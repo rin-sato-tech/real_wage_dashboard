@@ -94,7 +94,7 @@ def main() -> None:
         f'最新データ：{latest["date"].strftime("%Y年%m月")}'
     )
 
-    st.subheader("指数の推移")
+    st.subheader("時系列推移")
 
     period = st.selectbox(
         "表示期間",
@@ -124,6 +124,8 @@ def main() -> None:
     else:
         display_period_df = df.tail(period_months).copy()
 
+    st.markdown("#### 消費者物価指数")
+
     st.line_chart(
         display_period_df,
         x="date",
@@ -132,7 +134,7 @@ def main() -> None:
         y_label="消費者物価指数",
     )
 
-    st.subheader("前年同月比の推移")
+    st.markdown("#### 前年同月比")
 
     yoy_df = display_period_df.dropna(subset=["yoy_pct"])
 
