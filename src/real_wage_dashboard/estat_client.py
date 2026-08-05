@@ -52,3 +52,53 @@ def get_meta_info(
         )
 
     return data
+
+
+def get_stats_data(
+    app_id: str,
+    stats_data_id: str,
+    filters: dict[str, str] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    """指定した条件で統計データを取得する。"""
+
+    url = f"{BASE_URL}/getStatsData"
+
+    params = {
+        "appId": app_id,
+        "statsDataId": stats_data_id,
+        "lang": "J",
+        "metaGetFlg": "Y",
+        "cntGetFlg": "N",
+    }
+
+    if filters:
+        params.update(filters)
+
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise EStatAPIError(
+            "e-Stat APIへの接続に失敗しました。"
+        ) from exc
+
+    try:
+        data = response.json()
+    except requests.JSONDecodeError as exc:
+        raise EStatAPIError(
+            "APIレスポンスをJSONとして解析できませんでした。"
+        ) from exc
+
+    result = data["GET_STATS_DATA"]["RESULT"]
+
+    if int(result["STATUS"]) != 0:
+        raise EStatAPIError(
+            f'APIエラー: {result.get("ERROR_MSG", "詳細不明")}'
+        )
+
+    return data
