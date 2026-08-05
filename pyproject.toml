@@ -1,0 +1,28 @@
+[project]
+name = "real-wage-dashboard"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "rin-sato-tech", email = "rinsato.dev@gmail.com" }
+]
+requires-python = ">=3.12.12"
+dependencies = [
+    "altair>=6.2.2",
+    "pandas>=3.0.5",
+    "requests>=2.34.2",
+    "streamlit>=1.61.0",
+]
+
+[project.scripts]
+real-wage-dashboard = "real_wage_dashboard:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.1",
+]
