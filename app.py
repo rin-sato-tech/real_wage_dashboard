@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+from real_wage_dashboard.cpi_analysis import add_cpi_changes
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.estat_client import (
     EStatAPIError,
@@ -26,7 +27,7 @@ st.set_page_config(
 
 @st.cache_data(ttl=60 * 60 * 6)
 def load_cpi_data(app_id: str) -> pd.DataFrame:
-    """e-Stat APIからCPIを取得し、DataFrameとして返す。"""
+    """e-Stat APIからCPIを取得し、分析用DataFrameを返す。"""
 
     response = get_stats_data(
         app_id=app_id,
@@ -34,7 +35,9 @@ def load_cpi_data(app_id: str) -> pd.DataFrame:
         filters=CPI_FILTERS,
     )
 
-    return create_cpi_dataframe(response)
+    df = create_cpi_dataframe(response)
+
+    return add_cpi_changes(df)
 
 
 def main() -> None:
@@ -62,16 +65,33 @@ def main() -> None:
 
     st.subheader("最新データ")
 
-    metric_col1, metric_col2 = st.columns(2)
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
 
     metric_col1.metric(
-        label="最新指数",
+        label="消費者物価指数",
         value=f'{latest["index_value"]:.1f}',
     )
 
     metric_col2.metric(
-        label="対象年月",
-        value=latest["date"].strftime("%Y年%m月"),
+        label="前月比",
+        value=(
+            f'{latest["mom_pct"]:+.1f}%'
+            if pd.notna(latest["mom_pct"])
+            else "算出不可"
+        ),
+    )
+
+    metric_col3.metric(
+        label="前年同月比",
+        value=(
+            f'{latest["yoy_pct"]:+.1f}%'
+            if pd.notna(latest["yoy_pct"])
+            else "算出不可"
+        ),
+    )
+
+    st.caption(
+        f'最新データ：{latest["date"].strftime("%Y年%m月")}'
     )
 
     st.subheader("指数の推移")
@@ -84,13 +104,26 @@ def main() -> None:
         y_label="消費者物価指数",
     )
 
+    st.subheader("前年同月比の推移")
+
+    yoy_df = df.dropna(subset=["yoy_pct"])
+
+    st.line_chart(
+        yoy_df,
+        x="date",
+        y="yoy_pct",
+        x_label="年月",
+        y_label="前年同月比（%）",
+    )
+
     st.subheader("取得データ")
 
     display_df = df[
         [
             "date",
-            "time_name",
             "index_value",
+            "mom_pct",
+            "yoy_pct",
         ]
     ].copy()
 
@@ -108,10 +141,17 @@ def main() -> None:
                 "年月",
                 format="YYYY年MM月",
             ),
-            "time_name": "e-Stat表記",
             "index_value": st.column_config.NumberColumn(
                 "指数",
                 format="%.1f",
+            ),
+            "mom_pct": st.column_config.NumberColumn(
+                "前月比",
+                format="%.1f%%",
+            ),
+            "yoy_pct": st.column_config.NumberColumn(
+                "前年同月比",
+                format="%.1f%%",
             ),
         },
     )
