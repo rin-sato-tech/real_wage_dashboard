@@ -1,5 +1,6 @@
 import streamlit as st
 
+from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.estat_client import get_stats_data
 
 
@@ -42,8 +43,13 @@ def main() -> None:
 
     print(f"取得件数: {len(values)}")
 
-    for value in values[:10]:
-        print(value)
+    df = create_cpi_dataframe(response)
+
+    print(df.head())
+    print()
+    print(df.tail())
+    print()
+    print(df.dtypes)
 
 
 if __name__ == "__main__":
