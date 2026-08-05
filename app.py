@@ -96,8 +96,36 @@ def main() -> None:
 
     st.subheader("指数の推移")
 
+    period = st.selectbox(
+        "表示期間",
+        {
+            "直近1年": 12,
+            "直近3年": 36,
+            "直近5年": 60,
+            "直近10年": 120,
+            "直近20年": 240,
+            "直近30年": 360,
+            "全期間": None,
+        },
+    )
+
+    period_months = {
+        "直近1年": 12,
+        "直近3年": 36,
+        "直近5年": 60,
+        "直近10年": 120,
+        "直近20年": 240,
+        "直近30年": 360,
+        "全期間": None,
+    }[period]
+
+    if period_months is None:
+        display_period_df = df.copy()
+    else:
+        display_period_df = df.tail(period_months).copy()
+
     st.line_chart(
-        df,
+        display_period_df,
         x="date",
         y="index_value",
         x_label="年月",
@@ -106,7 +134,7 @@ def main() -> None:
 
     st.subheader("前年同月比の推移")
 
-    yoy_df = df.dropna(subset=["yoy_pct"])
+    yoy_df = display_period_df.dropna(subset=["yoy_pct"])
 
     st.line_chart(
         yoy_df,
@@ -118,7 +146,7 @@ def main() -> None:
 
     st.subheader("取得データ")
 
-    display_df = df[
+    display_df = display_period_df[
         [
             "date",
             "index_value",
