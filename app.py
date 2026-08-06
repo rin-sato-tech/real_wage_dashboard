@@ -4,8 +4,10 @@ import pandas as pd
 import streamlit as st
 
 from real_wage_dashboard.config import (
-    CPI_FILTERS,
+    CPI_BASE_FILTERS,
+    CPI_FILE_NAMES,
     CPI_METADATA,
+    CPI_SERIES,
     CPI_STATS_DATA_ID,
 )
 from real_wage_dashboard.cpi_analysis import add_cpi_changes
@@ -23,13 +25,18 @@ st.set_page_config(
 
 
 @st.cache_data(ttl=60 * 60 * 6)
-def load_cpi_data(app_id: str) -> tuple[pd.DataFrame, datetime]:
-    """e-Stat APIからCPIを取得し、分析用DataFrameを返す。"""
+def load_cpi_data(app_id: str, series_code: str) -> tuple[pd.DataFrame, datetime]:
+    """選択されたCPIをe-Stat APIから取得し、分析用DataFrameを返す。"""
+
+    filters = {
+        **CPI_BASE_FILTERS,
+        "cdCat01": series_code,
+    }
 
     response = get_stats_data(
         app_id=app_id,
         stats_data_id=CPI_STATS_DATA_ID,
-        filters=CPI_FILTERS,
+        filters=filters,
     )
 
     df = create_cpi_dataframe(response)
@@ -45,6 +52,13 @@ def main() -> None:
 
     st.caption("e-Stat APIから取得した全国・総合の消費者物価指数を表示します。")
 
+    selected_series = st.selectbox(
+        "表示する系列",
+        options=list(CPI_SERIES.keys()),
+    )
+
+    selected_series_code = CPI_SERIES[selected_series]
+
     try:
         app_id = st.secrets["ESTAT_APP_ID"]
 
@@ -53,7 +67,7 @@ def main() -> None:
         st.stop()
 
     try:
-        df, fetched_at = load_cpi_data(app_id)
+        df, fetched_at = load_cpi_data(app_id, selected_series_code)
 
     except EStatAPIError as exc:
         st.error(str(exc))
@@ -80,7 +94,7 @@ def main() -> None:
     metric_col1, metric_col2, metric_col3 = st.columns(3)
 
     metric_col1.metric(
-        label="消費者物価指数",
+        label=selected_series,
         value=f"{latest['index_value']:.1f}",
     )
 
@@ -133,14 +147,14 @@ def main() -> None:
     else:
         display_period_df = df.tail(period_months).copy()
 
-    st.markdown("#### 消費者物価指数")
+    st.markdown(f"#### {selected_series}")
 
     st.line_chart(
         display_period_df,
         x="date",
         y="index_value",
         x_label="年月",
-        y_label="消費者物価指数",
+        y_label=selected_series,
     )
 
     st.markdown("#### 前年同月比")
@@ -238,7 +252,7 @@ def main() -> None:
         st.download_button(
             label="全期間データをCSVでダウンロード",
             data=csv_data,
-            file_name="cpi_all_japan.csv",
+            file_name=CPI_FILE_NAMES[selected_series],
             mime="text/csv",
         )
 
@@ -256,11 +270,11 @@ def main() -> None:
             - **出典**：{CPI_METADATA["source"]}
             - **統計**：{CPI_METADATA["statistics_name"]}
             - **対象地域**：{CPI_METADATA["area_name"]}
-            - **対象系列**：{CPI_METADATA["series_name"]}
+            - **対象系列**：{selected_series}
             - **統計表ID**：{CPI_STATS_DATA_ID}
-            - **表章項目コード**：{CPI_FILTERS["cdTab"]}
-            - **品目コード**：{CPI_FILTERS["cdCat01"]}
-            - **地域コード**：{CPI_FILTERS["cdArea"]}
+            - **表章項目コード**：{CPI_BASE_FILTERS["cdTab"]}
+            - **品目コード**：{selected_series_code}
+            - **地域コード**：{CPI_BASE_FILTERS["cdArea"]}
             - **指数基準**：{CPI_METADATA["base_year"]}
             """
         )
