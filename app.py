@@ -3,6 +3,11 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+from real_wage_dashboard.config import (
+    CPI_FILTERS,
+    CPI_METADATA,
+    CPI_STATS_DATA_ID,
+)
 from real_wage_dashboard.cpi_analysis import add_cpi_changes
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.estat_client import (
@@ -33,7 +38,7 @@ def load_cpi_data(app_id: str) -> tuple[pd.DataFrame, datetime]:
 
     response = get_stats_data(
         app_id=app_id,
-        stats_data_id=STATS_DATA_ID,
+        stats_data_id=CPI_STATS_DATA_ID,
         filters=CPI_FILTERS,
     )
 
