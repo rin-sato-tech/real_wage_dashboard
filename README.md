@@ -41,11 +41,12 @@ ESTAT_APP_ID = "your-app-id"
 uv run streamlit run app.py
 ```
 
-## コード品質確認
+## テスト・コード品質確認
 
 ```bash
+uv run pytest
 uv run ruff check .
-uv run ruff format .
+uv run ruff format --check .
 ```
 
 ## データ出典
