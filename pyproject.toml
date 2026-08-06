@@ -1,7 +1,7 @@
 [project]
 name = "real-wage-dashboard"
 version = "0.1.0"
-description = "Add your description here"
+description = "Streamlit dashboard for analyzing Japanese CPI and real wages using e-Stat data"
 readme = "README.md"
 authors = [
     { name = "rin-sato-tech", email = "rinsato.dev@gmail.com" }

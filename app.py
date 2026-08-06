@@ -47,17 +47,19 @@ def main() -> None:
 
     try:
         app_id = st.secrets["ESTAT_APP_ID"]
-        df, fetched_at = load_cpi_data(app_id)
 
     except KeyError:
         st.error(".streamlit/secrets.tomlにESTAT_APP_IDを設定してください。")
         st.stop()
 
+    try:
+        df, fetched_at = load_cpi_data(app_id)
+
     except EStatAPIError as exc:
         st.error(str(exc))
         st.stop()
 
-    except (TypeError, ValueError) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         st.error(f"取得データの変換または計算に失敗しました: {exc}")
         st.stop()
 
@@ -250,16 +252,16 @@ def main() -> None:
 
     with st.expander("データ出典・算出方法"):
         st.markdown(
-            """
-            - **出典**：政府統計の総合窓口 e-Stat
-            - **統計**：消費者物価指数
-            - **対象地域**：全国
-            - **対象系列**：総合
-            - **統計表ID**：0003427113
-            - **表章項目コード**：1
-            - **品目コード**：0001
-            - **地域コード**：00000
-            - **指数基準**：2020年=100
+            f"""
+            - **出典**：{CPI_METADATA["source"]}
+            - **統計**：{CPI_METADATA["statistics_name"]}
+            - **対象地域**：{CPI_METADATA["area_name"]}
+            - **対象系列**：{CPI_METADATA["series_name"]}
+            - **統計表ID**：{CPI_STATS_DATA_ID}
+            - **表章項目コード**：{CPI_FILTERS["cdTab"]}
+            - **品目コード**：{CPI_FILTERS["cdCat01"]}
+            - **地域コード**：{CPI_FILTERS["cdArea"]}
+            - **指数基準**：{CPI_METADATA["base_year"]}
             """
         )
 

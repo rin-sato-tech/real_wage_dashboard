@@ -67,6 +67,10 @@ def create_cpi_dataframe(response: dict[str, Any]) -> pd.DataFrame:
 
     df = (
         df.dropna(subset=["date", "index_value"])
+        .drop_duplicates(
+            subset=["date"],
+            keep="last",
+        )
         .sort_values("date")
         .reset_index(drop=True)
     )
