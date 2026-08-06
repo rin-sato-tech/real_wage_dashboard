@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pandas as pd
 import streamlit as st
 
@@ -26,7 +28,7 @@ st.set_page_config(
 
 
 @st.cache_data(ttl=60 * 60 * 6)
-def load_cpi_data(app_id: str) -> pd.DataFrame:
+def load_cpi_data(app_id: str) -> tuple[pd.DataFrame, datetime]:
     """e-Stat APIからCPIを取得し、分析用DataFrameを返す。"""
 
     response = get_stats_data(
@@ -36,8 +38,11 @@ def load_cpi_data(app_id: str) -> pd.DataFrame:
     )
 
     df = create_cpi_dataframe(response)
+    df = add_cpi_changes(df)
 
-    return add_cpi_changes(df)
+    fetched_at = datetime.now().astimezone()
+
+    return df, fetched_at
 
 
 def main() -> None:
@@ -47,7 +52,7 @@ def main() -> None:
 
     try:
         app_id = st.secrets["ESTAT_APP_ID"]
-        df = load_cpi_data(app_id)
+        df, fetched_at = load_cpi_data(app_id)
 
     except KeyError:
         st.error(".streamlit/secrets.tomlにESTAT_APP_IDを設定してください。")
@@ -91,7 +96,8 @@ def main() -> None:
     )
 
     st.caption(
-        f'最新データ：{latest["date"].strftime("%Y年%m月")}'
+        f'最新データ：{latest["date"].strftime("%Y年%m月")}　'
+        f'API取得日時：{fetched_at.strftime("%Y年%m月%d日 %H:%M")}'
     )
 
     st.subheader("時系列推移")
@@ -185,6 +191,61 @@ def main() -> None:
             ),
         },
     )
+
+    csv_df = df[
+        [
+            "date",
+            "index_value",
+            "mom_pct",
+            "yoy_pct",
+        ]
+    ].copy()
+
+    csv_df.insert(
+        0,
+        "year",
+        csv_df["date"].dt.year,
+    )
+
+    csv_df.insert(
+        1,
+        "month",
+        csv_df["date"].dt.month,
+    )
+
+    csv_df = csv_df.drop(columns="date")
+
+    csv_df = csv_df.rename(
+        columns={
+            "year": "年",
+            "month": "月",
+            "index_value": "消費者物価指数",
+            "mom_pct": "前月比(%)",
+            "yoy_pct": "前年同月比(%)",
+        }
+    )
+
+    csv_data = csv_df.to_csv(
+        index=False,
+    ).encode("utf-8-sig")
+
+    download_col, refresh_col = st.columns([2, 1])
+
+    with download_col:
+        st.download_button(
+            label="全期間データをCSVでダウンロード",
+            data=csv_data,
+            file_name="cpi_all_japan.csv",
+            mime="text/csv",
+        )
+
+    with refresh_col:
+        if st.button(
+            "データを再取得",
+            width="stretch",
+        ):
+            load_cpi_data.clear()
+            st.rerun()
 
 
 if __name__ == "__main__":
