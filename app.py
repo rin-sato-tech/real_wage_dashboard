@@ -62,9 +62,19 @@ def main() -> None:
         st.error(str(exc))
         st.stop()
 
-    if df.empty:
-        st.warning("表示できるCPIデータがありません。")
+    except (TypeError, ValueError) as exc:
+        st.error(f"取得データの変換または計算に失敗しました: {exc}")
         st.stop()
+
+    if df.empty:
+        st.warning("表示可能なCPIデータがありません。")
+        st.stop()
+
+    if len(df) < 2:
+        st.warning("前月比を計算するためのデータ件数が不足しています。")
+
+    if len(df) < 13:
+        st.warning("前年同月比を計算するためのデータ件数が不足しています。")
 
     latest = df.iloc[-1]
 
@@ -74,30 +84,26 @@ def main() -> None:
 
     metric_col1.metric(
         label="消費者物価指数",
-        value=f'{latest["index_value"]:.1f}',
+        value=f"{latest['index_value']:.1f}",
     )
 
     metric_col2.metric(
         label="前月比",
         value=(
-            f'{latest["mom_pct"]:+.1f}%'
-            if pd.notna(latest["mom_pct"])
-            else "算出不可"
+            f"{latest['mom_pct']:+.1f}%" if pd.notna(latest["mom_pct"]) else "算出不可"
         ),
     )
 
     metric_col3.metric(
         label="前年同月比",
         value=(
-            f'{latest["yoy_pct"]:+.1f}%'
-            if pd.notna(latest["yoy_pct"])
-            else "算出不可"
+            f"{latest['yoy_pct']:+.1f}%" if pd.notna(latest["yoy_pct"]) else "算出不可"
         ),
     )
 
     st.caption(
-        f'最新データ：{latest["date"].strftime("%Y年%m月")}　'
-        f'API取得日時：{fetched_at.strftime("%Y年%m月%d日 %H:%M")}'
+        f"最新データ：{latest['date'].strftime('%Y年%m月')}　"
+        f"API取得日時：{fetched_at.strftime('%Y年%m月%d日 %H:%M')}"
     )
 
     st.subheader("時系列推移")
