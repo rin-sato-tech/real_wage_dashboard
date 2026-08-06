@@ -8,26 +8,12 @@ def add_cpi_changes(df: pd.DataFrame) -> pd.DataFrame:
 
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
-        raise ValueError(
-            f"必要な列がありません: {sorted(missing)}"
-        )
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
-    result = (
-        df.sort_values("date")
-        .reset_index(drop=True)
-        .copy()
-    )
+    result = df.sort_values("date").reset_index(drop=True).copy()
 
-    result["mom_pct"] = (
-        result["index_value"]
-        .pct_change()
-        .mul(100)
-    )
+    result["mom_pct"] = result["index_value"].pct_change().mul(100)
 
-    result["yoy_pct"] = (
-        result["index_value"]
-        .pct_change(periods=12)
-        .mul(100)
-    )
+    result["yoy_pct"] = result["index_value"].pct_change(periods=12).mul(100)
 
     return result

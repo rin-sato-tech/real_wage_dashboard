@@ -15,16 +15,6 @@ from real_wage_dashboard.estat_client import (
     get_stats_data,
 )
 
-
-STATS_DATA_ID = "0003427113"
-
-CPI_FILTERS = {
-    "cdTab": "1",
-    "cdCat01": "0001",
-    "cdArea": "00000",
-}
-
-
 st.set_page_config(
     page_title="消費者物価指数分析",
     page_icon="📊",

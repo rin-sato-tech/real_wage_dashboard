@@ -2,7 +2,6 @@ from typing import Any
 
 import requests
 
-
 BASE_URL = "https://api.e-stat.go.jp/rest/3.0/app/json"
 
 
@@ -33,23 +32,17 @@ def get_meta_info(
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise EStatAPIError(
-            "e-Stat APIへの接続に失敗しました。"
-        ) from exc
+        raise EStatAPIError("e-Stat APIへの接続に失敗しました。") from exc
 
     try:
         data = response.json()
     except requests.JSONDecodeError as exc:
-        raise EStatAPIError(
-            "APIレスポンスをJSONとして解析できませんでした。"
-        ) from exc
+        raise EStatAPIError("APIレスポンスをJSONとして解析できませんでした。") from exc
 
     result = data["GET_META_INFO"]["RESULT"]
 
     if int(result["STATUS"]) != 0:
-        raise EStatAPIError(
-            f'APIエラー: {result.get("ERROR_MSG", "詳細不明")}'
-        )
+        raise EStatAPIError(f"APIエラー: {result.get('ERROR_MSG', '詳細不明')}")
 
     return data
 
@@ -83,22 +76,16 @@ def get_stats_data(
         )
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise EStatAPIError(
-            "e-Stat APIへの接続に失敗しました。"
-        ) from exc
+        raise EStatAPIError("e-Stat APIへの接続に失敗しました。") from exc
 
     try:
         data = response.json()
     except requests.JSONDecodeError as exc:
-        raise EStatAPIError(
-            "APIレスポンスをJSONとして解析できませんでした。"
-        ) from exc
+        raise EStatAPIError("APIレスポンスをJSONとして解析できませんでした。") from exc
 
     result = data["GET_STATS_DATA"]["RESULT"]
 
     if int(result["STATUS"]) != 0:
-        raise EStatAPIError(
-            f'APIエラー: {result.get("ERROR_MSG", "詳細不明")}'
-        )
+        raise EStatAPIError(f"APIエラー: {result.get('ERROR_MSG', '詳細不明')}")
 
     return data

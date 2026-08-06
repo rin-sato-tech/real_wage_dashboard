@@ -17,13 +17,7 @@ def ensure_list(value: Any) -> list[Any]:
 def create_time_mapping(response: dict[str, Any]) -> dict[str, str]:
     """時間コードと時間名称の対応表を作成する。"""
 
-    class_objects = response[
-        "GET_STATS_DATA"
-    ][
-        "STATISTICAL_DATA"
-    ][
-        "CLASS_INF"
-    ][
+    class_objects = response["GET_STATS_DATA"]["STATISTICAL_DATA"]["CLASS_INF"][
         "CLASS_OBJ"
     ]
 
@@ -33,10 +27,7 @@ def create_time_mapping(response: dict[str, Any]) -> dict[str, str]:
 
         time_classes = ensure_list(class_object.get("CLASS"))
 
-        return {
-            item["@code"]: item["@name"]
-            for item in time_classes
-        }
+        return {item["@code"]: item["@name"] for item in time_classes}
 
     return {}
 
@@ -44,15 +35,7 @@ def create_time_mapping(response: dict[str, Any]) -> dict[str, str]:
 def create_cpi_dataframe(response: dict[str, Any]) -> pd.DataFrame:
     """e-Stat APIレスポンスからCPIのDataFrameを作成する。"""
 
-    values = response[
-        "GET_STATS_DATA"
-    ][
-        "STATISTICAL_DATA"
-    ][
-        "DATA_INF"
-    ][
-        "VALUE"
-    ]
+    values = response["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
 
     time_mapping = create_time_mapping(response)
 

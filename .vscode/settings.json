@@ -1,3 +1,11 @@
 {
-  "cSpell.words": ["pycache", "pytest", "sato", "streamlit", "venv"]
+  "cSpell.words": [
+    "ESTAT",
+    "pycache",
+    "pytest",
+    "sato",
+    "selectbox",
+    "streamlit",
+    "venv"
+  ]
 }

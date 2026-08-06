@@ -3,7 +3,6 @@ import streamlit as st
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.estat_client import get_stats_data
 
-
 STATS_DATA_ID = "0003427113"
 
 
@@ -31,15 +30,9 @@ def main() -> None:
         },
     )
 
-    statistical_data = response[
-        "GET_STATS_DATA"
-    ][
-        "STATISTICAL_DATA"
-    ]
+    statistical_data = response["GET_STATS_DATA"]["STATISTICAL_DATA"]
 
-    values = ensure_list(
-        statistical_data["DATA_INF"]["VALUE"]
-    )
+    values = ensure_list(statistical_data["DATA_INF"]["VALUE"])
 
     print(f"取得件数: {len(values)}")
 
