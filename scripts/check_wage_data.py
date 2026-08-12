@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.wage_analysis import add_wage_changes
 from real_wage_dashboard.wage_service import (
