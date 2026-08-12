@@ -15,7 +15,7 @@ def load_wage_csv(file_path: str | Path) -> pd.DataFrame:
 
 
 def create_wage_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
-    """長期時系列表から名目賃金指数を抽出する。"""
+    """長期時系列表から現金給与総額の月次実数を抽出する。"""
 
     required_columns = {
         "年",
@@ -30,8 +30,10 @@ def create_wage_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
         missing = required_columns - set(raw_df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
+    industry = raw_df["産業分類"].astype(str).str.strip()
+
     df = raw_df.loc[
-        (raw_df["産業分類"] == "TL  ")
+        (industry == "TL")
         & (raw_df["規模"] == "T")
         & (raw_df["就業形態"] == 0)
         & (raw_df["月"] != "CY"),
