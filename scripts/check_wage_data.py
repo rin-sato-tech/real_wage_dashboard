@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from real_wage_dashboard.wage_analysis import add_wage_changes
 from real_wage_dashboard.wage_service import (
     create_wage_dataframe,
     load_wage_csv,
@@ -15,6 +16,7 @@ def main() -> None:
     print(raw_df.shape)
 
     wage_df = create_wage_dataframe(raw_df)
+    wage_df = add_wage_changes(wage_df)
 
     print("\n絞り込み後")
     print(wage_df.shape)
