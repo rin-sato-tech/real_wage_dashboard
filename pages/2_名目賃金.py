@@ -74,18 +74,14 @@ def main() -> None:
     metric_col2.metric(
         label="前月比",
         value=(
-            f"{latest['mom_pct']:+.1f}%"
-            if pd.notna(latest["mom_pct"])
-            else "算出不可"
+            f"{latest['mom_pct']:+.1f}%" if pd.notna(latest["mom_pct"]) else "算出不可"
         ),
     )
 
     metric_col3.metric(
         label="前年同月比",
         value=(
-            f"{latest['yoy_pct']:+.1f}%"
-            if pd.notna(latest["yoy_pct"])
-            else "算出不可"
+            f"{latest['yoy_pct']:+.1f}%" if pd.notna(latest["yoy_pct"]) else "算出不可"
         ),
     )
 
@@ -234,14 +230,9 @@ def main() -> None:
         }
     )
 
-    csv_data = (
-        csv_df.to_csv(index=False)
-        .encode("utf-8-sig")
-    )
+    csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
 
-    download_col, refresh_col = st.columns(
-        [2, 1]
-    )
+    download_col, refresh_col = st.columns([2, 1])
 
     with download_col:
         st.download_button(
@@ -263,9 +254,7 @@ def main() -> None:
     # 出典
     # -------------------------
 
-    with st.expander(
-        "データ出典・算出方法"
-    ):
+    with st.expander("データ出典・算出方法"):
         st.markdown(
             f"""
             - **出典**：{WAGE_METADATA["source"]}
