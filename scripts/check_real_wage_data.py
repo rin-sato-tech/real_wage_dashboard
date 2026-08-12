@@ -9,7 +9,10 @@ from real_wage_dashboard.config import (
 from real_wage_dashboard.cpi_analysis import add_cpi_changes
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.estat_client import get_stats_data
-from real_wage_dashboard.real_wage_analysis import create_real_wage_dataframe
+from real_wage_dashboard.real_wage_analysis import (
+    add_real_wage_changes,
+    create_real_wage_dataframe,
+)
 from real_wage_dashboard.wage_analysis import add_wage_changes
 from real_wage_dashboard.wage_service import (
     create_wage_dataframe,
@@ -37,7 +40,6 @@ def main() -> None:
 
     # 名目賃金
     raw_wage_df = load_wage_csv(WAGE_DATA_PATH)
-
     wage_df = create_wage_dataframe(raw_wage_df)
     wage_df = add_wage_changes(wage_df)
 
@@ -47,14 +49,15 @@ def main() -> None:
         cpi_df,
         base_year=2020,
     )
+    real_wage_df = add_real_wage_changes(real_wage_df)
 
-    print("CPI")
+    print("CPI件数:")
     print(cpi_df.shape)
 
-    print("\n名目賃金")
+    print("\n名目賃金件数:")
     print(wage_df.shape)
 
-    print("\n結合後")
+    print("\n結合後件数:")
     print(real_wage_df.shape)
 
     print("\n期間")
@@ -73,17 +76,20 @@ def main() -> None:
     print("\nデータ型")
     print(real_wage_df.dtypes)
 
-    print("\n重複年月")
+    print("\n欠損値:")
+    print(real_wage_df.isna().sum())
+
+    print("\n重複年月数:")
     print(real_wage_df["date"].duplicated().sum())
 
     base_year_df = real_wage_df[real_wage_df["date"].dt.year == 2020]
 
-    print("\n2020年平均")
+    print("\n2020年平均（基準値100の確認）:")
+    print("2020年データ件数:", len(base_year_df))
     print(
         "名目賃金指数:",
         base_year_df["nominal_wage_index"].mean(),
     )
-
     print(
         "実質賃金指数:",
         base_year_df["real_wage_index"].mean(),

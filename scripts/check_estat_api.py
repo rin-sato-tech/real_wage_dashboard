@@ -1,11 +1,12 @@
+from typing import Any
+
 import streamlit as st
 
+from real_wage_dashboard.config import CPI_STATS_DATA_ID
 from real_wage_dashboard.estat_client import get_meta_info
 
-STATS_DATA_ID = "0003427113"
 
-
-def ensure_list(value: object) -> list:
+def ensure_list(value: Any) -> list[Any]:
     """辞書またはリストを、必ずリストとして返す。"""
     if value is None:
         return []
@@ -17,7 +18,7 @@ def ensure_list(value: object) -> list:
 
 
 def print_classes(
-    class_object: dict,
+    class_object: dict[str, Any],
     limit: int = 20,
 ) -> None:
     """分類項目と分類コードを表示する。"""
@@ -48,7 +49,7 @@ def main() -> None:
 
     response = get_meta_info(
         app_id=app_id,
-        stats_data_id=STATS_DATA_ID,
+        stats_data_id=CPI_STATS_DATA_ID,
     )
 
     metadata = response["GET_META_INFO"]["METADATA_INF"]
