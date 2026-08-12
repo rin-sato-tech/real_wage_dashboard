@@ -1,16 +1,15 @@
 from pathlib import Path
 
+from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.wage_analysis import add_wage_changes
 from real_wage_dashboard.wage_service import (
     create_wage_dataframe,
     load_wage_csv,
 )
 
-FILE_PATH = Path("data/raw/hon-maikin-k-jissu.csv")
-
 
 def main() -> None:
-    raw_df = load_wage_csv(FILE_PATH)
+    raw_df = load_wage_csv(WAGE_DATA_PATH)
 
     print("絞り込み前")
     print(raw_df.shape)
@@ -30,7 +29,10 @@ def main() -> None:
     print("\nデータ型")
     print(wage_df.dtypes)
 
-    print("\n重複年月")
+    print("\n欠損値")
+    print(wage_df.isna().sum())
+
+    print("\n重複年月数:")
     print(wage_df["date"].duplicated().sum())
 
     print("\n期間")
