@@ -23,7 +23,6 @@ from real_wage_dashboard.wage_service import (
     load_wage_csv,
 )
 
-
 st.set_page_config(
     page_title="実質賃金分析",
     page_icon="📈",
