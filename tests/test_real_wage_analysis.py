@@ -3,6 +3,7 @@ import pytest
 
 from real_wage_dashboard.real_wage_analysis import (
     add_real_wage_amount,
+    add_real_wage_changes,
     add_wage_indices,
     merge_wage_and_cpi,
 )
@@ -108,3 +109,42 @@ def test_add_wage_indices_raises_when_base_year_missing() -> None:
         match="2020年の基準データがありません",
     ):
         add_wage_indices(df)
+
+
+def test_add_real_wage_changes_calculates_yoy() -> None:
+    dates = pd.date_range(
+        "2024-01-01",
+        periods=13,
+        freq="MS",
+    )
+
+    df = pd.DataFrame(
+        {
+            "date": dates,
+            "real_wage_amount": [
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                100000,
+                105000,
+            ],
+            "real_wage_index": [100.0] * 12 + [105.0],
+        }
+    )
+
+    result = add_real_wage_changes(df)
+
+    assert pd.isna(result.loc[11, "real_wage_yoy_pct"])
+
+    assert result.loc[
+        12,
+        "real_wage_yoy_pct",
+    ] == pytest.approx(5.0)

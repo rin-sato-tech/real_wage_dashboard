@@ -124,3 +124,27 @@ def create_real_wage_dataframe(
     result = add_wage_indices(result, base_year=base_year)
 
     return result
+
+
+def add_real_wage_changes(df: pd.DataFrame) -> pd.DataFrame:
+    """実質賃金額と実質賃金指数の変化率を計算する。"""
+
+    required_columns = {
+        "date",
+        "real_wage_amount",
+        "real_wage_index",
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    result = df.sort_values("date").reset_index(drop=True).copy()
+
+    result["real_wage_mom_pct"] = result["real_wage_amount"].pct_change().mul(100)
+
+    result["real_wage_yoy_pct"] = (
+        result["real_wage_amount"].pct_change(periods=12).mul(100)
+    )
+
+    return result
