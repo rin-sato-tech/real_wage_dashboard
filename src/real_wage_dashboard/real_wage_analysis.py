@@ -31,12 +31,15 @@ def merge_wage_and_cpi(
         missing = cpi_required - set(cpi_df.columns)
         raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
 
-    wage = wage_df[
-        [
-            "date",
-            "nominal_wage_amount",
-        ]
-    ].copy()
+    wage_columns = [
+        "date",
+        "nominal_wage_amount",
+    ]
+
+    if "nominal_wage_ma_12" in wage_df.columns:
+        wage_columns.append("nominal_wage_ma_12")
+
+    wage = wage_df[wage_columns].copy()
 
     cpi = cpi_df[
         [
@@ -129,6 +132,19 @@ def add_real_wage_moving_average(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def add_real_wage_index_moving_average(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """実質賃金指数の12か月移動平均を追加する。"""
+
+    return add_moving_average(
+        df,
+        column="real_wage_index",
+        output_column="real_wage_index_ma_12",
+        window=WAGE_MOVING_AVERAGE_WINDOW,
+    )
+
+
 def create_real_wage_dataframe(
     wage_df: pd.DataFrame,
     cpi_df: pd.DataFrame,
@@ -149,6 +165,8 @@ def create_real_wage_dataframe(
     )
 
     result = add_real_wage_moving_average(result)
+
+    result = add_real_wage_index_moving_average(result)
 
     return result
 

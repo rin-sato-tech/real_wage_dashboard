@@ -4,6 +4,7 @@ import pytest
 from real_wage_dashboard.real_wage_analysis import (
     add_real_wage_amount,
     add_real_wage_changes,
+    add_real_wage_index_moving_average,
     add_real_wage_moving_average,
     add_wage_indices,
     create_real_wage_dataframe,
@@ -368,3 +369,30 @@ def test_add_real_wage_changes_uses_monthly_real_wage() -> None:
         12,
         "real_wage_yoy_pct",
     ] == pytest.approx(10.0)
+
+
+def test_add_real_wage_index_moving_average_starts_after_12_months() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=13,
+                freq="MS",
+            ),
+            "real_wage_index": range(100, 113),
+        }
+    )
+
+    result = add_real_wage_index_moving_average(df)
+
+    assert result.loc[:10, "real_wage_index_ma_12"].isna().all()
+
+    assert result.loc[
+        11,
+        "real_wage_index_ma_12",
+    ] == pytest.approx(105.5)
+
+    assert result.loc[
+        12,
+        "real_wage_index_ma_12",
+    ] == pytest.approx(106.5)
