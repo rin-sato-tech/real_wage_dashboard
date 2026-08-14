@@ -72,7 +72,7 @@ def main() -> None:
     st.title("実質賃金分析")
 
     st.caption(
-        "毎月勤労統計調査の現金給与総額を消費者物価指数で実質化し、"
+        "毎月勤労統計調査の賃金データを消費者物価指数で実質化し、"
         "名目賃金と購買力の変化を比較します。"
     )
 
@@ -508,7 +508,7 @@ def main() -> None:
             - **出典**：{WAGE_METADATA["source"]}
             - **統計**：{WAGE_METADATA["statistics_name"]}
             - **賃金項目**：{wage_item}
-            - **産業**：調査産業計
+            - **産業**：{WAGE_METADATA["industry"]}
             - **事業所規模**：{establishment_size}
             - **就業形態**：{employment_type}
 

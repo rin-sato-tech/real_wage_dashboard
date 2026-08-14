@@ -59,9 +59,6 @@ CPI_DEFAULT_SERIES = "総合"
 WAGE_METADATA = {
     "source": "政府統計の総合窓口 e-Stat",
     "statistics_name": "毎月勤労統計調査",
-    "item_name": "現金給与総額",
     "industry": "調査産業計",
-    "establishment_size": "事業所規模5人以上",
-    "employment_type": "就業形態計",
     "unit": "円",
 }

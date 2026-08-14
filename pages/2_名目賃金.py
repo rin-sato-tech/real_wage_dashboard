@@ -361,10 +361,10 @@ def main() -> None:
             - **出典**：{WAGE_METADATA["source"]}
             - **統計**：{WAGE_METADATA["statistics_name"]}
             - **賃金項目**：{wage_item}
-            - **産業**：調査産業計
+            - **産業**：{WAGE_METADATA["industry"]}
             - **事業所規模**：{establishment_size}
             - **就業形態**：{employment_type}
-            - **単位**：円
+            - **単位**：{WAGE_METADATA["unit"]}
             - **12か月移動平均**：月次値からアプリ内で算出
             """
         )
