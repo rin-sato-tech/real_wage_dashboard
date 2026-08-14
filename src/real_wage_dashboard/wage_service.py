@@ -14,7 +14,12 @@ def load_wage_csv(file_path: str | Path) -> pd.DataFrame:
     return pd.read_csv(path, encoding="cp932")
 
 
-def create_wage_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
+def create_wage_dataframe(
+    raw_df: pd.DataFrame,
+    wage_item: str = "現金給与総額",
+    establishment_size: str = "T",
+    employment_type: str = "0",
+) -> pd.DataFrame:
     """長期時系列表から現金給与総額の月次実数を抽出する。"""
 
     required_columns = {
@@ -23,7 +28,7 @@ def create_wage_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
         "産業分類",
         "規模",
         "就業形態",
-        "現金給与総額",
+        wage_item,
     }
 
     if not required_columns.issubset(raw_df.columns):
@@ -31,24 +36,26 @@ def create_wage_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     industry = raw_df["産業分類"].astype(str).str.strip()
+    size = raw_df["規模"].astype(str).str.strip()
+    employment = raw_df["就業形態"].astype(str).str.strip()
+    month = raw_df["月"].astype(str).str.strip()
 
     df = raw_df.loc[
         (industry == "TL")
-        & (raw_df["規模"] == "T")
-        & (raw_df["就業形態"] == 0)
-        & (raw_df["月"] != "CY"),
+        & (size == establishment_size)
+        & (employment == employment_type)
+        & (month != "CY"),
         [
             "年",
             "月",
-            "現金給与総額",
+            wage_item,
         ],
     ].copy()
 
-    df = df.rename(
-        columns={
-            "現金給与総額": "nominal_wage_amount",
-        }
-    )
+    if df.empty:
+        raise ValueError("選択した条件に該当する賃金データがありません。")
+
+    df = df.rename(columns={wage_item: "nominal_wage_amount"})
 
     df["year"] = pd.to_numeric(
         df["年"],
@@ -91,6 +98,9 @@ def create_wage_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
         .sort_values("date")
         .reset_index(drop=True)
     )
+
+    if df.empty:
+        raise ValueError("選択した条件では有効な賃金データを取得できません。")
 
     return df[
         [
