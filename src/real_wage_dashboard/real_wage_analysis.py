@@ -1,5 +1,11 @@
 import pandas as pd
 
+from real_wage_dashboard.config import (
+    WAGE_BASE_YEAR,
+    WAGE_MOVING_AVERAGE_WINDOW,
+)
+from real_wage_dashboard.wage_analysis import add_moving_average
+
 
 def merge_wage_and_cpi(
     wage_df: pd.DataFrame,
@@ -75,7 +81,7 @@ def add_real_wage_amount(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_wage_indices(
     df: pd.DataFrame,
-    base_year: int = 2020,
+    base_year: int = WAGE_BASE_YEAR,
 ) -> pd.DataFrame:
     """名目賃金と実質賃金を基準年平均=100に指数化する。"""
 
@@ -91,10 +97,12 @@ def add_wage_indices(
 
     result = df.copy()
 
-    base_df = result[result["date"].dt.year == base_year]
+    base_df = result[result["date"].dt.year == base_year].copy()
 
-    if base_df.empty:
-        raise ValueError(f"{base_year}年の基準データがありません。")
+    base_months = base_df["date"].dt.to_period("M").drop_duplicates()
+
+    if len(base_months) != 12:
+        raise ValueError(f"{base_year}年の基準データが12か月揃っていません。")
 
     nominal_base = base_df["nominal_wage_amount"].mean()
 
@@ -110,24 +118,43 @@ def add_wage_indices(
     return result
 
 
+def add_real_wage_moving_average(df: pd.DataFrame) -> pd.DataFrame:
+    """実質賃金額の12か月移動平均を追加する。"""
+
+    return add_moving_average(
+        df,
+        column="real_wage_amount",
+        output_column="real_wage_ma_12",
+        window=WAGE_MOVING_AVERAGE_WINDOW,
+    )
+
+
 def create_real_wage_dataframe(
     wage_df: pd.DataFrame,
     cpi_df: pd.DataFrame,
-    base_year: int = 2020,
+    base_year: int = WAGE_BASE_YEAR,
 ) -> pd.DataFrame:
     """名目賃金とCPIを結合し、実質賃金を計算する。"""
 
-    result = merge_wage_and_cpi(wage_df, cpi_df)
+    result = merge_wage_and_cpi(
+        wage_df,
+        cpi_df,
+    )
 
     result = add_real_wage_amount(result)
 
-    result = add_wage_indices(result, base_year=base_year)
+    result = add_wage_indices(
+        result,
+        base_year=base_year,
+    )
+
+    result = add_real_wage_moving_average(result)
 
     return result
 
 
 def add_real_wage_changes(df: pd.DataFrame) -> pd.DataFrame:
-    """実質賃金額と実質賃金指数の変化率を計算する。"""
+    """実質賃金の前月比と前年同月比を計算する。"""
 
     required_columns = {
         "date",
@@ -141,10 +168,17 @@ def add_real_wage_changes(df: pd.DataFrame) -> pd.DataFrame:
 
     result = df.sort_values("date").reset_index(drop=True).copy()
 
-    result["real_wage_mom_pct"] = result["real_wage_amount"].pct_change().mul(100)
+    result["real_wage_mom_pct"] = (
+        result["real_wage_amount"].pct_change(fill_method=None).mul(100)
+    )
 
     result["real_wage_yoy_pct"] = (
-        result["real_wage_amount"].pct_change(periods=12).mul(100)
+        result["real_wage_amount"]
+        .pct_change(
+            periods=12,
+            fill_method=None,
+        )
+        .mul(100)
     )
 
     return result

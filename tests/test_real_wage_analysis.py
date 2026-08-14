@@ -68,45 +68,54 @@ def test_add_real_wage_amount() -> None:
 def test_add_wage_indices() -> None:
     df = pd.DataFrame(
         {
-            "date": pd.to_datetime(
-                [
-                    "2020-01-01",
-                    "2020-02-01",
-                ]
+            "date": pd.date_range(
+                "2020-01-01",
+                periods=12,
+                freq="MS",
             ),
-            "nominal_wage_amount": [
-                100,
-                100,
-            ],
-            "real_wage_amount": [
-                100,
-                100,
-            ],
+            "nominal_wage_amount": [100] * 12,
+            "real_wage_amount": [100] * 12,
         }
     )
 
     result = add_wage_indices(df)
 
-    assert result["nominal_wage_index"].mean() == pytest.approx(100)
-    assert result["real_wage_index"].mean() == pytest.approx(100)
+    assert result["nominal_wage_index"].eq(100).all()
+    assert result["real_wage_index"].eq(100).all()
 
 
 def test_add_wage_indices_raises_when_base_year_missing() -> None:
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(["2025-01-01"]),
-            "nominal_wage_amount": [
-                100,
-            ],
-            "real_wage_amount": [
-                100,
-            ],
+            "nominal_wage_amount": [100],
+            "real_wage_amount": [100],
         }
     )
 
     with pytest.raises(
         ValueError,
-        match="2020年の基準データがありません",
+        match="2020年の基準データが12か月揃っていません",
+    ):
+        add_wage_indices(df)
+
+
+def test_add_wage_indices_raises_when_base_year_is_incomplete() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2020-01-01",
+                periods=11,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [100] * 11,
+            "real_wage_amount": [100] * 11,
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2020年の基準データが12か月揃っていません",
     ):
         add_wage_indices(df)
 
