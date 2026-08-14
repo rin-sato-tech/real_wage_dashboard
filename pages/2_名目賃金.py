@@ -3,9 +3,19 @@ import streamlit as st
 
 from real_wage_dashboard.config import (
     WAGE_DATA_PATH,
+    WAGE_DEFAULT_EMPLOYMENT_TYPE,
+    WAGE_DEFAULT_ESTABLISHMENT_SIZE,
+    WAGE_DEFAULT_ITEM,
+    WAGE_DEFAULT_SHOW_MOVING_AVERAGE,
+    WAGE_EMPLOYMENT_TYPES,
+    WAGE_ESTABLISHMENT_SIZES,
+    WAGE_ITEMS,
     WAGE_METADATA,
 )
-from real_wage_dashboard.wage_analysis import add_wage_changes
+from real_wage_dashboard.wage_analysis import (
+    add_wage_changes,
+    add_wage_moving_average,
+)
 from real_wage_dashboard.wage_service import (
     create_wage_dataframe,
     load_wage_csv,
@@ -19,41 +29,92 @@ st.set_page_config(
 
 
 @st.cache_data
-def load_wage_data() -> pd.DataFrame:
-    """毎月勤労統計CSVを読み込み、分析用DataFrameを返す。"""
+def load_raw_wage_data() -> pd.DataFrame:
+    """毎月勤労統計の元CSVを読み込む。"""
 
-    raw_df = load_wage_csv(WAGE_DATA_PATH)
-    df = create_wage_dataframe(raw_df)
-    df = add_wage_changes(df)
-
-    return df
+    return load_wage_csv(WAGE_DATA_PATH)
 
 
 def main() -> None:
     st.title("名目賃金分析")
 
-    st.caption("毎月勤労統計調査の現金給与総額から、名目賃金の推移を表示します。")
+    st.caption("毎月勤労統計調査から、選択した条件の名目賃金推移を表示します。")
+
+    # -------------------------
+    # 元データ読み込み
+    # -------------------------
 
     try:
-        df = load_wage_data()
+        raw_df = load_raw_wage_data()
 
     except FileNotFoundError as exc:
         st.error(str(exc))
         st.stop()
 
     except (KeyError, TypeError, ValueError) as exc:
-        st.error(f"賃金データの読み込みまたは変換に失敗しました: {exc}")
+        st.error(f"賃金データの読み込みに失敗しました: {exc}")
+        st.stop()
+
+    # -------------------------
+    # 分析条件
+    # -------------------------
+
+    st.subheader("分析条件")
+
+    condition_col1, condition_col2, condition_col3 = st.columns(3)
+
+    with condition_col1:
+        wage_item = st.selectbox(
+            "賃金項目",
+            list(WAGE_ITEMS.keys()),
+            index=list(WAGE_ITEMS.keys()).index(WAGE_DEFAULT_ITEM),
+        )
+
+    with condition_col2:
+        employment_type = st.selectbox(
+            "就業形態",
+            list(WAGE_EMPLOYMENT_TYPES.keys()),
+            index=list(WAGE_EMPLOYMENT_TYPES.keys()).index(
+                WAGE_DEFAULT_EMPLOYMENT_TYPE
+            ),
+        )
+
+    with condition_col3:
+        establishment_size = st.selectbox(
+            "事業所規模",
+            list(WAGE_ESTABLISHMENT_SIZES.keys()),
+            index=list(WAGE_ESTABLISHMENT_SIZES.keys()).index(
+                WAGE_DEFAULT_ESTABLISHMENT_SIZE
+            ),
+        )
+
+    show_moving_average = st.toggle(
+        "12か月移動平均を表示",
+        value=WAGE_DEFAULT_SHOW_MOVING_AVERAGE,
+    )
+
+    # -------------------------
+    # 条件抽出・分析
+    # -------------------------
+
+    try:
+        df = create_wage_dataframe(
+            raw_df,
+            wage_item=WAGE_ITEMS[wage_item],
+            establishment_size=(WAGE_ESTABLISHMENT_SIZES[establishment_size]),
+            employment_type=(WAGE_EMPLOYMENT_TYPES[employment_type]),
+        )
+
+        df = add_wage_changes(df)
+        df = add_wage_moving_average(df)
+
+    except (KeyError, TypeError, ValueError) as exc:
+        st.error(f"選択した条件の賃金データを作成できませんでした: {exc}")
         st.stop()
 
     if df.empty:
         st.warning("表示可能な名目賃金データがありません。")
         st.stop()
-
-    if len(df) < 2:
-        st.warning("前月比を計算するためのデータ件数が不足しています。")
-
-    if len(df) < 13:
-        st.warning("前年同月比を計算するためのデータ件数が不足しています。")
 
     latest = df.iloc[-1]
 
@@ -66,7 +127,7 @@ def main() -> None:
     metric_col1, metric_col2, metric_col3 = st.columns(3)
 
     metric_col1.metric(
-        label="現金給与総額",
+        label=wage_item,
         value=f"{latest['nominal_wage_amount']:,.0f}円",
     )
 
@@ -92,17 +153,20 @@ def main() -> None:
 
     st.subheader("時系列推移")
 
+    period_options = [
+        "直近1年",
+        "直近3年",
+        "直近5年",
+        "直近10年",
+        "直近20年",
+        "直近30年",
+        "全期間",
+    ]
+
     period = st.selectbox(
         "表示期間",
-        [
-            "直近1年",
-            "直近3年",
-            "直近5年",
-            "直近10年",
-            "直近20年",
-            "直近30年",
-            "全期間",
-        ],
+        period_options,
+        index=period_options.index("直近10年"),
     )
 
     period_months = {
@@ -117,22 +181,41 @@ def main() -> None:
 
     if period_months is None:
         display_period_df = df.copy()
-
     else:
         display_period_df = df.tail(period_months).copy()
 
     # -------------------------
-    # 現金給与総額
+    # 名目賃金
     # -------------------------
 
-    st.markdown("#### 現金給与総額")
+    st.markdown(f"#### {wage_item}")
+
+    wage_chart_df = display_period_df[
+        [
+            "date",
+            "nominal_wage_amount",
+            "nominal_wage_ma_12",
+        ]
+    ].copy()
+
+    wage_chart_df = wage_chart_df.rename(
+        columns={
+            "nominal_wage_amount": "月次",
+            "nominal_wage_ma_12": "12か月移動平均",
+        }
+    )
+
+    chart_columns = ["月次"]
+
+    if show_moving_average:
+        chart_columns.append("12か月移動平均")
 
     st.line_chart(
-        display_period_df,
+        wage_chart_df,
         x="date",
-        y="nominal_wage_amount",
+        y=chart_columns,
         x_label="年月",
-        y_label="現金給与総額（円）",
+        y_label=f"{wage_item}（円）",
     )
 
     # -------------------------
@@ -161,6 +244,7 @@ def main() -> None:
         [
             "date",
             "nominal_wage_amount",
+            "nominal_wage_ma_12",
             "mom_pct",
             "yoy_pct",
         ]
@@ -182,17 +266,27 @@ def main() -> None:
             ),
             "nominal_wage_amount": (
                 st.column_config.NumberColumn(
-                    "現金給与総額",
+                    "月次",
                     format="%,.0f円",
                 )
             ),
-            "mom_pct": st.column_config.NumberColumn(
-                "前月比",
-                format="%.1f%%",
+            "nominal_wage_ma_12": (
+                st.column_config.NumberColumn(
+                    "12か月移動平均",
+                    format="%,.0f円",
+                )
             ),
-            "yoy_pct": st.column_config.NumberColumn(
-                "前年同月比",
-                format="%.1f%%",
+            "mom_pct": (
+                st.column_config.NumberColumn(
+                    "前月比",
+                    format="%.1f%%",
+                )
+            ),
+            "yoy_pct": (
+                st.column_config.NumberColumn(
+                    "前年同月比",
+                    format="%.1f%%",
+                )
             ),
         },
     )
@@ -215,18 +309,26 @@ def main() -> None:
         csv_df["date"].dt.month,
     )
 
-    csv_df = csv_df.drop(
-        columns="date",
+    csv_df.insert(
+        2,
+        "wage_item",
+        wage_item,
     )
 
-    csv_df = csv_df.rename(
-        columns={
-            "year": "年",
-            "month": "月",
-            "nominal_wage_amount": "現金給与総額",
-            "mom_pct": "前月比(%)",
-            "yoy_pct": "前年同月比(%)",
-        }
+    csv_df.insert(
+        3,
+        "employment_type",
+        employment_type,
+    )
+
+    csv_df.insert(
+        4,
+        "establishment_size",
+        establishment_size,
+    )
+
+    csv_df = csv_df.drop(
+        columns="date",
     )
 
     csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
@@ -235,7 +337,7 @@ def main() -> None:
 
     with download_col:
         st.download_button(
-            label="全期間データをCSVでダウンロード",
+            label="選択条件の全期間データをCSVでダウンロード",
             data=csv_data,
             file_name="nominal_wage.csv",
             mime="text/csv",
@@ -246,7 +348,7 @@ def main() -> None:
             "データを再読み込み",
             width="stretch",
         ):
-            load_wage_data.clear()
+            load_raw_wage_data.clear()
             st.rerun()
 
     # -------------------------
@@ -258,17 +360,19 @@ def main() -> None:
             f"""
             - **出典**：{WAGE_METADATA["source"]}
             - **統計**：{WAGE_METADATA["statistics_name"]}
-            - **項目**：{WAGE_METADATA["item_name"]}
-            - **産業**：{WAGE_METADATA["industry"]}
-            - **事業所規模**：{WAGE_METADATA["establishment_size"]}
-            - **就業形態**：{WAGE_METADATA["employment_type"]}
-            - **単位**：{WAGE_METADATA["unit"]}
+            - **賃金項目**：{wage_item}
+            - **産業**：調査産業計
+            - **事業所規模**：{establishment_size}
+            - **就業形態**：{employment_type}
+            - **単位**：円
+            - **12か月移動平均**：月次値からアプリ内で算出
             """
         )
 
     st.info(
-        "前月比と前年同月比は、現金給与総額からアプリ内で計算しています。"
-        "現金給与総額は賞与などの影響を受けるため、月ごとの変動が大きくなる場合があります。"
+        "前月比・前年同月比・12か月移動平均は、"
+        "選択した月次賃金データからアプリ内で算出しています。"
+        "12か月移動平均は12か月連続したデータがある場合のみ算出します。"
     )
 
 
