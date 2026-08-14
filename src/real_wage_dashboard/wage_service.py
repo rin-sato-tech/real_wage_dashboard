@@ -20,7 +20,7 @@ def create_wage_dataframe(
     establishment_size: str = "T",
     employment_type: str = "0",
 ) -> pd.DataFrame:
-    """長期時系列表から現金給与総額の月次実数を抽出する。"""
+    """長期時系列表から指定条件の月次賃金データを抽出する。"""
 
     required_columns = {
         "年",
