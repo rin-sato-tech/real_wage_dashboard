@@ -4,6 +4,7 @@ import pytest
 from real_wage_dashboard.employment_analysis import (
     add_approx_hourly_wage,
     add_base_year_index,
+    add_employment_changes,
     add_employment_comparison_indices,
     create_employment_analysis_dataframe,
     merge_wage_and_working_hours,
@@ -409,3 +410,76 @@ def test_add_base_year_index_raises_when_column_missing() -> None:
             column="missing_column",
             output_column="test_index",
         )
+
+
+def create_changes_test_df() -> pd.DataFrame:
+    dates = pd.date_range(
+        "2020-01-01",
+        periods=13,
+        freq="MS",
+    )
+
+    return pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [
+                100.0,
+            ]
+            * 12
+            + [110.0],
+            "working_hours": [
+                100.0,
+            ]
+            * 12
+            + [95.0],
+            "approx_hourly_wage": [
+                100.0,
+            ]
+            * 12
+            + [120.0],
+        }
+    )
+
+
+def test_add_employment_changes() -> None:
+    df = create_changes_test_df()
+
+    result = add_employment_changes(df)
+
+    latest = result.iloc[-1]
+
+    assert latest["regular_wage_yoy_pct"] == pytest.approx(10.0)
+    assert latest["working_hours_yoy_pct"] == pytest.approx(-5.0)
+    assert latest["approx_hourly_wage_yoy_pct"] == pytest.approx(20.0)
+
+
+def test_add_employment_changes_first_12_months_are_nan() -> None:
+    df = create_changes_test_df()
+
+    result = add_employment_changes(df)
+
+    assert result.iloc[:12]["regular_wage_yoy_pct"].isna().all()
+    assert result.iloc[:12]["working_hours_yoy_pct"].isna().all()
+    assert result.iloc[:12]["approx_hourly_wage_yoy_pct"].isna().all()
+
+
+def test_add_employment_changes_sorts_dates() -> None:
+    df = create_changes_test_df().iloc[::-1].reset_index(drop=True)
+
+    result = add_employment_changes(df)
+
+    assert result["date"].is_monotonic_increasing
+
+    latest = result.iloc[-1]
+
+    assert latest["regular_wage_yoy_pct"] == pytest.approx(10.0)
+
+
+def test_add_employment_changes_raises_when_required_column_missing() -> None:
+    df = create_changes_test_df().drop(columns=["working_hours"])
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        add_employment_changes(df)
