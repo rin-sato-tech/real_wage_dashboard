@@ -12,6 +12,7 @@ from real_wage_dashboard.employment_analysis import (
     add_real_employment_values,
     add_wage_change_decomposition,
     create_employment_analysis_dataframe,
+    create_full_employment_analysis_dataframe,
     merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
 )
@@ -730,3 +731,157 @@ def test_add_wage_change_decomposition_raises_when_value_not_positive() -> None:
         match="0より大きい賃金・労働時間データが必要",
     ):
         add_wage_change_decomposition(df)
+
+
+def create_full_analysis_test_data() -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
+    dates = pd.date_range(
+        "2020-01-01",
+        periods=13,
+        freq="MS",
+    )
+
+    wage_df = pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [200_000.0] * 12 + [220_000.0],
+        }
+    )
+
+    working_hours_df = pd.DataFrame(
+        {
+            "date": dates,
+            "working_hours": [100.0] * 12 + [105.0],
+        }
+    )
+
+    cpi_df = pd.DataFrame(
+        {
+            "date": dates,
+            "index_value": [100.0] * 12 + [105.0],
+        }
+    )
+
+    return wage_df, working_hours_df, cpi_df
+
+
+def test_create_full_employment_analysis_dataframe() -> None:
+    wage_df, working_hours_df, cpi_df = create_full_analysis_test_data()
+
+    result = create_full_employment_analysis_dataframe(
+        wage_df,
+        working_hours_df,
+        cpi_df,
+    )
+
+    expected_columns = {
+        "date",
+        "nominal_wage_amount",
+        "working_hours",
+        "approx_hourly_wage",
+        "regular_wage_index",
+        "working_hours_index",
+        "approx_hourly_wage_index",
+        "regular_wage_yoy_pct",
+        "working_hours_yoy_pct",
+        "approx_hourly_wage_yoy_pct",
+        "index_value",
+        "real_regular_wage",
+        "real_approx_hourly_wage",
+        "real_regular_wage_index",
+        "real_approx_hourly_wage_index",
+        "real_regular_wage_yoy_pct",
+        "real_approx_hourly_wage_yoy_pct",
+        "wage_log_change_pct",
+        "hourly_wage_contribution_pct",
+        "working_hours_contribution_pct",
+    }
+
+    assert expected_columns.issubset(result.columns)
+    assert len(result) == 13
+
+
+def test_create_full_employment_analysis_dataframe_base_year_indices() -> None:
+    wage_df, working_hours_df, cpi_df = create_full_analysis_test_data()
+
+    result = create_full_employment_analysis_dataframe(
+        wage_df,
+        working_hours_df,
+        cpi_df,
+    )
+
+    base_df = result[result["date"].dt.year == 2020]
+
+    index_columns = [
+        "regular_wage_index",
+        "working_hours_index",
+        "approx_hourly_wage_index",
+        "real_regular_wage_index",
+        "real_approx_hourly_wage_index",
+    ]
+
+    for column in index_columns:
+        assert base_df[column].mean() == pytest.approx(100.0)
+
+
+def test_create_full_employment_analysis_dataframe_latest_values() -> None:
+    wage_df, working_hours_df, cpi_df = create_full_analysis_test_data()
+
+    result = create_full_employment_analysis_dataframe(
+        wage_df,
+        working_hours_df,
+        cpi_df,
+    )
+
+    latest = result.iloc[-1]
+
+    assert latest["approx_hourly_wage"] == pytest.approx(220_000.0 / 105.0)
+
+    assert latest["real_regular_wage"] == pytest.approx(220_000.0 / 105.0 * 100)
+
+    assert latest["real_approx_hourly_wage"] == pytest.approx(
+        (220_000.0 / 105.0) / 105.0 * 100
+    )
+
+    assert latest["regular_wage_yoy_pct"] == pytest.approx(10.0)
+    assert latest["working_hours_yoy_pct"] == pytest.approx(5.0)
+
+
+def test_create_full_employment_analysis_dataframe_decomposition() -> None:
+    wage_df, working_hours_df, cpi_df = create_full_analysis_test_data()
+
+    result = create_full_employment_analysis_dataframe(
+        wage_df,
+        working_hours_df,
+        cpi_df,
+    )
+
+    latest = result.iloc[-1]
+
+    assert latest["wage_log_change_pct"] == pytest.approx(
+        latest["hourly_wage_contribution_pct"]
+        + latest["working_hours_contribution_pct"]
+    )
+
+
+def test_create_full_employment_analysis_dataframe_raises_when_base_year_incomplete() -> (
+    None
+):
+    wage_df, working_hours_df, cpi_df = create_full_analysis_test_data()
+
+    wage_df = wage_df.iloc[:11].copy()
+    working_hours_df = working_hours_df.iloc[:11].copy()
+    cpi_df = cpi_df.iloc[:11].copy()
+
+    with pytest.raises(
+        ValueError,
+        match="2020年の基準データが12か月揃っていません",
+    ):
+        create_full_employment_analysis_dataframe(
+            wage_df,
+            working_hours_df,
+            cpi_df,
+        )

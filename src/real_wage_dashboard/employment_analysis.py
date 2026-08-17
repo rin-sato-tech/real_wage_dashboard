@@ -388,3 +388,40 @@ def add_wage_change_decomposition(
     ) * 100
 
     return result
+
+
+def create_full_employment_analysis_dataframe(
+    wage_df: pd.DataFrame,
+    working_hours_df: pd.DataFrame,
+    cpi_df: pd.DataFrame,
+    base_year: int = 2020,
+) -> pd.DataFrame:
+    """雇用形態比較に必要な分析列をまとめて作成する。"""
+
+    result = create_employment_analysis_dataframe(
+        wage_df,
+        working_hours_df,
+    )
+
+    result = add_employment_comparison_indices(
+        result,
+        base_year=base_year,
+    )
+
+    result = add_employment_changes(result)
+
+    result = add_real_employment_analysis(
+        result,
+        cpi_df,
+    )
+
+    result = add_real_employment_indices(
+        result,
+        base_year=base_year,
+    )
+
+    result = add_real_employment_changes(result)
+
+    result = add_wage_change_decomposition(result)
+
+    return result
