@@ -694,9 +694,9 @@ def test_add_wage_change_decomposition() -> None:
 
     latest = result.iloc[-1]
 
-    total = latest["wage_log_change_pct"]
-    hourly = latest["hourly_wage_contribution_pct"]
-    hours = latest["working_hours_contribution_pct"]
+    total = latest["wage_log_change"]
+    hourly = latest["hourly_wage_log_contribution"]
+    hours = latest["working_hours_log_contribution"]
 
     assert total == pytest.approx(hourly + hours)
 
@@ -706,9 +706,9 @@ def test_add_wage_change_decomposition_first_12_months_are_nan() -> None:
 
     result = add_wage_change_decomposition(df)
 
-    assert result.iloc[:12]["wage_log_change_pct"].isna().all()
-    assert result.iloc[:12]["hourly_wage_contribution_pct"].isna().all()
-    assert result.iloc[:12]["working_hours_contribution_pct"].isna().all()
+    assert result.iloc[:12]["wage_log_change"].isna().all()
+    assert result.iloc[:12]["hourly_wage_log_contribution"].isna().all()
+    assert result.iloc[:12]["working_hours_log_contribution"].isna().all()
 
 
 def test_add_wage_change_decomposition_raises_when_required_column_missing() -> None:
@@ -795,9 +795,9 @@ def test_create_full_employment_analysis_dataframe() -> None:
         "real_approx_hourly_wage_index",
         "real_regular_wage_yoy_pct",
         "real_approx_hourly_wage_yoy_pct",
-        "wage_log_change_pct",
-        "hourly_wage_contribution_pct",
-        "working_hours_contribution_pct",
+        "wage_log_change",
+        "hourly_wage_log_contribution",
+        "working_hours_log_contribution",
     }
 
     assert expected_columns.issubset(result.columns)
@@ -861,9 +861,9 @@ def test_create_full_employment_analysis_dataframe_decomposition() -> None:
 
     latest = result.iloc[-1]
 
-    assert latest["wage_log_change_pct"] == pytest.approx(
-        latest["hourly_wage_contribution_pct"]
-        + latest["working_hours_contribution_pct"]
+    assert latest["wage_log_change"] == pytest.approx(
+        latest["hourly_wage_log_contribution"]
+        + latest["working_hours_log_contribution"]
     )
 
 

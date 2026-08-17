@@ -373,17 +373,17 @@ def add_wage_change_decomposition(
     ):
         raise ValueError("要因分解には0より大きい賃金・労働時間データが必要です。")
 
-    result["wage_log_change_pct"] = (
+    result["wage_log_change"] = (
         np.log(result["nominal_wage_amount"])
         - np.log(result["nominal_wage_amount"].shift(12))
     ) * 100
 
-    result["hourly_wage_contribution_pct"] = (
+    result["hourly_wage_log_contribution"] = (
         np.log(result["approx_hourly_wage"])
         - np.log(result["approx_hourly_wage"].shift(12))
     ) * 100
 
-    result["working_hours_contribution_pct"] = (
+    result["working_hours_log_contribution"] = (
         np.log(result["working_hours"]) - np.log(result["working_hours"].shift(12))
     ) * 100
 
