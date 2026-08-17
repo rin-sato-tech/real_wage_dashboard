@@ -7,6 +7,8 @@ from real_wage_dashboard.employment_analysis import (
     add_employment_changes,
     add_employment_comparison_indices,
     add_real_employment_analysis,
+    add_real_employment_changes,
+    add_real_employment_indices,
     add_real_employment_values,
     create_employment_analysis_dataframe,
     merge_employment_analysis_with_cpi,
@@ -602,3 +604,53 @@ def test_add_real_employment_analysis() -> None:
         "real_regular_wage",
         "real_approx_hourly_wage",
     }.issubset(result.columns)
+
+
+def create_real_test_df() -> pd.DataFrame:
+    dates = pd.date_range(
+        "2020-01-01",
+        periods=13,
+        freq="MS",
+    )
+
+    return pd.DataFrame(
+        {
+            "date": dates,
+            "real_regular_wage": [100.0] * 12 + [110.0],
+            "real_approx_hourly_wage": [100.0] * 12 + [105.0],
+        }
+    )
+
+
+def test_add_real_employment_indices() -> None:
+    df = create_real_test_df()
+
+    result = add_real_employment_indices(df)
+
+    base_df = result[result["date"].dt.year == 2020]
+
+    assert base_df["real_regular_wage_index"].mean() == pytest.approx(100.0)
+    assert base_df["real_approx_hourly_wage_index"].mean() == pytest.approx(100.0)
+
+    assert result.iloc[-1]["real_regular_wage_index"] == pytest.approx(110.0)
+    assert result.iloc[-1]["real_approx_hourly_wage_index"] == pytest.approx(105.0)
+
+
+def test_add_real_employment_changes() -> None:
+    df = create_real_test_df()
+
+    result = add_real_employment_changes(df)
+
+    latest = result.iloc[-1]
+
+    assert latest["real_regular_wage_yoy_pct"] == pytest.approx(10.0)
+    assert latest["real_approx_hourly_wage_yoy_pct"] == pytest.approx(5.0)
+
+
+def test_add_real_employment_changes_first_12_months_are_nan() -> None:
+    df = create_real_test_df()
+
+    result = add_real_employment_changes(df)
+
+    assert result.iloc[:12]["real_regular_wage_yoy_pct"].isna().all()
+    assert result.iloc[:12]["real_approx_hourly_wage_yoy_pct"].isna().all()

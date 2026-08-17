@@ -290,3 +290,58 @@ def add_real_employment_analysis(
     result = add_real_employment_values(result)
 
     return result
+
+
+def add_real_employment_indices(
+    df: pd.DataFrame,
+    base_year: int = 2020,
+) -> pd.DataFrame:
+    """実質賃金系の2020年基準指数を追加する。"""
+
+    result = df.copy()
+
+    result = add_base_year_index(
+        result,
+        column="real_regular_wage",
+        output_column="real_regular_wage_index",
+        base_year=base_year,
+    )
+
+    result = add_base_year_index(
+        result,
+        column="real_approx_hourly_wage",
+        output_column="real_approx_hourly_wage_index",
+        base_year=base_year,
+    )
+
+    return result
+
+
+def add_real_employment_changes(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """実質賃金系の前年同月比を追加する。"""
+
+    required_columns = {
+        "date",
+        "real_regular_wage",
+        "real_approx_hourly_wage",
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    result = df.sort_values("date").reset_index(drop=True).copy()
+
+    result["real_regular_wage_yoy_pct"] = (
+        result["real_regular_wage"].pct_change(periods=12, fill_method=None).mul(100)
+    )
+
+    result["real_approx_hourly_wage_yoy_pct"] = (
+        result["real_approx_hourly_wage"]
+        .pct_change(periods=12, fill_method=None)
+        .mul(100)
+    )
+
+    return result
