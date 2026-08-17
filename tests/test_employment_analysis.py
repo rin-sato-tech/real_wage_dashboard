@@ -6,7 +6,10 @@ from real_wage_dashboard.employment_analysis import (
     add_base_year_index,
     add_employment_changes,
     add_employment_comparison_indices,
+    add_real_employment_analysis,
+    add_real_employment_values,
     create_employment_analysis_dataframe,
+    merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
 )
 
@@ -483,3 +486,119 @@ def test_add_employment_changes_raises_when_required_column_missing() -> None:
         match="必要な列がありません",
     ):
         add_employment_changes(df)
+
+
+def create_test_cpi_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "date": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2020-02-01",
+                    "2020-03-01",
+                ]
+            ),
+            "index_value": [
+                100.0,
+                102.0,
+                105.0,
+            ],
+        }
+    )
+
+
+def test_merge_employment_analysis_with_cpi() -> None:
+    df = create_employment_analysis_dataframe(
+        create_test_wage_df(),
+        create_test_working_hours_df(),
+    )
+
+    cpi_df = create_test_cpi_df()
+
+    result = merge_employment_analysis_with_cpi(
+        df,
+        cpi_df,
+    )
+
+    assert len(result) == 3
+
+    assert "index_value" in result.columns
+
+
+def test_merge_employment_analysis_with_cpi_raises_for_duplicate_cpi_dates() -> None:
+    df = create_employment_analysis_dataframe(
+        create_test_wage_df(),
+        create_test_working_hours_df(),
+    )
+
+    cpi_df = pd.concat(
+        [
+            create_test_cpi_df(),
+            create_test_cpi_df().iloc[[0]],
+        ],
+        ignore_index=True,
+    )
+
+    with pytest.raises(pd.errors.MergeError):
+        merge_employment_analysis_with_cpi(
+            df,
+            cpi_df,
+        )
+
+
+def test_add_real_employment_values() -> None:
+    df = pd.DataFrame(
+        {
+            "nominal_wage_amount": [
+                300_000.0,
+            ],
+            "approx_hourly_wage": [
+                2000.0,
+            ],
+            "index_value": [
+                120.0,
+            ],
+        }
+    )
+
+    result = add_real_employment_values(df)
+
+    assert result.iloc[0]["real_regular_wage"] == pytest.approx(250_000.0)
+
+    assert result.iloc[0]["real_approx_hourly_wage"] == pytest.approx(1666.6666667)
+
+
+def test_add_real_employment_values_raises_when_cpi_not_positive() -> None:
+    df = pd.DataFrame(
+        {
+            "nominal_wage_amount": [300_000.0],
+            "approx_hourly_wage": [2000.0],
+            "index_value": [0.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="CPIには0より大きい値が必要です",
+    ):
+        add_real_employment_values(df)
+
+
+def test_add_real_employment_analysis() -> None:
+    df = create_employment_analysis_dataframe(
+        create_test_wage_df(),
+        create_test_working_hours_df(),
+    )
+
+    cpi_df = create_test_cpi_df()
+
+    result = add_real_employment_analysis(
+        df,
+        cpi_df,
+    )
+
+    assert {
+        "index_value",
+        "real_regular_wage",
+        "real_approx_hourly_wage",
+    }.issubset(result.columns)

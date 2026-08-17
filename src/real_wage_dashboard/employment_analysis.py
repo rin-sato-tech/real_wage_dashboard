@@ -198,3 +198,95 @@ def add_employment_changes(
     )
 
     return result
+
+
+def merge_employment_analysis_with_cpi(
+    df: pd.DataFrame,
+    cpi_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """雇用形態比較データとCPIを年月でone-to-one結合する。"""
+
+    analysis_required = {
+        "date",
+        "nominal_wage_amount",
+        "working_hours",
+        "approx_hourly_wage",
+    }
+
+    cpi_required = {
+        "date",
+        "index_value",
+    }
+
+    if not analysis_required.issubset(df.columns):
+        missing = analysis_required - set(df.columns)
+        raise ValueError(f"雇用形態比較データに必要な列がありません: {sorted(missing)}")
+
+    if not cpi_required.issubset(cpi_df.columns):
+        missing = cpi_required - set(cpi_df.columns)
+        raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
+
+    analysis = df.copy()
+
+    cpi = cpi_df[
+        [
+            "date",
+            "index_value",
+        ]
+    ].copy()
+
+    result = analysis.merge(
+        cpi,
+        on="date",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    return result.sort_values("date").reset_index(drop=True)
+
+
+def add_real_employment_values(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """CPIで実質月額賃金と実質概算時間当たり賃金を算出する。"""
+
+    required_columns = {
+        "nominal_wage_amount",
+        "approx_hourly_wage",
+        "index_value",
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    result = df.copy()
+
+    if (result["index_value"] <= 0).any():
+        raise ValueError("CPIには0より大きい値が必要です。")
+
+    result["real_regular_wage"] = (
+        result["nominal_wage_amount"] / result["index_value"] * 100
+    )
+
+    result["real_approx_hourly_wage"] = (
+        result["approx_hourly_wage"] / result["index_value"] * 100
+    )
+
+    return result
+
+
+def add_real_employment_analysis(
+    df: pd.DataFrame,
+    cpi_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """雇用形態比較データにCPIと実質値を追加する。"""
+
+    result = merge_employment_analysis_with_cpi(
+        df,
+        cpi_df,
+    )
+
+    result = add_real_employment_values(result)
+
+    return result
