@@ -89,3 +89,64 @@ def create_employment_analysis_dataframe(
     result = add_approx_hourly_wage(result)
 
     return result
+
+
+def add_base_year_index(
+    df: pd.DataFrame,
+    column: str,
+    output_column: str,
+    base_year: int = 2020,
+) -> pd.DataFrame:
+    """指定列を基準年平均=100として指数化する。"""
+
+    required_columns = {
+        "date",
+        column,
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    result = df.copy()
+
+    base_df = result[result["date"].dt.year == base_year].copy()
+
+    base_months = base_df["date"].dt.to_period("M").drop_duplicates()
+
+    if len(base_months) != 12:
+        raise ValueError(f"{base_year}年の基準データが12か月揃っていません。")
+
+    base_value = base_df[column].mean()
+
+    if pd.isna(base_value) or base_value <= 0:
+        raise ValueError("基準年平均は0より大きい必要があります。")
+
+    result[output_column] = result[column] / base_value * 100
+
+    return result
+
+
+def add_employment_comparison_indices(
+    df: pd.DataFrame,
+    base_year: int = 2020,
+) -> pd.DataFrame:
+    """雇用形態比較で使用する2020年基準指数を追加する。"""
+
+    index_columns = {
+        "nominal_wage_amount": "regular_wage_index",
+        "working_hours": "working_hours_index",
+        "approx_hourly_wage": "approx_hourly_wage_index",
+    }
+
+    result = df.copy()
+
+    for column, output_column in index_columns.items():
+        result = add_base_year_index(
+            result,
+            column=column,
+            output_column=output_column,
+            base_year=base_year,
+        )
+
+    return result

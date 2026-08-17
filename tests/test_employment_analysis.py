@@ -3,6 +3,8 @@ import pytest
 
 from real_wage_dashboard.employment_analysis import (
     add_approx_hourly_wage,
+    add_base_year_index,
+    add_employment_comparison_indices,
     create_employment_analysis_dataframe,
     merge_wage_and_working_hours,
 )
@@ -290,3 +292,120 @@ def test_create_employment_analysis_dataframe() -> None:
             2000.0,
         ]
     )
+
+
+def create_base_year_test_df() -> pd.DataFrame:
+    dates = pd.date_range(
+        "2020-01-01",
+        periods=13,
+        freq="MS",
+    )
+
+    return pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+                110.0,
+            ],
+            "working_hours": [
+                160.0,
+            ]
+            * 12
+            + [168.0],
+            "approx_hourly_wage": [
+                10.0,
+            ]
+            * 12
+            + [11.0],
+        }
+    )
+
+
+def test_add_base_year_index() -> None:
+    df = create_base_year_test_df()
+
+    result = add_base_year_index(
+        df,
+        column="nominal_wage_amount",
+        output_column="test_index",
+    )
+
+    base_df = result[result["date"].dt.year == 2020]
+
+    assert base_df["test_index"].mean() == pytest.approx(100.0)
+
+    assert result.iloc[-1]["test_index"] == pytest.approx(110.0)
+
+
+def test_add_employment_comparison_indices() -> None:
+    df = create_base_year_test_df()
+
+    result = add_employment_comparison_indices(df)
+
+    assert {
+        "regular_wage_index",
+        "working_hours_index",
+        "approx_hourly_wage_index",
+    }.issubset(result.columns)
+
+    base_df = result[result["date"].dt.year == 2020]
+
+    assert base_df["regular_wage_index"].mean() == pytest.approx(100.0)
+    assert base_df["working_hours_index"].mean() == pytest.approx(100.0)
+    assert base_df["approx_hourly_wage_index"].mean() == pytest.approx(100.0)
+
+
+def test_add_base_year_index_raises_when_base_year_incomplete() -> None:
+    df = create_base_year_test_df().iloc[:11].copy()
+
+    with pytest.raises(
+        ValueError,
+        match="2020年の基準データが12か月揃っていません",
+    ):
+        add_base_year_index(
+            df,
+            column="nominal_wage_amount",
+            output_column="test_index",
+        )
+
+
+def test_add_base_year_index_raises_when_base_year_missing() -> None:
+    df = create_base_year_test_df().copy()
+
+    df["date"] = df["date"] + pd.DateOffset(years=1)
+
+    with pytest.raises(
+        ValueError,
+        match="2020年の基準データが12か月揃っていません",
+    ):
+        add_base_year_index(
+            df,
+            column="nominal_wage_amount",
+            output_column="test_index",
+        )
+
+
+def test_add_base_year_index_raises_when_column_missing() -> None:
+    df = create_base_year_test_df()
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        add_base_year_index(
+            df,
+            column="missing_column",
+            output_column="test_index",
+        )
