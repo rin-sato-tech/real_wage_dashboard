@@ -272,6 +272,7 @@ v2では以下に固定する。
 
 - 名目賃金
 - 実質賃金
+- 実質賃金指数
 
 前年同月比には適用しない。
 
@@ -390,18 +391,11 @@ UI表示名とCSVコードの対応は`config.py`等に集約する。
 
 ---
 
-### 10.2 基準年データがない場合
+### 10.2 基準年データが不足している場合
 
-2020年のデータが存在せず指数化できない場合は処理を停止する。
+2020年の12か月分の基準データが揃っていない場合は処理を停止する。
 
-例：
-
-```text
-選択した条件では2020年の基準データが取得できないため、
-指数を算出できません。
-```
-
-別の年を自動的に基準年として使用してはならない。
+別の年への自動フォールバックは行わない。
 
 ---
 
@@ -466,11 +460,13 @@ establishment_size
 cpi_series
 nominal_wage_amount
 nominal_wage_ma_12
-cpi
+index_value
 real_wage_amount
 real_wage_ma_12
 nominal_wage_index
 real_wage_index
+real_wage_index_ma_12
+real_wage_mom_pct
 real_wage_yoy_pct
 ```
 
