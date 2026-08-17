@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -343,5 +344,47 @@ def add_real_employment_changes(
         .pct_change(periods=12, fill_method=None)
         .mul(100)
     )
+
+    return result
+
+
+def add_wage_change_decomposition(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """月額賃金の前年同月変化を時間当たり賃金要因と労働時間要因に分解する。"""
+
+    required_columns = {
+        "date",
+        "nominal_wage_amount",
+        "working_hours",
+        "approx_hourly_wage",
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    result = df.sort_values("date").reset_index(drop=True).copy()
+
+    if (
+        (result["nominal_wage_amount"] <= 0).any()
+        or (result["working_hours"] <= 0).any()
+        or (result["approx_hourly_wage"] <= 0).any()
+    ):
+        raise ValueError("要因分解には0より大きい賃金・労働時間データが必要です。")
+
+    result["wage_log_change_pct"] = (
+        np.log(result["nominal_wage_amount"])
+        - np.log(result["nominal_wage_amount"].shift(12))
+    ) * 100
+
+    result["hourly_wage_contribution_pct"] = (
+        np.log(result["approx_hourly_wage"])
+        - np.log(result["approx_hourly_wage"].shift(12))
+    ) * 100
+
+    result["working_hours_contribution_pct"] = (
+        np.log(result["working_hours"]) - np.log(result["working_hours"].shift(12))
+    ) * 100
 
     return result

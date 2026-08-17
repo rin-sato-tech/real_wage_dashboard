@@ -10,6 +10,7 @@ from real_wage_dashboard.employment_analysis import (
     add_real_employment_changes,
     add_real_employment_indices,
     add_real_employment_values,
+    add_wage_change_decomposition,
     create_employment_analysis_dataframe,
     merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
@@ -654,3 +655,78 @@ def test_add_real_employment_changes_first_12_months_are_nan() -> None:
 
     assert result.iloc[:12]["real_regular_wage_yoy_pct"].isna().all()
     assert result.iloc[:12]["real_approx_hourly_wage_yoy_pct"].isna().all()
+
+
+def create_decomposition_test_df() -> pd.DataFrame:
+    dates = pd.date_range(
+        "2020-01-01",
+        periods=13,
+        freq="MS",
+    )
+
+    nominal_wage = [200.0] * 12 + [231.0]
+    working_hours = [100.0] * 12 + [105.0]
+
+    approx_hourly_wage = [
+        wage / hours
+        for wage, hours in zip(
+            nominal_wage,
+            working_hours,
+            strict=True,
+        )
+    ]
+
+    return pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": nominal_wage,
+            "working_hours": working_hours,
+            "approx_hourly_wage": approx_hourly_wage,
+        }
+    )
+
+
+def test_add_wage_change_decomposition() -> None:
+    df = create_decomposition_test_df()
+
+    result = add_wage_change_decomposition(df)
+
+    latest = result.iloc[-1]
+
+    total = latest["wage_log_change_pct"]
+    hourly = latest["hourly_wage_contribution_pct"]
+    hours = latest["working_hours_contribution_pct"]
+
+    assert total == pytest.approx(hourly + hours)
+
+
+def test_add_wage_change_decomposition_first_12_months_are_nan() -> None:
+    df = create_decomposition_test_df()
+
+    result = add_wage_change_decomposition(df)
+
+    assert result.iloc[:12]["wage_log_change_pct"].isna().all()
+    assert result.iloc[:12]["hourly_wage_contribution_pct"].isna().all()
+    assert result.iloc[:12]["working_hours_contribution_pct"].isna().all()
+
+
+def test_add_wage_change_decomposition_raises_when_required_column_missing() -> None:
+    df = create_decomposition_test_df().drop(columns=["working_hours"])
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        add_wage_change_decomposition(df)
+
+
+def test_add_wage_change_decomposition_raises_when_value_not_positive() -> None:
+    df = create_decomposition_test_df()
+
+    df.loc[0, "working_hours"] = 0.0
+
+    with pytest.raises(
+        ValueError,
+        match="0より大きい賃金・労働時間データが必要",
+    ):
+        add_wage_change_decomposition(df)
