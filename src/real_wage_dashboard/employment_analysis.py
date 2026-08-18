@@ -425,3 +425,32 @@ def create_full_employment_analysis_dataframe(
     result = add_wage_change_decomposition(result)
 
     return result
+
+
+def calculate_yearly_averages(
+    df: pd.DataFrame,
+    year: int,
+    columns: list[str],
+) -> dict[str, float]:
+    """指定年の12か月平均を算出する。"""
+
+    required_columns = {
+        "date",
+        *columns,
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    year_df = df[df["date"].dt.year == year].copy()
+
+    months = year_df["date"].dt.to_period("M")
+
+    if len(year_df) != 12 or months.nunique() != 12:
+        raise ValueError(f"{year}年のデータが12か月揃っていません。")
+
+    if year_df[columns].isna().any().any():
+        raise ValueError(f"{year}年の分析対象データに欠損値があります。")
+
+    return {column: float(year_df[column].mean()) for column in columns}

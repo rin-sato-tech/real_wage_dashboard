@@ -11,6 +11,7 @@ from real_wage_dashboard.employment_analysis import (
     add_real_employment_indices,
     add_real_employment_values,
     add_wage_change_decomposition,
+    calculate_yearly_averages,
     create_employment_analysis_dataframe,
     create_full_employment_analysis_dataframe,
     merge_employment_analysis_with_cpi,
@@ -884,4 +885,121 @@ def test_create_full_employment_analysis_dataframe_raises_when_base_year_incompl
             wage_df,
             working_hours_df,
             cpi_df,
+        )
+
+
+def test_calculate_yearly_averages() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [
+                100.0,
+                110.0,
+                120.0,
+                130.0,
+                140.0,
+                150.0,
+                160.0,
+                170.0,
+                180.0,
+                190.0,
+                200.0,
+                210.0,
+            ],
+            "working_hours": [
+                100.0,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_yearly_averages(
+        df,
+        year=2025,
+        columns=[
+            "nominal_wage_amount",
+            "working_hours",
+        ],
+    )
+
+    assert result["nominal_wage_amount"] == pytest.approx(155.0)
+    assert result["working_hours"] == pytest.approx(100.0)
+
+
+def test_calculate_yearly_averages_raises_when_months_missing() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=11,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [
+                100.0,
+            ]
+            * 11,
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2025年のデータが12か月揃っていません",
+    ):
+        calculate_yearly_averages(
+            df,
+            year=2025,
+            columns=["nominal_wage_amount"],
+        )
+
+
+def test_calculate_yearly_averages_raises_when_value_missing() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [
+                100.0,
+            ]
+            * 11
+            + [None],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2025年の分析対象データに欠損値があります",
+    ):
+        calculate_yearly_averages(
+            df,
+            year=2025,
+            columns=["nominal_wage_amount"],
+        )
+
+
+def test_calculate_yearly_averages_raises_when_column_missing() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        calculate_yearly_averages(
+            df,
+            year=2025,
+            columns=["nominal_wage_amount"],
         )
