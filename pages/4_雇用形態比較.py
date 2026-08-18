@@ -151,6 +151,33 @@ def create_decomposition_chart_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def create_comparison_output_dataframe(
+    general_df: pd.DataFrame,
+    part_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """一般労働者とパートの分析結果を縦結合する。"""
+
+    general = general_df.copy()
+    general["employment_type"] = "一般労働者"
+
+    part = part_df.copy()
+    part["employment_type"] = "パートタイム労働者"
+
+    result = pd.concat(
+        [
+            general,
+            part,
+        ],
+        ignore_index=True,
+    )
+
+    return result.sort_values(
+        [
+            "date",
+            "employment_type",
+        ]
+    ).reset_index(drop=True)
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -521,6 +548,70 @@ def main() -> None:
     )
 
     st.caption("月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。")
+
+    comparison_output_df = create_comparison_output_dataframe(
+        general_df,
+        part_df,
+    )
+
+    st.subheader("分析データ")
+
+    display_columns = [
+        "date",
+        "employment_type",
+        "nominal_wage_amount",
+        "working_hours",
+        "approx_hourly_wage",
+        "real_regular_wage",
+        "real_approx_hourly_wage",
+        "regular_wage_index",
+        "working_hours_index",
+        "approx_hourly_wage_index",
+        "real_regular_wage_index",
+        "real_approx_hourly_wage_index",
+        "regular_wage_yoy_pct",
+        "working_hours_yoy_pct",
+        "approx_hourly_wage_yoy_pct",
+        "real_regular_wage_yoy_pct",
+        "real_approx_hourly_wage_yoy_pct",
+        "wage_log_change",
+        "hourly_wage_log_contribution",
+        "working_hours_log_contribution",
+    ]
+
+    display_df = comparison_output_df[
+        display_columns
+    ].copy()
+
+    display_df = display_df.sort_values(
+        [
+            "date",
+            "employment_type",
+        ],
+        ascending=[
+            False,
+            True,
+        ],
+    )
+
+    st.dataframe(
+        display_df,
+        width="stretch",
+        hide_index=True,
+    )
+
+    csv_data = comparison_output_df[
+        display_columns
+    ].to_csv(
+        index=False,
+    ).encode("utf-8-sig")
+
+    st.download_button(
+        label="CSVをダウンロード",
+        data=csv_data,
+        file_name="employment_comparison.csv",
+        mime="text/csv",
+    )
 
 if __name__ == "__main__":
     main()
