@@ -130,6 +130,27 @@ def create_comparison_chart_dataframe(
     )
 
 
+def create_decomposition_chart_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """要因分解グラフ用のDataFrameを作成する。"""
+
+    result = df[
+        [
+            "date",
+            "wage_log_change",
+            "hourly_wage_log_contribution",
+            "working_hours_log_contribution",
+        ]
+    ].copy()
+
+    return result.rename(
+        columns={
+            "wage_log_change": "月額賃金の対数変化",
+            "hourly_wage_log_contribution": "時間当たり賃金要因",
+            "working_hours_log_contribution": "労働時間要因",
+        }
+    )
+
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -219,6 +240,64 @@ def main() -> None:
     # -------------------------
 
     st.subheader("データ確認")
+
+    latest_general = general_df.iloc[-1]
+    latest_part = part_df.iloc[-1]
+
+    st.subheader("最新データ")
+
+    general_col, part_col = st.columns(2)
+
+    with general_col:
+        st.markdown("### 一般労働者")
+
+        metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+        metric_col1.metric(
+            "月額賃金",
+            f"{latest_general['nominal_wage_amount']:,.0f}円",
+            f"{latest_general['regular_wage_yoy_pct']:+.1f}%",
+        )
+
+        metric_col2.metric(
+            "総実労働時間",
+            f"{latest_general['working_hours']:.1f}時間",
+            f"{latest_general['working_hours_yoy_pct']:+.1f}%",
+        )
+
+        metric_col3.metric(
+            "概算時間当たり賃金",
+            f"{latest_general['approx_hourly_wage']:,.0f}円",
+            f"{latest_general['approx_hourly_wage_yoy_pct']:+.1f}%",
+        )
+
+    with part_col:
+        st.markdown("### パートタイム労働者")
+
+        metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+        metric_col1.metric(
+            "月額賃金",
+            f"{latest_part['nominal_wage_amount']:,.0f}円",
+            f"{latest_part['regular_wage_yoy_pct']:+.1f}%",
+        )
+
+        metric_col2.metric(
+            "総実労働時間",
+            f"{latest_part['working_hours']:.1f}時間",
+            f"{latest_part['working_hours_yoy_pct']:+.1f}%",
+        )
+
+        metric_col3.metric(
+            "概算時間当たり賃金",
+            f"{latest_part['approx_hourly_wage']:,.0f}円",
+            f"{latest_part['approx_hourly_wage_yoy_pct']:+.1f}%",
+        )
+
+    st.caption(
+        f"最新データ：{latest_general['date'].strftime('%Y年%m月')} ／ "
+        "前年差は前年同月比"
+    )
 
     general_col, part_col = st.columns(2)
 
@@ -353,6 +432,95 @@ def main() -> None:
     )
 
     st.caption("概算時間当たり賃金は、「きまって支給する給与 ÷ 総実労働時間」で算出しています。")
+
+    st.markdown("## 2. 物価を考えるとどうか")
+    st.caption("名目賃金を消費者物価指数で実質化し、""購買力の変化を比較します。")
+
+    st.markdown("### 実質月額賃金指数")
+
+    real_regular_wage_chart_df = create_comparison_chart_dataframe(
+        general_display_df,
+        part_display_df,
+        "real_regular_wage_index",
+    )
+
+    st.line_chart(
+        real_regular_wage_chart_df,
+        x="date",
+        y=[
+            "一般労働者",
+            "パートタイム労働者",
+        ],
+        x_label="年月",
+        y_label="実質月額賃金指数（2020年平均=100）",
+    )
+
+    st.caption("「きまって支給する給与」を選択したCPIで実質化し、各就業形態について2020年平均=100として指数化しています。")
+
+    st.markdown("### 実質概算時間当たり賃金指数")
+
+    real_hourly_wage_chart_df = create_comparison_chart_dataframe(
+        general_display_df,
+        part_display_df,
+        "real_approx_hourly_wage_index",
+    )
+
+    st.line_chart(
+        real_hourly_wage_chart_df,
+        x="date",
+        y=[
+            "一般労働者",
+            "パートタイム労働者",
+        ],
+        x_label="年月",
+        y_label="実質概算時間当たり賃金指数（2020年平均=100）",
+    )
+
+    st.caption("概算時間当たり賃金を選択したCPIで実質化し、1時間当たりの賃金の実質的な購買力の変化を示します。")
+
+    st.markdown("## 3. なぜそうなったか")
+
+    st.caption("月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。")
+
+    st.markdown("### 一般労働者：月額賃金変化の要因分解")
+
+    general_decomposition_df = create_decomposition_chart_dataframe(
+        general_display_df
+    ).dropna()
+
+    st.line_chart(
+        general_decomposition_df,
+        x="date",
+        y=[
+            "月額賃金の対数変化",
+            "時間当たり賃金要因",
+            "労働時間要因",
+        ],
+        x_label="年月",
+        y_label="前年同月からの対数変化（×100）",
+    )
+
+    st.caption("月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。")
+
+    st.markdown("### パートタイム労働者：月額賃金変化の要因分解")
+
+    part_decomposition_df = create_decomposition_chart_dataframe(
+        part_display_df
+    ).dropna()
+
+    st.line_chart(
+        part_decomposition_df,
+        x="date",
+        y=[
+            "月額賃金の対数変化",
+            "時間当たり賃金要因",
+            "労働時間要因",
+        ],
+        x_label="年月",
+        y_label="前年同月からの対数変化（×100）",
+    )
+
+    st.caption("月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。")
 
 if __name__ == "__main__":
     main()
