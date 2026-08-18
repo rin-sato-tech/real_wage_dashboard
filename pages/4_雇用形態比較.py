@@ -27,7 +27,6 @@ from real_wage_dashboard.working_hours_service import (
     create_working_hours_dataframe,
 )
 
-
 st.set_page_config(
     page_title="雇用形態比較",
     page_icon="👥",
@@ -178,6 +177,7 @@ def create_comparison_output_dataframe(
         ]
     ).reset_index(drop=True)
 
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -207,15 +207,11 @@ def main() -> None:
         selected_series = st.selectbox(
             "実質化に使用する消費者物価指数",
             list(CPI_SERIES.keys()),
-            index=list(CPI_SERIES.keys()).index(
-                CPI_DEFAULT_SERIES
-            ),
+            index=list(CPI_SERIES.keys()).index(CPI_DEFAULT_SERIES),
         )
 
     st.caption(
-        "賃金項目：きまって支給する給与 ／ "
-        "労働時間：総実労働時間 ／ "
-        "産業：調査産業計"
+        "賃金項目：きまって支給する給与 ／ 労働時間：総実労働時間 ／ 産業：調査産業計"
     )
 
     selected_size_code = WAGE_ESTABLISHMENT_SIZES[establishment_size]
@@ -380,7 +376,6 @@ def main() -> None:
         "全期間": None,
     }[period]
 
-
     def filter_display_period(
         df: pd.DataFrame,
     ) -> pd.DataFrame:
@@ -389,13 +384,14 @@ def main() -> None:
 
         return df.tail(period_months).copy()
 
-
     general_display_df = filter_display_period(general_df)
     part_display_df = filter_display_period(part_df)
 
     st.markdown("## 1. 何が起きたか")
 
-    st.caption("2020年平均を100として、月額賃金・労働時間・概算時間当たり賃金の変化を比較します。")
+    st.caption(
+        "2020年平均を100として、月額賃金・労働時間・概算時間当たり賃金の変化を比較します。"
+    )
 
     st.markdown("### 月額賃金指数")
 
@@ -416,7 +412,9 @@ def main() -> None:
         y_label="月額賃金指数（2020年平均=100）",
     )
 
-    st.caption("「きまって支給する給与」の推移を、各就業形態について2020年平均=100として指数化しています。")
+    st.caption(
+        "「きまって支給する給与」の推移を、各就業形態について2020年平均=100として指数化しています。"
+    )
 
     st.markdown("### 総実労働時間指数")
 
@@ -458,10 +456,12 @@ def main() -> None:
         y_label="概算時間当たり賃金指数（2020年平均=100）",
     )
 
-    st.caption("概算時間当たり賃金は、「きまって支給する給与 ÷ 総実労働時間」で算出しています。")
+    st.caption(
+        "概算時間当たり賃金は、「きまって支給する給与 ÷ 総実労働時間」で算出しています。"
+    )
 
     st.markdown("## 2. 物価を考えるとどうか")
-    st.caption("名目賃金を消費者物価指数で実質化し、""購買力の変化を比較します。")
+    st.caption("名目賃金を消費者物価指数で実質化し、購買力の変化を比較します。")
 
     st.markdown("### 実質月額賃金指数")
 
@@ -482,7 +482,9 @@ def main() -> None:
         y_label="実質月額賃金指数（2020年平均=100）",
     )
 
-    st.caption("「きまって支給する給与」を選択したCPIで実質化し、各就業形態について2020年平均=100として指数化しています。")
+    st.caption(
+        "「きまって支給する給与」を選択したCPIで実質化し、各就業形態について2020年平均=100として指数化しています。"
+    )
 
     st.markdown("### 実質概算時間当たり賃金指数")
 
@@ -503,11 +505,15 @@ def main() -> None:
         y_label="実質概算時間当たり賃金指数（2020年平均=100）",
     )
 
-    st.caption("概算時間当たり賃金を選択したCPIで実質化し、1時間当たりの賃金の実質的な購買力の変化を示します。")
+    st.caption(
+        "概算時間当たり賃金を選択したCPIで実質化し、1時間当たりの賃金の実質的な購買力の変化を示します。"
+    )
 
     st.markdown("## 3. なぜそうなったか")
 
-    st.caption("月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。")
+    st.caption(
+        "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
+    )
 
     st.markdown("### 一般労働者：月額賃金変化の要因分解")
 
@@ -527,7 +533,9 @@ def main() -> None:
         y_label="前年同月からの対数変化（×100）",
     )
 
-    st.caption("月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。")
+    st.caption(
+        "月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。"
+    )
 
     st.markdown("### パートタイム労働者：月額賃金変化の要因分解")
 
@@ -547,7 +555,9 @@ def main() -> None:
         y_label="前年同月からの対数変化（×100）",
     )
 
-    st.caption("月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。")
+    st.caption(
+        "月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。"
+    )
 
     comparison_output_df = create_comparison_output_dataframe(
         general_df,
@@ -579,9 +589,7 @@ def main() -> None:
         "working_hours_log_contribution",
     ]
 
-    display_df = comparison_output_df[
-        display_columns
-    ].copy()
+    display_df = comparison_output_df[display_columns].copy()
 
     display_df = display_df.sort_values(
         [
@@ -600,11 +608,13 @@ def main() -> None:
         hide_index=True,
     )
 
-    csv_data = comparison_output_df[
-        display_columns
-    ].to_csv(
-        index=False,
-    ).encode("utf-8-sig")
+    csv_data = (
+        comparison_output_df[display_columns]
+        .to_csv(
+            index=False,
+        )
+        .encode("utf-8-sig")
+    )
 
     st.download_button(
         label="CSVをダウンロード",
@@ -612,6 +622,41 @@ def main() -> None:
         file_name="employment_comparison.csv",
         mime="text/csv",
     )
+
+    st.subheader("注意事項")
+
+    st.markdown(
+        """
+    - **概算時間当たり賃金**は、公表されている公式の時給ではありません。
+    本アプリでは「きまって支給する給与 ÷ 総実労働時間」で算出しています。
+    - **実質月額賃金・実質概算時間当たり賃金**は、
+    選択した消費者物価指数を用いて本アプリ側で実質化した値です。
+    公式に公表されている実質賃金指数とは定義・計算方法が異なる場合があります。
+    - 各指数は、**一般労働者とパートタイム労働者について、それぞれ個別に
+    2020年平均=100として指数化**しています。
+    したがって、指数の水準から両者の絶対的な賃金格差を比較することはできません。
+    - 要因分解では、月額賃金を
+    「概算時間当たり賃金 × 総実労働時間」とみなし、
+    前年同月からの**対数変化**を時間当たり賃金要因と労働時間要因に分解しています。
+    - 要因分解の値は通常の前年比（%）とは異なります。
+    対数変化を100倍した値として表示しています。
+    """
+    )
+
+    st.subheader("データ出典")
+
+    st.markdown(
+        f"""
+    - 賃金・労働時間：政府統計の総合窓口 e-Stat
+    「毎月勤労統計調査」
+    - 産業：調査産業計
+    - 賃金項目：きまって支給する給与
+    - 労働時間：総実労働時間
+    - 事業所規模：{establishment_size}
+    - 消費者物価指数：{selected_series}
+    """
+    )
+
 
 if __name__ == "__main__":
     main()
