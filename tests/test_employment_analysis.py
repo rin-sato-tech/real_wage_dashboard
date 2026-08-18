@@ -16,8 +16,10 @@ from real_wage_dashboard.employment_analysis import (
     calculate_yearly_change_rates,
     compare_employment_change_rates,
     create_employment_analysis_dataframe,
+    create_employment_analysis_insights,
     create_full_employment_analysis_dataframe,
     create_yearly_comparison_summary,
+    describe_change_direction,
     merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
 )
@@ -1279,3 +1281,62 @@ def test_compare_employment_change_rates_raises_when_column_missing() -> None:
         match="必要な列がありません",
     ):
         compare_employment_change_rates(summary_df)
+
+
+def test_describe_change_direction() -> None:
+    assert describe_change_direction(5.0) == "上昇"
+    assert describe_change_direction(-5.0) == "低下"
+    assert describe_change_direction(0.05) == "横ばい"
+
+
+def test_create_employment_analysis_insights() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+                "一般労働者",
+                "一般労働者",
+                "一般労働者",
+                "一般労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+                "working_hours",
+                "approx_hourly_wage",
+                "real_regular_wage",
+                "real_approx_hourly_wage",
+                "nominal_wage_amount",
+                "working_hours",
+                "approx_hourly_wage",
+                "real_regular_wage",
+                "real_approx_hourly_wage",
+            ],
+            "change_rate_pct": [
+                10.0,
+                -5.0,
+                15.8,
+                -2.0,
+                3.0,
+                20.0,
+                -10.0,
+                33.3,
+                5.0,
+                15.0,
+            ],
+        }
+    )
+
+    result = create_employment_analysis_insights(summary_df)
+
+    joined = "\n".join(result)
+
+    assert "一般労働者で+10.0%" in joined
+    assert "パートタイム労働者で+20.0%" in joined
+    assert "労働時間の減少はその伸びを抑える方向" in joined
+    assert "17.5%ポイント大きく" in joined
+    assert "月額の購買力は低下" in joined

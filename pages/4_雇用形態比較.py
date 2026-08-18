@@ -14,6 +14,7 @@ from real_wage_dashboard.config import (
 )
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.employment_analysis import (
+    create_employment_analysis_insights,
     create_full_employment_analysis_dataframe,
     create_yearly_comparison_summary,
 )
@@ -437,6 +438,26 @@ def create_change_summary_display(
     ]
 
 
+def get_change_rate(
+    comparison_summary_df: pd.DataFrame,
+    employment_type: str,
+    indicator: str,
+) -> float:
+    """指定した就業形態・指標の変化率を取得する。"""
+
+    matched = comparison_summary_df[
+        (comparison_summary_df["employment_type"] == employment_type)
+        & (comparison_summary_df["indicator"] == indicator)
+    ]
+
+    if len(matched) != 1:
+        raise ValueError(
+            f"比較結果を一意に取得できません: {employment_type}, {indicator}"
+        )
+
+    return float(matched.iloc[0]["change_rate_pct"])
+
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -628,6 +649,101 @@ def main() -> None:
             "「パート - 一般」は2015年平均から2025年平均までの変化率の差（%ポイント）です。"
             "賃金額そのものの差を示すものではありません。"
         )
+
+        st.markdown("#### 分析結果")
+
+        general_wage_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "nominal_wage_amount",
+        )
+
+        part_wage_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "nominal_wage_amount",
+        )
+
+        general_hours_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "working_hours",
+        )
+
+        part_hours_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "working_hours",
+        )
+
+        general_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "approx_hourly_wage",
+        )
+
+        part_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "approx_hourly_wage",
+        )
+
+        general_real_wage_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "real_regular_wage",
+        )
+
+        part_real_wage_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "real_regular_wage",
+        )
+
+        general_real_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "real_approx_hourly_wage",
+        )
+
+        part_real_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "real_approx_hourly_wage",
+        )
+
+        st.markdown(
+            f"""
+        **一般労働者**
+
+        - 月額賃金：**{general_wage_change:+.1f}%**
+        - 総実労働時間：**{general_hours_change:+.1f}%**
+        - 概算時間当たり賃金：**{general_hourly_change:+.1f}%**
+        - 実質月額賃金：**{general_real_wage_change:+.1f}%**
+        - 実質概算時間当たり賃金：**{general_real_hourly_change:+.1f}%**
+
+        **パートタイム労働者**
+
+        - 月額賃金：**{part_wage_change:+.1f}%**
+        - 総実労働時間：**{part_hours_change:+.1f}%**
+        - 概算時間当たり賃金：**{part_hourly_change:+.1f}%**
+        - 実質月額賃金：**{part_real_wage_change:+.1f}%**
+        - 実質概算時間当たり賃金：**{part_real_hourly_change:+.1f}%**
+        """
+        )
+
+        st.caption(
+            f"{ANALYSIS_START_YEAR}年平均から"
+            f"{ANALYSIS_END_YEAR}年平均までの変化率。"
+            "実質値は選択中のCPI系列を使用して算出しています。"
+        )
+
+        st.markdown("#### この比較から読み取れること")
+
+        analysis_insights = create_employment_analysis_insights(comparison_summary_df)
+
+        for insight in analysis_insights:
+            st.markdown(f"- {insight}")
 
         st.markdown("#### 年平均の詳細")
 

@@ -582,3 +582,191 @@ def compare_employment_change_rates(
             "larger_change",
         ]
     ]
+
+
+def describe_change_direction(
+    value: float,
+    tolerance: float = 0.1,
+) -> str:
+    """変化率を上昇・低下・横ばいに分類する。"""
+
+    if value > tolerance:
+        return "上昇"
+
+    if value < -tolerance:
+        return "低下"
+
+    return "横ばい"
+
+
+def create_employment_analysis_insights(
+    summary_df: pd.DataFrame,
+    tolerance: float = 0.1,
+) -> list[str]:
+    """雇用形態比較の年平均変化率から主要な分析結果を生成する。"""
+
+    required_columns = {
+        "employment_type",
+        "indicator",
+        "change_rate_pct",
+    }
+
+    if not required_columns.issubset(summary_df.columns):
+        missing = required_columns - set(summary_df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    def get_rate(
+        employment_type: str,
+        indicator: str,
+    ) -> float:
+        matched = summary_df[
+            (summary_df["employment_type"] == employment_type)
+            & (summary_df["indicator"] == indicator)
+        ]
+
+        if len(matched) != 1:
+            raise ValueError(
+                f"比較結果を一意に取得できません: {employment_type}, {indicator}"
+            )
+
+        return float(matched.iloc[0]["change_rate_pct"])
+
+    general_wage = get_rate(
+        "一般労働者",
+        "nominal_wage_amount",
+    )
+    part_wage = get_rate(
+        "パートタイム労働者",
+        "nominal_wage_amount",
+    )
+
+    general_hours = get_rate(
+        "一般労働者",
+        "working_hours",
+    )
+    part_hours = get_rate(
+        "パートタイム労働者",
+        "working_hours",
+    )
+
+    general_hourly = get_rate(
+        "一般労働者",
+        "approx_hourly_wage",
+    )
+    part_hourly = get_rate(
+        "パートタイム労働者",
+        "approx_hourly_wage",
+    )
+
+    general_real_wage = get_rate(
+        "一般労働者",
+        "real_regular_wage",
+    )
+    part_real_wage = get_rate(
+        "パートタイム労働者",
+        "real_regular_wage",
+    )
+
+    general_real_hourly = get_rate(
+        "一般労働者",
+        "real_approx_hourly_wage",
+    )
+    part_real_hourly = get_rate(
+        "パートタイム労働者",
+        "real_approx_hourly_wage",
+    )
+
+    insights = []
+
+    # 1. 月額賃金
+    insights.append(
+        "月額賃金は、"
+        f"一般労働者で{general_wage:+.1f}%"
+        f"（{describe_change_direction(general_wage, tolerance)}）、"
+        f"パートタイム労働者で{part_wage:+.1f}%"
+        f"（{describe_change_direction(part_wage, tolerance)}）でした。"
+    )
+
+    # 2. 賃金変化の構造
+    for employment_type, hourly, hours in [
+        ("一般労働者", general_hourly, general_hours),
+        ("パートタイム労働者", part_hourly, part_hours),
+    ]:
+        if hourly > tolerance and hours < -tolerance:
+            insights.append(
+                f"{employment_type}では、概算時間当たり賃金が"
+                f"{hourly:+.1f}%上昇する一方、"
+                f"総実労働時間は{hours:+.1f}%低下しました。"
+                "時間当たり賃金の上昇が月額賃金を押し上げる一方、"
+                "労働時間の減少はその伸びを抑える方向に働いています。"
+            )
+        else:
+            insights.append(
+                f"{employment_type}では、概算時間当たり賃金が"
+                f"{hourly:+.1f}%、総実労働時間が"
+                f"{hours:+.1f}%変化しました。"
+            )
+
+    # 3. 雇用形態間の時間当たり賃金の伸び
+    hourly_difference = part_hourly - general_hourly
+
+    if hourly_difference > tolerance:
+        insights.append(
+            "概算時間当たり賃金の上昇幅は、"
+            f"パートタイム労働者の方が一般労働者より"
+            f"{hourly_difference:.1f}%ポイント大きくなっています。"
+        )
+    elif hourly_difference < -tolerance:
+        insights.append(
+            "概算時間当たり賃金の上昇幅は、"
+            f"一般労働者の方がパートタイム労働者より"
+            f"{abs(hourly_difference):.1f}%ポイント大きくなっています。"
+        )
+    else:
+        insights.append(
+            "概算時間当たり賃金の変化率は、"
+            "一般労働者とパートタイム労働者でほぼ同程度でした。"
+        )
+
+    # 4. 物価を考慮した購買力
+    for employment_type, nominal, real, real_hourly in [
+        (
+            "一般労働者",
+            general_wage,
+            general_real_wage,
+            general_real_hourly,
+        ),
+        (
+            "パートタイム労働者",
+            part_wage,
+            part_real_wage,
+            part_real_hourly,
+        ),
+    ]:
+        if nominal > tolerance and real < -tolerance:
+            insights.append(
+                f"{employment_type}では名目月額賃金が上昇した一方、"
+                f"実質月額賃金は{real:+.1f}%となっており、"
+                "物価上昇を考慮すると月額の購買力は低下しています。"
+            )
+        elif nominal > real + tolerance:
+            insights.append(
+                f"{employment_type}では実質月額賃金の変化率が"
+                f"{real:+.1f}%で、名目月額賃金の伸びを下回りました。"
+                "物価上昇によって名目賃金の改善の一部が相殺されています。"
+            )
+
+        if real_hourly > tolerance:
+            insights.append(
+                f"{employment_type}の実質概算時間当たり賃金は"
+                f"{real_hourly:+.1f}%上昇しており、"
+                "1時間当たりの購買力は改善しています。"
+            )
+        elif real_hourly < -tolerance:
+            insights.append(
+                f"{employment_type}の実質概算時間当たり賃金は"
+                f"{real_hourly:+.1f}%低下しており、"
+                "1時間当たりの購買力は低下しています。"
+            )
+
+    return insights
