@@ -454,3 +454,33 @@ def calculate_yearly_averages(
         raise ValueError(f"{year}年の分析対象データに欠損値があります。")
 
     return {column: float(year_df[column].mean()) for column in columns}
+
+
+def calculate_change_rate(
+    start_value: float,
+    end_value: float,
+) -> float:
+    """開始値から終了値までの変化率（%）を算出する。"""
+
+    if start_value <= 0:
+        raise ValueError("開始値は0より大きい必要があります。")
+
+    return (end_value / start_value - 1) * 100
+
+
+def calculate_yearly_change_rates(
+    start_averages: dict[str, float],
+    end_averages: dict[str, float],
+) -> dict[str, float]:
+    """2時点の年平均から各指標の変化率を算出する。"""
+
+    if set(start_averages) != set(end_averages):
+        raise ValueError("比較する年平均の指標が一致していません。")
+
+    return {
+        column: calculate_change_rate(
+            start_averages[column],
+            end_averages[column],
+        )
+        for column in start_averages
+    }

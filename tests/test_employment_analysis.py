@@ -11,7 +11,9 @@ from real_wage_dashboard.employment_analysis import (
     add_real_employment_indices,
     add_real_employment_values,
     add_wage_change_decomposition,
+    calculate_change_rate,
     calculate_yearly_averages,
+    calculate_yearly_change_rates,
     create_employment_analysis_dataframe,
     create_full_employment_analysis_dataframe,
     merge_employment_analysis_with_cpi,
@@ -1002,4 +1004,72 @@ def test_calculate_yearly_averages_raises_when_column_missing() -> None:
             df,
             year=2025,
             columns=["nominal_wage_amount"],
+        )
+
+
+def test_calculate_change_rate() -> None:
+    result = calculate_change_rate(
+        100.0,
+        120.0,
+    )
+
+    assert result == pytest.approx(20.0)
+
+
+def test_calculate_change_rate_returns_negative_value() -> None:
+    result = calculate_change_rate(
+        100.0,
+        90.0,
+    )
+
+    assert result == pytest.approx(-10.0)
+
+
+def test_calculate_change_rate_raises_when_start_value_zero() -> None:
+    with pytest.raises(
+        ValueError,
+        match="開始値は0より大きい必要があります",
+    ):
+        calculate_change_rate(
+            0.0,
+            100.0,
+        )
+
+
+def test_calculate_yearly_change_rates() -> None:
+    start = {
+        "nominal_wage_amount": 200_000.0,
+        "working_hours": 100.0,
+    }
+
+    end = {
+        "nominal_wage_amount": 220_000.0,
+        "working_hours": 95.0,
+    }
+
+    result = calculate_yearly_change_rates(
+        start,
+        end,
+    )
+
+    assert result["nominal_wage_amount"] == pytest.approx(10.0)
+    assert result["working_hours"] == pytest.approx(-5.0)
+
+
+def test_calculate_yearly_change_rates_raises_when_columns_differ() -> None:
+    start = {
+        "nominal_wage_amount": 200_000.0,
+    }
+
+    end = {
+        "working_hours": 100.0,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="比較する年平均の指標が一致していません",
+    ):
+        calculate_yearly_change_rates(
+            start,
+            end,
         )
