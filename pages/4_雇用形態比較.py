@@ -15,6 +15,7 @@ from real_wage_dashboard.config import (
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.employment_analysis import (
     create_full_employment_analysis_dataframe,
+    create_yearly_comparison_summary,
 )
 from real_wage_dashboard.estat_client import (
     EStatAPIError,
@@ -27,6 +28,25 @@ from real_wage_dashboard.wage_service import (
 from real_wage_dashboard.working_hours_service import (
     create_working_hours_dataframe,
 )
+
+ANALYSIS_START_YEAR = 2015
+ANALYSIS_END_YEAR = 2025
+
+ANALYSIS_INDICATORS = [
+    "nominal_wage_amount",
+    "working_hours",
+    "approx_hourly_wage",
+    "real_regular_wage",
+    "real_approx_hourly_wage",
+]
+
+ANALYSIS_INDICATOR_LABELS = {
+    "nominal_wage_amount": "月額賃金",
+    "working_hours": "総実労働時間",
+    "approx_hourly_wage": "概算時間当たり賃金",
+    "real_regular_wage": "実質月額賃金",
+    "real_approx_hourly_wage": "実質概算時間当たり賃金",
+}
 
 st.set_page_config(
     page_title="雇用形態比較",
@@ -384,6 +404,39 @@ def create_decomposition_chart(
     )
 
 
+def create_change_summary_display(
+    comparison_summary_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """雇用形態別の変化率を指標ごとに横並びにする。"""
+
+    change_df = comparison_summary_df[
+        [
+            "indicator",
+            "employment_type",
+            "change_rate_pct",
+        ]
+    ].copy()
+
+    result = change_df.pivot(
+        index="indicator",
+        columns="employment_type",
+        values="change_rate_pct",
+    ).reset_index()
+
+    result["指標"] = result["indicator"].map(ANALYSIS_INDICATOR_LABELS)
+
+    result["差（pt）"] = result["パートタイム労働者"] - result["一般労働者"]
+
+    return result[
+        [
+            "指標",
+            "一般労働者",
+            "パートタイム労働者",
+            "差（pt）",
+        ]
+    ]
+
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -531,6 +584,100 @@ def main() -> None:
         f"{general_df['date'].min().strftime('%Y年%m月')} ～ "
         f"{general_df['date'].max().strftime('%Y年%m月')}"
     )
+
+    st.subheader("2015年から2025年の変化")
+
+    try:
+        comparison_summary_df = create_yearly_comparison_summary(
+            general_df,
+            part_df,
+            start_year=ANALYSIS_START_YEAR,
+            end_year=ANALYSIS_END_YEAR,
+            columns=ANALYSIS_INDICATORS,
+        )
+
+    except ValueError as exc:
+        st.warning(f"年平均による比較結果を作成できませんでした：{exc}")
+
+    else:
+        change_summary_df = create_change_summary_display(comparison_summary_df)
+
+        st.markdown("#### 変化率の比較")
+
+        st.dataframe(
+            change_summary_df,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "一般労働者": st.column_config.NumberColumn(
+                    "一般労働者",
+                    format="%+.1f%%",
+                ),
+                "パートタイム労働者": st.column_config.NumberColumn(
+                    "パートタイム労働者",
+                    format="%+.1f%%",
+                ),
+                "差（pt）": st.column_config.NumberColumn(
+                    "パート - 一般",
+                    format="%+.1f",
+                ),
+            },
+        )
+
+        st.caption(
+            "「パート - 一般」は2015年平均から2025年平均までの変化率の差（%ポイント）です。"
+            "賃金額そのものの差を示すものではありません。"
+        )
+
+        st.markdown("#### 年平均の詳細")
+
+        analysis_display_df = comparison_summary_df.copy()
+
+        analysis_display_df["指標"] = analysis_display_df["indicator"].map(
+            ANALYSIS_INDICATOR_LABELS
+        )
+
+        analysis_display_df["就業形態"] = analysis_display_df["employment_type"]
+
+        analysis_display_df["2015年平均"] = analysis_display_df["start_value"]
+
+        analysis_display_df["2025年平均"] = analysis_display_df["end_value"]
+
+        analysis_display_df["変化率"] = analysis_display_df["change_rate_pct"]
+
+        analysis_display_df = analysis_display_df[
+            [
+                "指標",
+                "就業形態",
+                "2015年平均",
+                "2025年平均",
+                "変化率",
+            ]
+        ]
+
+        st.dataframe(
+            analysis_display_df,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "2015年平均": st.column_config.NumberColumn(
+                    format="%.1f",
+                ),
+                "2025年平均": st.column_config.NumberColumn(
+                    format="%.1f",
+                ),
+                "変化率": st.column_config.NumberColumn(
+                    format="%+.1f%%",
+                ),
+            },
+        )
+
+        st.caption(
+            f"{ANALYSIS_START_YEAR}年と{ANALYSIS_END_YEAR}年について、"
+            "各12か月の平均値を比較しています。"
+            f"事業所規模：{establishment_size} ／ "
+            f"CPI：{selected_series}"
+        )
 
     st.subheader("時系列推移")
 
