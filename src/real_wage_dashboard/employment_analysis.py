@@ -599,21 +599,11 @@ def describe_change_direction(
     return "横ばい"
 
 
-def create_employment_analysis_insights(
+def create_employment_analysis_discussion(
     summary_df: pd.DataFrame,
     tolerance: float = 0.1,
 ) -> list[str]:
-    """雇用形態比較の年平均変化率から主要な分析結果を生成する。"""
-
-    required_columns = {
-        "employment_type",
-        "indicator",
-        "change_rate_pct",
-    }
-
-    if not required_columns.issubset(summary_df.columns):
-        missing = required_columns - set(summary_df.columns)
-        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+    """一般労働者とパートタイム労働者の比較結果から総合考察を生成する。"""
 
     def get_rate(
         employment_type: str,
@@ -667,106 +657,101 @@ def create_employment_analysis_insights(
         "real_regular_wage",
     )
 
-    general_real_hourly = get_rate(
-        "一般労働者",
-        "real_approx_hourly_wage",
-    )
-    part_real_hourly = get_rate(
-        "パートタイム労働者",
-        "real_approx_hourly_wage",
-    )
+    discussions = []
 
-    insights = []
+    if (
+        general_hourly > tolerance
+        and part_hourly > tolerance
+        and general_hours < -tolerance
+        and part_hours < -tolerance
+    ):
+        discussions.append(
+            "両就業形態とも、時間当たり賃金が上昇する一方で"
+            "総実労働時間は減少しています。"
+            "このため、時間当たり賃金の改善が月額賃金を押し上げる一方、"
+            "労働時間の減少はその伸びを抑える方向に働いたと考えられます。"
+        )
 
-    # 1. 月額賃金
-    insights.append(
-        "月額賃金は、"
-        f"一般労働者で{general_wage:+.1f}%"
-        f"（{describe_change_direction(general_wage, tolerance)}）、"
-        f"パートタイム労働者で{part_wage:+.1f}%"
-        f"（{describe_change_direction(part_wage, tolerance)}）でした。"
-    )
-
-    # 2. 賃金変化の構造
-    for employment_type, hourly, hours in [
-        ("一般労働者", general_hourly, general_hours),
-        ("パートタイム労働者", part_hourly, part_hours),
-    ]:
-        if hourly > tolerance and hours < -tolerance:
-            insights.append(
-                f"{employment_type}では、概算時間当たり賃金が"
-                f"{hourly:+.1f}%上昇する一方、"
-                f"総実労働時間は{hours:+.1f}%低下しました。"
-                "時間当たり賃金の上昇が月額賃金を押し上げる一方、"
-                "労働時間の減少はその伸びを抑える方向に働いています。"
-            )
-        else:
-            insights.append(
-                f"{employment_type}では、概算時間当たり賃金が"
-                f"{hourly:+.1f}%、総実労働時間が"
-                f"{hours:+.1f}%変化しました。"
-            )
-
-    # 3. 雇用形態間の時間当たり賃金の伸び
     hourly_difference = part_hourly - general_hourly
+    hours_difference = part_hours - general_hours
 
     if hourly_difference > tolerance:
-        insights.append(
-            "概算時間当たり賃金の上昇幅は、"
-            f"パートタイム労働者の方が一般労働者より"
-            f"{hourly_difference:.1f}%ポイント大きくなっています。"
-        )
-    elif hourly_difference < -tolerance:
-        insights.append(
-            "概算時間当たり賃金の上昇幅は、"
-            f"一般労働者の方がパートタイム労働者より"
-            f"{abs(hourly_difference):.1f}%ポイント大きくなっています。"
-        )
-    else:
-        insights.append(
-            "概算時間当たり賃金の変化率は、"
-            "一般労働者とパートタイム労働者でほぼ同程度でした。"
+        text = "特にパートタイム労働者では、一般労働者より時間当たり賃金の伸びが大きく"
+
+        if hours_difference < -tolerance:
+            text += (
+                "、同時に労働時間の減少も大きいため、"
+                "時間当たり賃金の改善ほど月額賃金は伸びていません。"
+            )
+        else:
+            text += "なっています。"
+
+        discussions.append(text)
+
+    if (
+        general_wage > tolerance
+        and part_wage > tolerance
+        and general_real_wage < general_wage - tolerance
+        and part_real_wage < part_wage - tolerance
+    ):
+        discussions.append(
+            "また、両就業形態とも名目月額賃金の伸びに比べて"
+            "実質月額賃金の伸びは小さく、"
+            "物価上昇によって名目賃金の改善の一部が相殺されています。"
         )
 
-    # 4. 物価を考慮した購買力
-    for employment_type, nominal, real, real_hourly in [
-        (
-            "一般労働者",
-            general_wage,
-            general_real_wage,
-            general_real_hourly,
+    return discussions
+
+
+def summarize_wage_change_decomposition(
+    df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+) -> dict[str, float | int]:
+    """指定期間の月額賃金要因分解を要約する。"""
+
+    required_columns = {
+        "date",
+        "wage_log_change",
+        "hourly_wage_log_contribution",
+        "working_hours_log_contribution",
+    }
+
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    period_df = df[
+        (df["date"].dt.year >= start_year) & (df["date"].dt.year <= end_year)
+    ][
+        [
+            "date",
+            "wage_log_change",
+            "hourly_wage_log_contribution",
+            "working_hours_log_contribution",
+        ]
+    ].dropna()
+
+    if period_df.empty:
+        raise ValueError("指定期間に要因分解データがありません。")
+
+    hourly_abs = period_df["hourly_wage_log_contribution"].abs()
+    hours_abs = period_df["working_hours_log_contribution"].abs()
+
+    return {
+        "n_months": len(period_df),
+        "mean_wage_log_change": float(period_df["wage_log_change"].mean()),
+        "mean_hourly_wage_contribution": float(
+            period_df["hourly_wage_log_contribution"].mean()
         ),
-        (
-            "パートタイム労働者",
-            part_wage,
-            part_real_wage,
-            part_real_hourly,
+        "mean_working_hours_contribution": float(
+            period_df["working_hours_log_contribution"].mean()
         ),
-    ]:
-        if nominal > tolerance and real < -tolerance:
-            insights.append(
-                f"{employment_type}では名目月額賃金が上昇した一方、"
-                f"実質月額賃金は{real:+.1f}%となっており、"
-                "物価上昇を考慮すると月額の購買力は低下しています。"
-            )
-        elif nominal > real + tolerance:
-            insights.append(
-                f"{employment_type}では実質月額賃金の変化率が"
-                f"{real:+.1f}%で、名目月額賃金の伸びを下回りました。"
-                "物価上昇によって名目賃金の改善の一部が相殺されています。"
-            )
-
-        if real_hourly > tolerance:
-            insights.append(
-                f"{employment_type}の実質概算時間当たり賃金は"
-                f"{real_hourly:+.1f}%上昇しており、"
-                "1時間当たりの購買力は改善しています。"
-            )
-        elif real_hourly < -tolerance:
-            insights.append(
-                f"{employment_type}の実質概算時間当たり賃金は"
-                f"{real_hourly:+.1f}%低下しており、"
-                "1時間当たりの購買力は低下しています。"
-            )
-
-    return insights
+        "hourly_positive_share_pct": float(
+            (period_df["hourly_wage_log_contribution"] > 0).mean() * 100
+        ),
+        "hours_negative_share_pct": float(
+            (period_df["working_hours_log_contribution"] < 0).mean() * 100
+        ),
+        "hourly_dominant_share_pct": float((hourly_abs > hours_abs).mean() * 100),
+    }

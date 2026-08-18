@@ -16,12 +16,13 @@ from real_wage_dashboard.employment_analysis import (
     calculate_yearly_change_rates,
     compare_employment_change_rates,
     create_employment_analysis_dataframe,
-    create_employment_analysis_insights,
+    create_employment_analysis_discussion,
     create_full_employment_analysis_dataframe,
     create_yearly_comparison_summary,
     describe_change_direction,
     merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
+    summarize_wage_change_decomposition,
 )
 
 
@@ -1289,7 +1290,7 @@ def test_describe_change_direction() -> None:
     assert describe_change_direction(0.05) == "横ばい"
 
 
-def test_create_employment_analysis_insights() -> None:
+def test_create_employment_analysis_discussion() -> None:
     summary_df = pd.DataFrame(
         {
             "employment_type": [
@@ -1320,8 +1321,8 @@ def test_create_employment_analysis_insights() -> None:
                 10.0,
                 -5.0,
                 15.8,
-                -2.0,
-                3.0,
+                2.0,
+                7.0,
                 20.0,
                 -10.0,
                 33.3,
@@ -1331,12 +1332,128 @@ def test_create_employment_analysis_insights() -> None:
         }
     )
 
-    result = create_employment_analysis_insights(summary_df)
+    result = create_employment_analysis_discussion(summary_df)
 
     joined = "\n".join(result)
 
-    assert "一般労働者で+10.0%" in joined
-    assert "パートタイム労働者で+20.0%" in joined
-    assert "労働時間の減少はその伸びを抑える方向" in joined
-    assert "17.5%ポイント大きく" in joined
-    assert "月額の購買力は低下" in joined
+    assert len(result) == 3
+
+    assert "両就業形態とも、時間当たり賃金が上昇する一方で総実労働時間は減少" in joined
+
+    assert (
+        "パートタイム労働者では、一般労働者より時間当たり賃金の伸びが大きく" in joined
+    )
+
+    assert "時間当たり賃金の改善ほど月額賃金は伸びていません" in joined
+
+    assert (
+        "両就業形態とも名目月額賃金の伸びに比べて実質月額賃金の伸びは小さく" in joined
+    )
+
+    assert "物価上昇によって" in joined
+
+
+def test_summarize_wage_change_decomposition() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2020-02-01",
+                    "2020-03-01",
+                    "2020-04-01",
+                ]
+            ),
+            "wage_log_change": [
+                2.0,
+                3.0,
+                1.0,
+                4.0,
+            ],
+            "hourly_wage_log_contribution": [
+                3.0,
+                4.0,
+                2.0,
+                5.0,
+            ],
+            "working_hours_log_contribution": [
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+            ],
+        }
+    )
+
+    result = summarize_wage_change_decomposition(
+        df,
+        start_year=2020,
+        end_year=2020,
+    )
+
+    assert result["n_months"] == 4
+    assert result["mean_wage_log_change"] == pytest.approx(2.5)
+    assert result["mean_hourly_wage_contribution"] == pytest.approx(3.5)
+    assert result["mean_working_hours_contribution"] == pytest.approx(-1.0)
+    assert result["hourly_positive_share_pct"] == pytest.approx(100.0)
+    assert result["hours_negative_share_pct"] == pytest.approx(100.0)
+    assert result["hourly_dominant_share_pct"] == pytest.approx(100.0)
+
+
+def test_summarize_wage_change_decomposition_filters_years() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(
+                [
+                    "2019-01-01",
+                    "2020-01-01",
+                    "2021-01-01",
+                ]
+            ),
+            "wage_log_change": [
+                100.0,
+                2.0,
+                100.0,
+            ],
+            "hourly_wage_log_contribution": [
+                100.0,
+                3.0,
+                100.0,
+            ],
+            "working_hours_log_contribution": [
+                0.0,
+                -1.0,
+                0.0,
+            ],
+        }
+    )
+
+    result = summarize_wage_change_decomposition(
+        df,
+        start_year=2020,
+        end_year=2020,
+    )
+
+    assert result["n_months"] == 1
+    assert result["mean_wage_log_change"] == pytest.approx(2.0)
+
+
+def test_summarize_wage_change_decomposition_raises_when_no_data() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2020-01-01"]),
+            "wage_log_change": [2.0],
+            "hourly_wage_log_contribution": [3.0],
+            "working_hours_log_contribution": [-1.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="指定期間に要因分解データがありません",
+    ):
+        summarize_wage_change_decomposition(
+            df,
+            start_year=2025,
+            end_year=2025,
+        )

@@ -14,9 +14,10 @@ from real_wage_dashboard.config import (
 )
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.employment_analysis import (
-    create_employment_analysis_insights,
+    create_employment_analysis_discussion,
     create_full_employment_analysis_dataframe,
     create_yearly_comparison_summary,
+    summarize_wage_change_decomposition,
 )
 from real_wage_dashboard.estat_client import (
     EStatAPIError,
@@ -47,6 +48,14 @@ ANALYSIS_INDICATOR_LABELS = {
     "approx_hourly_wage": "概算時間当たり賃金",
     "real_regular_wage": "実質月額賃金",
     "real_approx_hourly_wage": "実質概算時間当たり賃金",
+}
+
+ANALYSIS_INDICATOR_UNITS = {
+    "nominal_wage_amount": "円",
+    "working_hours": "時間",
+    "approx_hourly_wage": "円/時間",
+    "real_regular_wage": "円（2020年価格換算）",
+    "real_approx_hourly_wage": "円/時間（2020年価格換算）",
 }
 
 st.set_page_config(
@@ -466,6 +475,15 @@ def main() -> None:
         "月額賃金・労働時間・概算時間当たり賃金・実質購買力の推移を比較します。"
     )
 
+    st.markdown(
+        """
+    ### 問い
+
+    **一般労働者とパートタイム労働者では、賃金・労働時間・
+    時間当たり賃金・実質購買力がどのように異なる推移をしてきたか。**
+    """
+    )
+
     # -------------------------
     # 分析条件
     # -------------------------
@@ -542,64 +560,6 @@ def main() -> None:
     # 生成確認
     # -------------------------
 
-    latest_general = general_df.iloc[-1]
-    latest_part = part_df.iloc[-1]
-
-    st.subheader("最新データ")
-
-    general_col, part_col = st.columns(2)
-
-    with general_col:
-        st.markdown("#### 一般労働者")
-
-        metric_col1, metric_col2, metric_col3 = st.columns(3)
-
-        metric_col1.metric(
-            "月額賃金",
-            f"{latest_general['nominal_wage_amount']:,.0f}円",
-            f"{latest_general['regular_wage_yoy_pct']:+.1f}%",
-        )
-
-        metric_col2.metric(
-            "総実労働時間",
-            f"{latest_general['working_hours']:.1f}時間",
-            f"{latest_general['working_hours_yoy_pct']:+.1f}%",
-        )
-
-        metric_col3.metric(
-            "概算時間当たり賃金",
-            f"{latest_general['approx_hourly_wage']:,.0f}円",
-            f"{latest_general['approx_hourly_wage_yoy_pct']:+.1f}%",
-        )
-
-    with part_col:
-        st.markdown("#### パートタイム労働者")
-
-        metric_col1, metric_col2, metric_col3 = st.columns(3)
-
-        metric_col1.metric(
-            "月額賃金",
-            f"{latest_part['nominal_wage_amount']:,.0f}円",
-            f"{latest_part['regular_wage_yoy_pct']:+.1f}%",
-        )
-
-        metric_col2.metric(
-            "総実労働時間",
-            f"{latest_part['working_hours']:.1f}時間",
-            f"{latest_part['working_hours_yoy_pct']:+.1f}%",
-        )
-
-        metric_col3.metric(
-            "概算時間当たり賃金",
-            f"{latest_part['approx_hourly_wage']:,.0f}円",
-            f"{latest_part['approx_hourly_wage_yoy_pct']:+.1f}%",
-        )
-
-    st.caption(
-        f"最新データ：{latest_general['date'].strftime('%Y年%m月')} "
-        "（各指標の下段は前年同月比）"
-    )
-
     st.caption(
         f"データ期間："
         f"{general_df['date'].min().strftime('%Y年%m月')} ～ "
@@ -607,16 +567,6 @@ def main() -> None:
     )
 
     st.subheader("2015年から2025年の変化")
-
-    st.caption(
-        f"分析条件："
-        f"事業所規模={establishment_size} ／ "
-        f"CPI={selected_series} ／ "
-        "産業=調査産業計 ／ "
-        "賃金項目=きまって支給する給与 ／ "
-        "労働時間=総実労働時間 ／ "
-        f"比較期間={ANALYSIS_START_YEAR}年平均→{ANALYSIS_END_YEAR}年平均"
-    )
 
     try:
         comparison_summary_df = create_yearly_comparison_summary(
@@ -631,9 +581,9 @@ def main() -> None:
         st.warning(f"年平均による比較結果を作成できませんでした：{exc}")
 
     else:
-        change_summary_df = create_change_summary_display(comparison_summary_df)
+        st.markdown("#### 分析結果")
 
-        st.markdown("#### 変化率の比較")
+        change_summary_df = create_change_summary_display(comparison_summary_df)
 
         st.dataframe(
             change_summary_df,
@@ -649,18 +599,27 @@ def main() -> None:
                     format="%+.1f%%",
                 ),
                 "差（pt）": st.column_config.NumberColumn(
-                    "パート - 一般",
+                    "パート － 一般",
                     format="%+.1f",
                 ),
             },
         )
 
         st.caption(
-            "「パート - 一般」は2015年平均から2025年平均までの変化率の差（%ポイント）です。"
-            "賃金額そのものの差を示すものではありません。"
+            f"{ANALYSIS_START_YEAR}年平均から"
+            f"{ANALYSIS_END_YEAR}年平均までの変化率。"
+            "「パート－一般」は変化率の差（%ポイント）であり、"
+            "賃金額そのものの差ではありません。"
         )
 
-        st.markdown("#### 分析結果")
+        st.markdown("#### 考察")
+
+        analysis_discussion = create_employment_analysis_discussion(
+            comparison_summary_df
+        )
+
+        for discussion in analysis_discussion:
+            st.write(discussion)
 
         general_wage_change = get_change_rate(
             comparison_summary_df,
@@ -722,44 +681,6 @@ def main() -> None:
             "real_approx_hourly_wage",
         )
 
-        st.markdown(
-            f"""
-        **一般労働者**
-
-        - 月額賃金：**{general_wage_change:+.1f}%**
-        - 総実労働時間：**{general_hours_change:+.1f}%**
-        - 概算時間当たり賃金：**{general_hourly_change:+.1f}%**
-        - 実質月額賃金：**{general_real_wage_change:+.1f}%**
-        - 実質概算時間当たり賃金：**{general_real_hourly_change:+.1f}%**
-
-        **パートタイム労働者**
-
-        - 月額賃金：**{part_wage_change:+.1f}%**
-        - 総実労働時間：**{part_hours_change:+.1f}%**
-        - 概算時間当たり賃金：**{part_hourly_change:+.1f}%**
-        - 実質月額賃金：**{part_real_wage_change:+.1f}%**
-        - 実質概算時間当たり賃金：**{part_real_hourly_change:+.1f}%**
-        """
-        )
-
-        st.caption(
-            f"{ANALYSIS_START_YEAR}年平均から"
-            f"{ANALYSIS_END_YEAR}年平均までの変化率。"
-            "実質値は選択中のCPI系列を使用して算出しています。"
-        )
-
-        st.markdown("#### この比較から読み取れること")
-
-        analysis_insights = create_employment_analysis_insights(comparison_summary_df)
-
-        for insight in analysis_insights:
-            st.markdown(f"- {insight}")
-
-        st.caption(
-            "ここで示す比較は各就業形態の時系列変化に関するものであり、"
-            "一般労働者とパートタイム労働者の賃金水準そのものの格差を示すものではありません。"
-        )
-
         st.markdown("#### 年平均の詳細")
 
         analysis_display_df = comparison_summary_df.copy()
@@ -768,11 +689,19 @@ def main() -> None:
             ANALYSIS_INDICATOR_LABELS
         )
 
+        analysis_display_df["単位"] = analysis_display_df["indicator"].map(
+            ANALYSIS_INDICATOR_UNITS
+        )
+
         analysis_display_df["就業形態"] = analysis_display_df["employment_type"]
 
-        analysis_display_df["2015年平均"] = analysis_display_df["start_value"]
+        analysis_display_df[f"{ANALYSIS_START_YEAR}年平均"] = analysis_display_df[
+            "start_value"
+        ]
 
-        analysis_display_df["2025年平均"] = analysis_display_df["end_value"]
+        analysis_display_df[f"{ANALYSIS_END_YEAR}年平均"] = analysis_display_df[
+            "end_value"
+        ]
 
         analysis_display_df["変化率"] = analysis_display_df["change_rate_pct"]
 
@@ -780,28 +709,39 @@ def main() -> None:
             [
                 "指標",
                 "就業形態",
-                "2015年平均",
-                "2025年平均",
+                "単位",
+                f"{ANALYSIS_START_YEAR}年平均",
+                f"{ANALYSIS_END_YEAR}年平均",
                 "変化率",
             ]
         ]
 
-        st.dataframe(
-            analysis_display_df,
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "2015年平均": st.column_config.NumberColumn(
-                    format="%.1f",
-                ),
-                "2025年平均": st.column_config.NumberColumn(
-                    format="%.1f",
-                ),
-                "変化率": st.column_config.NumberColumn(
-                    format="%+.1f%%",
-                ),
-            },
-        )
+        with st.expander(
+            f"{ANALYSIS_START_YEAR}年・{ANALYSIS_END_YEAR}年の年平均を確認"
+        ):
+            st.dataframe(
+                analysis_display_df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    f"{ANALYSIS_START_YEAR}年平均": st.column_config.NumberColumn(
+                        format="%.1f",
+                    ),
+                    f"{ANALYSIS_END_YEAR}年平均": st.column_config.NumberColumn(
+                        format="%.1f",
+                    ),
+                    "変化率": st.column_config.NumberColumn(
+                        format="%+.1f%%",
+                    ),
+                },
+            )
+
+            st.caption(
+                "実質値は選択中のCPI系列を用いて実質化しています。"
+                "「2020年価格換算」はCPIの2020年基準に対応した表記です。"
+            )
+
+        st.divider()
 
     st.subheader("時系列推移")
 
@@ -1007,12 +947,44 @@ def main() -> None:
         "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
     )
 
+    general_decomposition_summary = summarize_wage_change_decomposition(
+        general_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+    )
+
+    part_decomposition_summary = summarize_wage_change_decomposition(
+        part_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+    )
+
     st.altair_chart(
         create_decomposition_chart(
             general_display_df,
             "一般労働者：月額賃金変化の要因分解",
         ),
         width="stretch",
+    )
+
+    st.info(
+        f"""
+    **一般労働者：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年の傾向**
+
+    - 時間当たり賃金要因の平均：\
+    **{general_decomposition_summary["mean_hourly_wage_contribution"]:+.2f}**
+    - 労働時間要因の平均：\
+    **{general_decomposition_summary["mean_working_hours_contribution"]:+.2f}**
+    - 時間当たり賃金要因がプラスだった月：\
+    **{general_decomposition_summary["hourly_positive_share_pct"]:.1f}%**
+    - 労働時間要因がマイナスだった月：\
+    **{general_decomposition_summary["hours_negative_share_pct"]:.1f}%**
+    - 時間当たり賃金要因の絶対値が大きかった月：\
+    **{general_decomposition_summary["hourly_dominant_share_pct"]:.1f}%**
+
+    期間中の前年同月変化を平均した記述統計です。
+    原因そのものを示すものではありません。
+    """
     )
 
     st.altair_chart(
@@ -1024,19 +996,54 @@ def main() -> None:
     )
 
     st.info(
-        """
-    **読み方：** 月額賃金の前年同月からの変化を、
-    「時間当たり賃金要因」と「労働時間要因」に分解しています。
-    棒がプラスなら月額賃金を押し上げる方向、
-    マイナスなら押し下げる方向です。黒線は両要因を合わせた月額賃金の対数変化です。
+        f"""
+    **パートタイム労働者：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年の傾向**
 
-    **分かること：** 月額賃金が増減した背景について、
-    時間当たり賃金の変化と労働時間の変化のどちらが寄与したかを確認できます。
+    - 時間当たり賃金要因の平均：\
+    **{part_decomposition_summary["mean_hourly_wage_contribution"]:+.2f}**
+    - 労働時間要因の平均：\
+    **{part_decomposition_summary["mean_working_hours_contribution"]:+.2f}**
+    - 時間当たり賃金要因がプラスだった月：\
+    **{part_decomposition_summary["hourly_positive_share_pct"]:.1f}%**
+    - 労働時間要因がマイナスだった月：\
+    **{part_decomposition_summary["hours_negative_share_pct"]:.1f}%**
+    - 時間当たり賃金要因の絶対値が大きかった月：\
+    **{part_decomposition_summary["hourly_dominant_share_pct"]:.1f}%**
 
-    **分からないこと：** 労働時間や時間当たり賃金が変化した原因そのものは、
-    この分解だけでは判断できません。また、値は通常の前年比（%）ではなく
-    前年同月からの対数変化を100倍したものです。
+    期間中の前年同月変化を平均した記述統計です。
+    原因そのものを示すものではありません。
     """
+    )
+
+    general_hourly_dominant = general_decomposition_summary["hourly_dominant_share_pct"]
+    part_hourly_dominant = part_decomposition_summary["hourly_dominant_share_pct"]
+
+    st.markdown("#### 要因分解から見た違い")
+
+    if part_hourly_dominant > general_hourly_dominant + 0.1:
+        st.write(
+            "パートタイム労働者では、一般労働者よりも"
+            "時間当たり賃金要因の変動幅が労働時間要因を上回る月の割合が高く、"
+            "月額賃金の変化が時間当たり賃金の変化により強く結び付いていた"
+            "期間が多かったことが確認できます。"
+        )
+    elif general_hourly_dominant > part_hourly_dominant + 0.1:
+        st.write(
+            "一般労働者では、パートタイム労働者よりも"
+            "時間当たり賃金要因の変動幅が労働時間要因を上回る月の割合が高く、"
+            "月額賃金の変化が時間当たり賃金の変化により強く結び付いていた"
+            "期間が多かったことが確認できます。"
+        )
+    else:
+        st.write(
+            "時間当たり賃金要因が労働時間要因を上回る月の割合は、"
+            "一般労働者とパートタイム労働者でおおむね同程度でした。"
+        )
+
+    st.caption(
+        "棒は前年同月からの月額賃金変化を、"
+        "時間当たり賃金要因と労働時間要因に分解したものです。"
+        "値は通常の前年比ではなく、対数変化を100倍した値です。"
     )
 
     comparison_output_df = create_comparison_output_dataframe(
