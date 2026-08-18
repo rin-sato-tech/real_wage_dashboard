@@ -1,3 +1,4 @@
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -178,6 +179,108 @@ def create_comparison_output_dataframe(
     ).reset_index(drop=True)
 
 
+def create_index_chart(
+    df: pd.DataFrame,
+    title: str,
+    y_title: str,
+) -> alt.Chart:
+    """雇用形態比較用の指数折れ線グラフを作成する。"""
+
+    long_df = df.melt(
+        id_vars="date",
+        value_vars=[
+            "一般労働者",
+            "パートタイム労働者",
+        ],
+        var_name="就業形態",
+        value_name="指数",
+    )
+
+    y_min = long_df["指数"].min()
+    y_max = long_df["指数"].max()
+
+    padding = max(
+        (y_max - y_min) * 0.1,
+        2,
+    )
+
+    chart = (
+        alt.Chart(long_df)
+        .mark_line(
+            strokeWidth=2.5,
+        )
+        .encode(
+            x=alt.X(
+                "date:T",
+                title="年月",
+            ),
+            y=alt.Y(
+                "指数:Q",
+                title=y_title,
+                scale=alt.Scale(
+                    domain=[
+                        y_min - padding,
+                        y_max + padding,
+                    ],
+                    zero=False,
+                ),
+            ),
+            color=alt.Color(
+                "就業形態:N",
+                title="就業形態",
+                scale=alt.Scale(
+                    domain=[
+                        "一般労働者",
+                        "パートタイム労働者",
+                    ],
+                    range=[
+                        "#1f77b4",
+                        "#e45756",
+                    ],
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "就業形態:N",
+                    title="就業形態",
+                ),
+                alt.Tooltip(
+                    "指数:Q",
+                    title="指数",
+                    format=".1f",
+                ),
+            ],
+        )
+        .properties(
+            title=title,
+            height=400,
+        )
+        .interactive()
+    )
+
+    baseline = (
+        alt.Chart(
+            pd.DataFrame(
+                {
+                    "y": [100],
+                }
+            )
+        )
+        .mark_rule(
+            strokeDash=[5, 5],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return chart + baseline
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -318,41 +421,15 @@ def main() -> None:
         )
 
     st.caption(
-        f"最新データ：{latest_general['date'].strftime('%Y年%m月')} ／ "
-        "前年差は前年同月比"
+        f"最新データ：{latest_general['date'].strftime('%Y年%m月')} "
+        "（各指標の下段は前年同月比）"
     )
 
-    general_col, part_col = st.columns(2)
-
-    with general_col:
-        st.markdown("#### 一般労働者")
-
-        st.write(
-            "期間：",
-            general_df["date"].min().strftime("%Y-%m"),
-            "〜",
-            general_df["date"].max().strftime("%Y-%m"),
-        )
-
-        st.write(
-            "データ件数：",
-            len(general_df),
-        )
-
-    with part_col:
-        st.markdown("#### パートタイム労働者")
-
-        st.write(
-            "期間：",
-            part_df["date"].min().strftime("%Y-%m"),
-            "〜",
-            part_df["date"].max().strftime("%Y-%m"),
-        )
-
-        st.write(
-            "データ件数：",
-            len(part_df),
-        )
+    st.caption(
+        f"データ期間："
+        f"{general_df['date'].min().strftime('%Y年%m月')} ～ "
+        f"{general_df['date'].max().strftime('%Y年%m月')}"
+    )
 
     st.subheader("時系列推移")
 
@@ -393,30 +470,24 @@ def main() -> None:
         "2020年平均を100として、月額賃金・労働時間・概算時間当たり賃金の変化を比較します。"
     )
 
-    st.markdown("### 月額賃金指数")
-
     regular_wage_chart_df = create_comparison_chart_dataframe(
         general_display_df,
         part_display_df,
         "regular_wage_index",
     )
 
-    st.line_chart(
-        regular_wage_chart_df,
-        x="date",
-        y=[
-            "一般労働者",
-            "パートタイム労働者",
-        ],
-        x_label="年月",
-        y_label="月額賃金指数（2020年平均=100）",
+    st.altair_chart(
+        create_index_chart(
+            regular_wage_chart_df,
+            title="月額賃金指数",
+            y_title="指数（2020年平均=100）",
+        ),
+        width="stretch",
     )
 
     st.caption(
         "「きまって支給する給与」の推移を、各就業形態について2020年平均=100として指数化しています。"
     )
-
-    st.markdown("### 総実労働時間指数")
 
     working_hours_chart_df = create_comparison_chart_dataframe(
         general_display_df,
@@ -424,20 +495,16 @@ def main() -> None:
         "working_hours_index",
     )
 
-    st.line_chart(
-        working_hours_chart_df,
-        x="date",
-        y=[
-            "一般労働者",
-            "パートタイム労働者",
-        ],
-        x_label="年月",
-        y_label="総実労働時間指数（2020年平均=100）",
+    st.altair_chart(
+        create_index_chart(
+            working_hours_chart_df,
+            title="総実労働時間指数",
+            y_title="指数（2020年平均=100）",
+        ),
+        width="stretch",
     )
 
     st.caption("月間の総実労働時間が2020年と比べてどのように変化したかを示します。")
-
-    st.markdown("### 概算時間当たり賃金指数")
 
     hourly_wage_chart_df = create_comparison_chart_dataframe(
         general_display_df,
@@ -445,15 +512,13 @@ def main() -> None:
         "approx_hourly_wage_index",
     )
 
-    st.line_chart(
-        hourly_wage_chart_df,
-        x="date",
-        y=[
-            "一般労働者",
-            "パートタイム労働者",
-        ],
-        x_label="年月",
-        y_label="概算時間当たり賃金指数（2020年平均=100）",
+    st.altair_chart(
+        create_index_chart(
+            hourly_wage_chart_df,
+            title="概算時間当たり賃金指数",
+            y_title="指数（2020年平均=100）",
+        ),
+        width="stretch",
     )
 
     st.caption(
@@ -463,23 +528,19 @@ def main() -> None:
     st.markdown("## 2. 物価を考えるとどうか")
     st.caption("名目賃金を消費者物価指数で実質化し、購買力の変化を比較します。")
 
-    st.markdown("### 実質月額賃金指数")
-
     real_regular_wage_chart_df = create_comparison_chart_dataframe(
         general_display_df,
         part_display_df,
         "real_regular_wage_index",
     )
 
-    st.line_chart(
-        real_regular_wage_chart_df,
-        x="date",
-        y=[
-            "一般労働者",
-            "パートタイム労働者",
-        ],
-        x_label="年月",
-        y_label="実質月額賃金指数（2020年平均=100）",
+    st.altair_chart(
+        create_index_chart(
+            real_regular_wage_chart_df,
+            title="実質月額賃金指数",
+            y_title="指数（2020年平均=100）",
+        ),
+        width="stretch",
     )
 
     st.caption(
@@ -494,15 +555,13 @@ def main() -> None:
         "real_approx_hourly_wage_index",
     )
 
-    st.line_chart(
-        real_hourly_wage_chart_df,
-        x="date",
-        y=[
-            "一般労働者",
-            "パートタイム労働者",
-        ],
-        x_label="年月",
-        y_label="実質概算時間当たり賃金指数（2020年平均=100）",
+    st.altair_chart(
+        create_index_chart(
+            real_hourly_wage_chart_df,
+            title="実質概算時間当たり賃金指数",
+            y_title="指数（2020年平均=100）",
+        ),
+        width="stretch",
     )
 
     st.caption(
