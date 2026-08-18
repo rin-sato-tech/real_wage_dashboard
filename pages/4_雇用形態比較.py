@@ -608,6 +608,16 @@ def main() -> None:
 
     st.subheader("2015年から2025年の変化")
 
+    st.caption(
+        f"分析条件："
+        f"事業所規模={establishment_size} ／ "
+        f"CPI={selected_series} ／ "
+        "産業=調査産業計 ／ "
+        "賃金項目=きまって支給する給与 ／ "
+        "労働時間=総実労働時間 ／ "
+        f"比較期間={ANALYSIS_START_YEAR}年平均→{ANALYSIS_END_YEAR}年平均"
+    )
+
     try:
         comparison_summary_df = create_yearly_comparison_summary(
             general_df,
@@ -745,6 +755,11 @@ def main() -> None:
         for insight in analysis_insights:
             st.markdown(f"- {insight}")
 
+        st.caption(
+            "ここで示す比較は各就業形態の時系列変化に関するものであり、"
+            "一般労働者とパートタイム労働者の賃金水準そのものの格差を示すものではありません。"
+        )
+
         st.markdown("#### 年平均の詳細")
 
         analysis_display_df = comparison_summary_df.copy()
@@ -786,13 +801,6 @@ def main() -> None:
                     format="%+.1f%%",
                 ),
             },
-        )
-
-        st.caption(
-            f"{ANALYSIS_START_YEAR}年と{ANALYSIS_END_YEAR}年について、"
-            "各12か月の平均値を比較しています。"
-            f"事業所規模：{establishment_size} ／ "
-            f"CPI：{selected_series}"
         )
 
     st.subheader("時系列推移")
