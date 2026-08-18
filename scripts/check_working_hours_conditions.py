@@ -2,7 +2,6 @@ import pandas as pd
 
 from real_wage_dashboard.config import WAGE_DATA_PATH
 
-
 TIME_ITEMS = [
     "総実労働時間",
     "所定内労働時間",
