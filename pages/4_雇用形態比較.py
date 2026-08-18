@@ -130,27 +130,6 @@ def create_comparison_chart_dataframe(
     )
 
 
-def create_decomposition_chart_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """要因分解グラフ用のDataFrameを作成する。"""
-
-    result = df[
-        [
-            "date",
-            "wage_log_change",
-            "hourly_wage_log_contribution",
-            "working_hours_log_contribution",
-        ]
-    ].copy()
-
-    return result.rename(
-        columns={
-            "wage_log_change": "月額賃金の対数変化",
-            "hourly_wage_log_contribution": "時間当たり賃金要因",
-            "working_hours_log_contribution": "労働時間要因",
-        }
-    )
-
-
 def create_comparison_output_dataframe(
     general_df: pd.DataFrame,
     part_df: pd.DataFrame,
@@ -366,29 +345,26 @@ def create_decomposition_chart(
         )
     )
 
-    line = (
-        base.mark_line(
-            strokeWidth=2.5,
-            color="#222222",
-        )
-        .encode(
-            y=alt.Y(
-                "wage_log_change:Q",
-                title="前年同月からの対数変化（×100）",
+    line = base.mark_line(
+        strokeWidth=2.5,
+        color="#222222",
+    ).encode(
+        y=alt.Y(
+            "wage_log_change:Q",
+            title="前年同月からの対数変化（×100）",
+        ),
+        tooltip=[
+            alt.Tooltip(
+                "date:T",
+                title="年月",
+                format="%Y年%m月",
             ),
-            tooltip=[
-                alt.Tooltip(
-                    "date:T",
-                    title="年月",
-                    format="%Y年%m月",
-                ),
-                alt.Tooltip(
-                    "wage_log_change:Q",
-                    title="月額賃金の対数変化",
-                    format="+.2f",
-                ),
-            ],
-        )
+            alt.Tooltip(
+                "wage_log_change:Q",
+                title="月額賃金の対数変化",
+                format="+.2f",
+            ),
+        ],
     )
 
     zero_line = (
@@ -402,11 +378,7 @@ def create_decomposition_chart(
         )
     )
 
-    return (
-        bars
-        + line
-        + zero_line
-    ).properties(
+    return (bars + line + zero_line).properties(
         title=title,
         height=400,
     )
@@ -496,8 +468,6 @@ def main() -> None:
     # 生成確認
     # -------------------------
 
-    st.subheader("データ確認")
-
     latest_general = general_df.iloc[-1]
     latest_part = part_df.iloc[-1]
 
@@ -506,7 +476,7 @@ def main() -> None:
     general_col, part_col = st.columns(2)
 
     with general_col:
-        st.markdown("### 一般労働者")
+        st.markdown("#### 一般労働者")
 
         metric_col1, metric_col2, metric_col3 = st.columns(3)
 
@@ -529,7 +499,7 @@ def main() -> None:
         )
 
     with part_col:
-        st.markdown("### パートタイム労働者")
+        st.markdown("#### パートタイム労働者")
 
         metric_col1, metric_col2, metric_col3 = st.columns(3)
 
@@ -751,10 +721,6 @@ def main() -> None:
         "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
     )
 
-    general_decomposition_df = create_decomposition_chart_dataframe(
-        general_display_df
-    ).dropna()
-
     st.altair_chart(
         create_decomposition_chart(
             general_display_df,
@@ -762,10 +728,6 @@ def main() -> None:
         ),
         width="stretch",
     )
-
-    part_decomposition_df = create_decomposition_chart_dataframe(
-        part_display_df
-    ).dropna()
 
     st.altair_chart(
         create_decomposition_chart(
