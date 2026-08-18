@@ -532,3 +532,53 @@ def create_yearly_comparison_summary(
             )
 
     return pd.DataFrame(rows)
+
+
+def compare_employment_change_rates(
+    summary_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """各指標について一般労働者とパートの変化率を比較する。"""
+
+    required_columns = {
+        "employment_type",
+        "indicator",
+        "change_rate_pct",
+    }
+
+    if not required_columns.issubset(summary_df.columns):
+        missing = required_columns - set(summary_df.columns)
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    pivot_df = summary_df.pivot(
+        index="indicator",
+        columns="employment_type",
+        values="change_rate_pct",
+    )
+
+    required_employment_types = {
+        "一般労働者",
+        "パートタイム労働者",
+    }
+
+    if not required_employment_types.issubset(pivot_df.columns):
+        raise ValueError("一般労働者とパートタイム労働者の両方のデータが必要です。")
+
+    result = pivot_df.reset_index()
+
+    result["difference_pct_point"] = result["パートタイム労働者"] - result["一般労働者"]
+
+    result["larger_change"] = result["difference_pct_point"].map(
+        lambda diff: (
+            "パートタイム労働者" if diff > 0 else "一般労働者" if diff < 0 else "同程度"
+        )
+    )
+
+    return result[
+        [
+            "indicator",
+            "一般労働者",
+            "パートタイム労働者",
+            "difference_pct_point",
+            "larger_change",
+        ]
+    ]

@@ -14,6 +14,7 @@ from real_wage_dashboard.employment_analysis import (
     calculate_change_rate,
     calculate_yearly_averages,
     calculate_yearly_change_rates,
+    compare_employment_change_rates,
     create_employment_analysis_dataframe,
     create_full_employment_analysis_dataframe,
     create_yearly_comparison_summary,
@@ -1177,3 +1178,104 @@ def test_create_yearly_comparison_summary_handles_multiple_indicators() -> None:
         "一般労働者",
         "パートタイム労働者",
     }
+
+
+def test_compare_employment_change_rates() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+                "パートタイム労働者",
+                "一般労働者",
+                "パートタイム労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+                "nominal_wage_amount",
+                "working_hours",
+                "working_hours",
+            ],
+            "change_rate_pct": [
+                10.0,
+                20.0,
+                -5.0,
+                -10.0,
+            ],
+        }
+    )
+
+    result = compare_employment_change_rates(summary_df)
+
+    wage_result = result[result["indicator"] == "nominal_wage_amount"].iloc[0]
+
+    hours_result = result[result["indicator"] == "working_hours"].iloc[0]
+
+    assert wage_result["一般労働者"] == pytest.approx(10.0)
+    assert wage_result["パートタイム労働者"] == pytest.approx(20.0)
+    assert wage_result["difference_pct_point"] == pytest.approx(10.0)
+    assert wage_result["larger_change"] == "パートタイム労働者"
+
+    assert hours_result["difference_pct_point"] == pytest.approx(-5.0)
+    assert hours_result["larger_change"] == "一般労働者"
+
+
+def test_compare_employment_change_rates_returns_same_when_equal() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+                "パートタイム労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+                "nominal_wage_amount",
+            ],
+            "change_rate_pct": [
+                10.0,
+                10.0,
+            ],
+        }
+    )
+
+    result = compare_employment_change_rates(summary_df)
+
+    assert result.iloc[0]["difference_pct_point"] == pytest.approx(0.0)
+    assert result.iloc[0]["larger_change"] == "同程度"
+
+
+def test_compare_employment_change_rates_raises_when_employment_type_missing() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+            ],
+            "change_rate_pct": [
+                10.0,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="一般労働者とパートタイム労働者の両方のデータが必要です",
+    ):
+        compare_employment_change_rates(summary_df)
+
+
+def test_compare_employment_change_rates_raises_when_column_missing() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "indicator": [
+                "nominal_wage_amount",
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        compare_employment_change_rates(summary_df)
