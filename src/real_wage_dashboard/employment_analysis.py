@@ -484,3 +484,51 @@ def calculate_yearly_change_rates(
         )
         for column in start_averages
     }
+
+
+def create_yearly_comparison_summary(
+    general_df: pd.DataFrame,
+    part_df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+    columns: list[str],
+) -> pd.DataFrame:
+    """一般労働者とパートの年平均・変化率を比較用DataFrameにまとめる。"""
+
+    rows = []
+
+    for employment_type, df in [
+        ("一般労働者", general_df),
+        ("パートタイム労働者", part_df),
+    ]:
+        start_averages = calculate_yearly_averages(
+            df,
+            year=start_year,
+            columns=columns,
+        )
+
+        end_averages = calculate_yearly_averages(
+            df,
+            year=end_year,
+            columns=columns,
+        )
+
+        change_rates = calculate_yearly_change_rates(
+            start_averages,
+            end_averages,
+        )
+
+        for column in columns:
+            rows.append(
+                {
+                    "employment_type": employment_type,
+                    "indicator": column,
+                    "start_year": start_year,
+                    "start_value": start_averages[column],
+                    "end_year": end_year,
+                    "end_value": end_averages[column],
+                    "change_rate_pct": change_rates[column],
+                }
+            )
+
+    return pd.DataFrame(rows)

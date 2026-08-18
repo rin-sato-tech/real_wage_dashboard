@@ -16,6 +16,7 @@ from real_wage_dashboard.employment_analysis import (
     calculate_yearly_change_rates,
     create_employment_analysis_dataframe,
     create_full_employment_analysis_dataframe,
+    create_yearly_comparison_summary,
     merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
 )
@@ -1073,3 +1074,106 @@ def test_calculate_yearly_change_rates_raises_when_columns_differ() -> None:
             start,
             end,
         )
+
+
+def test_create_yearly_comparison_summary() -> None:
+    general_df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2015-01-01",
+                "2025-12-01",
+                freq="MS",
+            ),
+        }
+    )
+
+    general_df["nominal_wage_amount"] = general_df["date"].dt.year.map(
+        lambda year: 100.0 if year == 2015 else 120.0
+    )
+
+    part_df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2015-01-01",
+                "2025-12-01",
+                freq="MS",
+            ),
+        }
+    )
+
+    part_df["nominal_wage_amount"] = part_df["date"].dt.year.map(
+        lambda year: 100.0 if year == 2015 else 130.0
+    )
+
+    result = create_yearly_comparison_summary(
+        general_df,
+        part_df,
+        start_year=2015,
+        end_year=2025,
+        columns=["nominal_wage_amount"],
+    )
+
+    assert len(result) == 2
+
+    general_result = result[result["employment_type"] == "一般労働者"].iloc[0]
+
+    part_result = result[result["employment_type"] == "パートタイム労働者"].iloc[0]
+
+    assert general_result["start_value"] == pytest.approx(100.0)
+    assert general_result["end_value"] == pytest.approx(120.0)
+    assert general_result["change_rate_pct"] == pytest.approx(20.0)
+
+    assert part_result["start_value"] == pytest.approx(100.0)
+    assert part_result["end_value"] == pytest.approx(130.0)
+    assert part_result["change_rate_pct"] == pytest.approx(30.0)
+
+
+def test_create_yearly_comparison_summary_handles_multiple_indicators() -> None:
+    dates = pd.date_range(
+        "2015-01-01",
+        "2025-12-01",
+        freq="MS",
+    )
+
+    general_df = pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [
+                100.0 if date.year == 2015 else 110.0 for date in dates
+            ],
+            "working_hours": [100.0 if date.year == 2015 else 95.0 for date in dates],
+        }
+    )
+
+    part_df = pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [
+                100.0 if date.year == 2015 else 120.0 for date in dates
+            ],
+            "working_hours": [100.0 if date.year == 2015 else 90.0 for date in dates],
+        }
+    )
+
+    result = create_yearly_comparison_summary(
+        general_df,
+        part_df,
+        start_year=2015,
+        end_year=2025,
+        columns=[
+            "nominal_wage_amount",
+            "working_hours",
+        ],
+    )
+
+    assert len(result) == 4
+
+    assert set(result["indicator"]) == {
+        "nominal_wage_amount",
+        "working_hours",
+    }
+
+    assert set(result["employment_type"]) == {
+        "一般労働者",
+        "パートタイム労働者",
+    }
