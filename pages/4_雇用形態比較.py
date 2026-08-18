@@ -281,6 +281,137 @@ def create_index_chart(
 
     return chart + baseline
 
+
+def create_decomposition_chart(
+    df: pd.DataFrame,
+    title: str,
+) -> alt.LayerChart:
+    """月額賃金変化の要因分解を棒グラフと折れ線で表示する。"""
+
+    chart_df = df[
+        [
+            "date",
+            "wage_log_change",
+            "hourly_wage_log_contribution",
+            "working_hours_log_contribution",
+        ]
+    ].dropna()
+
+    contribution_df = chart_df.melt(
+        id_vars="date",
+        value_vars=[
+            "hourly_wage_log_contribution",
+            "working_hours_log_contribution",
+        ],
+        var_name="要因",
+        value_name="寄与",
+    )
+
+    contribution_df["要因"] = contribution_df["要因"].replace(
+        {
+            "hourly_wage_log_contribution": "時間当たり賃金要因",
+            "working_hours_log_contribution": "労働時間要因",
+        }
+    )
+
+    base = alt.Chart(chart_df).encode(
+        x=alt.X(
+            "date:T",
+            title="年月",
+        )
+    )
+
+    bars = (
+        alt.Chart(contribution_df)
+        .mark_bar(opacity=0.75)
+        .encode(
+            x=alt.X(
+                "date:T",
+                title="年月",
+            ),
+            y=alt.Y(
+                "寄与:Q",
+                title="前年同月からの対数変化（×100）",
+            ),
+            color=alt.Color(
+                "要因:N",
+                title="要因",
+                scale=alt.Scale(
+                    domain=[
+                        "時間当たり賃金要因",
+                        "労働時間要因",
+                    ],
+                    range=[
+                        "#4c78a8",
+                        "#f58518",
+                    ],
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "要因:N",
+                    title="要因",
+                ),
+                alt.Tooltip(
+                    "寄与:Q",
+                    title="寄与",
+                    format="+.2f",
+                ),
+            ],
+        )
+    )
+
+    line = (
+        base.mark_line(
+            strokeWidth=2.5,
+            color="#222222",
+        )
+        .encode(
+            y=alt.Y(
+                "wage_log_change:Q",
+                title="前年同月からの対数変化（×100）",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "wage_log_change:Q",
+                    title="月額賃金の対数変化",
+                    format="+.2f",
+                ),
+            ],
+        )
+    )
+
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(
+            color="#666666",
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (
+        bars
+        + line
+        + zero_line
+    ).properties(
+        title=title,
+        height=400,
+    )
+
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
@@ -620,48 +751,44 @@ def main() -> None:
         "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
     )
 
-    st.markdown("### 一般労働者：月額賃金変化の要因分解")
-
     general_decomposition_df = create_decomposition_chart_dataframe(
         general_display_df
     ).dropna()
 
-    st.line_chart(
-        general_decomposition_df,
-        x="date",
-        y=[
-            "月額賃金の対数変化",
-            "時間当たり賃金要因",
-            "労働時間要因",
-        ],
-        x_label="年月",
-        y_label="前年同月からの対数変化（×100）",
+    st.altair_chart(
+        create_decomposition_chart(
+            general_display_df,
+            "一般労働者：月額賃金変化の要因分解",
+        ),
+        width="stretch",
     )
-
-    st.caption(
-        "月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。"
-    )
-
-    st.markdown("### パートタイム労働者：月額賃金変化の要因分解")
 
     part_decomposition_df = create_decomposition_chart_dataframe(
         part_display_df
     ).dropna()
 
-    st.line_chart(
-        part_decomposition_df,
-        x="date",
-        y=[
-            "月額賃金の対数変化",
-            "時間当たり賃金要因",
-            "労働時間要因",
-        ],
-        x_label="年月",
-        y_label="前年同月からの対数変化（×100）",
+    st.altair_chart(
+        create_decomposition_chart(
+            part_display_df,
+            "パートタイム労働者：月額賃金変化の要因分解",
+        ),
+        width="stretch",
     )
 
-    st.caption(
-        "月額賃金の変化を、概算時間当たり賃金の変化と総実労働時間の変化に分解しています。"
+    st.info(
+        """
+    **読み方：** 月額賃金の前年同月からの変化を、
+    「時間当たり賃金要因」と「労働時間要因」に分解しています。
+    棒がプラスなら月額賃金を押し上げる方向、
+    マイナスなら押し下げる方向です。黒線は両要因を合わせた月額賃金の対数変化です。
+
+    **分かること：** 月額賃金が増減した背景について、
+    時間当たり賃金の変化と労働時間の変化のどちらが寄与したかを確認できます。
+
+    **分からないこと：** 労働時間や時間当たり賃金が変化した原因そのものは、
+    この分解だけでは判断できません。また、値は通常の前年比（%）ではなく
+    前年同月からの対数変化を100倍したものです。
+    """
     )
 
     comparison_output_df = create_comparison_output_dataframe(
