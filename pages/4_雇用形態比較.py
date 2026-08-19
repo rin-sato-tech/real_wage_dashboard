@@ -683,6 +683,7 @@ def main() -> None:
 
     except ValueError as exc:
         st.warning(f"年平均による比較結果を作成できませんでした：{exc}")
+        st.stop()
 
     else:
         st.markdown("#### 分析結果")
@@ -1045,7 +1046,7 @@ def main() -> None:
     """
     )
 
-    st.markdown("## 3. なぜそうなったか")
+    st.markdown("## 3. 月額賃金の変化を分解")
 
     st.caption(
         "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
