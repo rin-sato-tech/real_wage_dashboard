@@ -58,6 +58,40 @@ ANALYSIS_INDICATOR_UNITS = {
     "real_approx_hourly_wage": "円/時間（2020年価格換算）",
 }
 
+TABLEAU_EXPORT_COLUMNS = [
+    # 分析条件
+    "date",
+    "employment_type",
+    "establishment_size",
+    "cpi_series",
+    "wage_item",
+    "working_hours_item",
+    "industry",
+    # 基本指標
+    "nominal_wage_amount",
+    "working_hours",
+    "approx_hourly_wage",
+    # 実質指標
+    "real_regular_wage",
+    "real_approx_hourly_wage",
+    # 指数
+    "regular_wage_index",
+    "working_hours_index",
+    "approx_hourly_wage_index",
+    "real_regular_wage_index",
+    "real_approx_hourly_wage_index",
+    # 前年同月比
+    "regular_wage_yoy_pct",
+    "working_hours_yoy_pct",
+    "approx_hourly_wage_yoy_pct",
+    "real_regular_wage_yoy_pct",
+    "real_approx_hourly_wage_yoy_pct",
+    # 要因分解
+    "wage_log_change",
+    "hourly_wage_log_contribution",
+    "working_hours_log_contribution",
+]
+
 st.set_page_config(
     page_title="雇用形態比較",
     page_icon="👥",
@@ -163,8 +197,10 @@ def create_comparison_chart_dataframe(
 def create_comparison_output_dataframe(
     general_df: pd.DataFrame,
     part_df: pd.DataFrame,
+    establishment_size: str,
+    cpi_series: str,
 ) -> pd.DataFrame:
-    """一般労働者とパートの分析結果を縦結合する。"""
+    """一般労働者とパートの分析結果を選択条件付きで縦結合する。"""
 
     general = general_df.copy()
     general["employment_type"] = "一般労働者"
@@ -179,6 +215,12 @@ def create_comparison_output_dataframe(
         ],
         ignore_index=True,
     )
+
+    result["establishment_size"] = establishment_size
+    result["cpi_series"] = cpi_series
+    result["wage_item"] = "きまって支給する給与"
+    result["working_hours_item"] = "総実労働時間"
+    result["industry"] = "調査産業計"
 
     return result.sort_values(
         [
@@ -465,6 +507,68 @@ def get_change_rate(
         )
 
     return float(matched.iloc[0]["change_rate_pct"])
+
+
+def create_tableau_export_dataframe(
+    raw_df: pd.DataFrame,
+    cpi_dataframes: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """Tableau用に全事業所規模・全CPI系列の分析結果を結合する。"""
+
+    results = []
+
+    for establishment_size, establishment_size_code in WAGE_ESTABLISHMENT_SIZES.items():
+        for cpi_series, cpi_df in cpi_dataframes.items():
+            general_df = create_analysis_dataframe(
+                raw_df,
+                cpi_df,
+                establishment_size=establishment_size_code,
+                employment_type="1",
+            )
+
+            part_df = create_analysis_dataframe(
+                raw_df,
+                cpi_df,
+                establishment_size=establishment_size_code,
+                employment_type="2",
+            )
+
+            comparison_df = create_comparison_output_dataframe(
+                general_df,
+                part_df,
+                establishment_size=establishment_size,
+                cpi_series=cpi_series,
+            )
+
+            results.append(comparison_df)
+
+    if not results:
+        raise ValueError("Tableau用データを生成できませんでした。")
+
+    result = (
+        pd.concat(
+            results,
+            ignore_index=True,
+        )
+        .sort_values(
+            [
+                "date",
+                "establishment_size",
+                "cpi_series",
+                "employment_type",
+            ]
+        )
+        .reset_index(drop=True)
+    )
+
+    missing_columns = set(TABLEAU_EXPORT_COLUMNS) - set(result.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"Tableau出力に必要な列がありません: {sorted(missing_columns)}"
+        )
+
+    return result[TABLEAU_EXPORT_COLUMNS]
 
 
 def main() -> None:
@@ -1049,6 +1153,8 @@ def main() -> None:
     comparison_output_df = create_comparison_output_dataframe(
         general_df,
         part_df,
+        establishment_size=establishment_size,
+        cpi_series=selected_series,
     )
 
     st.subheader("分析データ")
@@ -1095,8 +1201,36 @@ def main() -> None:
         hide_index=True,
     )
 
+    export_columns = [
+        "date",
+        "employment_type",
+        "establishment_size",
+        "cpi_series",
+        "wage_item",
+        "working_hours_item",
+        "industry",
+        "nominal_wage_amount",
+        "working_hours",
+        "approx_hourly_wage",
+        "real_regular_wage",
+        "real_approx_hourly_wage",
+        "regular_wage_index",
+        "working_hours_index",
+        "approx_hourly_wage_index",
+        "real_regular_wage_index",
+        "real_approx_hourly_wage_index",
+        "regular_wage_yoy_pct",
+        "working_hours_yoy_pct",
+        "approx_hourly_wage_yoy_pct",
+        "real_regular_wage_yoy_pct",
+        "real_approx_hourly_wage_yoy_pct",
+        "wage_log_change",
+        "hourly_wage_log_contribution",
+        "working_hours_log_contribution",
+    ]
+
     csv_data = (
-        comparison_output_df[display_columns]
+        comparison_output_df[export_columns]
         .to_csv(
             index=False,
         )
@@ -1109,6 +1243,49 @@ def main() -> None:
         file_name="employment_comparison.csv",
         mime="text/csv",
     )
+
+    st.markdown("#### Tableau用データ")
+
+    st.caption(
+        "事業所規模・CPI系列・雇用形態の全条件を含むCSVを生成します。"
+        "Tableau側で各条件をフィルターして分析できます。"
+    )
+
+    if st.button("Tableau用CSVを生成"):
+        try:
+            cpi_dataframes = {
+                series_name: load_cpi_data(
+                    app_id,
+                    series_code,
+                )
+                for series_name, series_code in CPI_SERIES.items()
+            }
+
+            tableau_df = create_tableau_export_dataframe(
+                raw_df,
+                cpi_dataframes,
+            )
+
+            st.session_state["tableau_export_csv"] = tableau_df.to_csv(
+                index=False
+            ).encode("utf-8-sig")
+
+            st.session_state["tableau_export_rows"] = len(tableau_df)
+
+        except (EStatAPIError, ValueError) as exc:
+            st.error(str(exc))
+
+    if "tableau_export_csv" in st.session_state:
+        st.download_button(
+            label="Tableau用CSVをダウンロード",
+            data=st.session_state["tableau_export_csv"],
+            file_name="employment_comparison_tableau.csv",
+            mime="text/csv",
+        )
+
+        st.caption(
+            f"{st.session_state['tableau_export_rows']:,}行のデータを生成しました。"
+        )
 
     st.subheader("注意事項")
 
