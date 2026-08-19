@@ -184,8 +184,6 @@ uv run ruff format --check .
 
 ---
 
----
-
 ## v2.1.1
 
 ### 改善
