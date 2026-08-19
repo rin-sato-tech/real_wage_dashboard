@@ -14,7 +14,10 @@ from real_wage_dashboard.config import (
 )
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.employment_analysis import (
+    create_employment_analysis_discussion,
     create_full_employment_analysis_dataframe,
+    create_yearly_comparison_summary,
+    summarize_wage_change_decomposition,
 )
 from real_wage_dashboard.estat_client import (
     EStatAPIError,
@@ -27,6 +30,67 @@ from real_wage_dashboard.wage_service import (
 from real_wage_dashboard.working_hours_service import (
     create_working_hours_dataframe,
 )
+
+ANALYSIS_START_YEAR = 2015
+ANALYSIS_END_YEAR = 2025
+
+ANALYSIS_INDICATORS = [
+    "nominal_wage_amount",
+    "working_hours",
+    "approx_hourly_wage",
+    "real_regular_wage",
+    "real_approx_hourly_wage",
+]
+
+ANALYSIS_INDICATOR_LABELS = {
+    "nominal_wage_amount": "月額賃金",
+    "working_hours": "総実労働時間",
+    "approx_hourly_wage": "概算時間当たり賃金",
+    "real_regular_wage": "実質月額賃金",
+    "real_approx_hourly_wage": "実質概算時間当たり賃金",
+}
+
+ANALYSIS_INDICATOR_UNITS = {
+    "nominal_wage_amount": "円",
+    "working_hours": "時間",
+    "approx_hourly_wage": "円/時間",
+    "real_regular_wage": "円（2020年価格換算）",
+    "real_approx_hourly_wage": "円/時間（2020年価格換算）",
+}
+
+TABLEAU_EXPORT_COLUMNS = [
+    # 分析条件
+    "date",
+    "employment_type",
+    "establishment_size",
+    "cpi_series",
+    "wage_item",
+    "working_hours_item",
+    "industry",
+    # 基本指標
+    "nominal_wage_amount",
+    "working_hours",
+    "approx_hourly_wage",
+    # 実質指標
+    "real_regular_wage",
+    "real_approx_hourly_wage",
+    # 指数
+    "regular_wage_index",
+    "working_hours_index",
+    "approx_hourly_wage_index",
+    "real_regular_wage_index",
+    "real_approx_hourly_wage_index",
+    # 前年同月比
+    "regular_wage_yoy_pct",
+    "working_hours_yoy_pct",
+    "approx_hourly_wage_yoy_pct",
+    "real_regular_wage_yoy_pct",
+    "real_approx_hourly_wage_yoy_pct",
+    # 要因分解
+    "wage_log_change",
+    "hourly_wage_log_contribution",
+    "working_hours_log_contribution",
+]
 
 st.set_page_config(
     page_title="雇用形態比較",
@@ -133,8 +197,10 @@ def create_comparison_chart_dataframe(
 def create_comparison_output_dataframe(
     general_df: pd.DataFrame,
     part_df: pd.DataFrame,
+    establishment_size: str,
+    cpi_series: str,
 ) -> pd.DataFrame:
-    """一般労働者とパートの分析結果を縦結合する。"""
+    """一般労働者とパートの分析結果を選択条件付きで縦結合する。"""
 
     general = general_df.copy()
     general["employment_type"] = "一般労働者"
@@ -149,6 +215,12 @@ def create_comparison_output_dataframe(
         ],
         ignore_index=True,
     )
+
+    result["establishment_size"] = establishment_size
+    result["cpi_series"] = cpi_series
+    result["wage_item"] = "きまって支給する給与"
+    result["working_hours_item"] = "総実労働時間"
+    result["industry"] = "調査産業計"
 
     return result.sort_values(
         [
@@ -384,12 +456,136 @@ def create_decomposition_chart(
     )
 
 
+def create_change_summary_display(
+    comparison_summary_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """雇用形態別の変化率を指標ごとに横並びにする。"""
+
+    change_df = comparison_summary_df[
+        [
+            "indicator",
+            "employment_type",
+            "change_rate_pct",
+        ]
+    ].copy()
+
+    result = change_df.pivot(
+        index="indicator",
+        columns="employment_type",
+        values="change_rate_pct",
+    ).reset_index()
+
+    result["指標"] = result["indicator"].map(ANALYSIS_INDICATOR_LABELS)
+
+    result["差（pt）"] = result["パートタイム労働者"] - result["一般労働者"]
+
+    return result[
+        [
+            "指標",
+            "一般労働者",
+            "パートタイム労働者",
+            "差（pt）",
+        ]
+    ]
+
+
+def get_change_rate(
+    comparison_summary_df: pd.DataFrame,
+    employment_type: str,
+    indicator: str,
+) -> float:
+    """指定した就業形態・指標の変化率を取得する。"""
+
+    matched = comparison_summary_df[
+        (comparison_summary_df["employment_type"] == employment_type)
+        & (comparison_summary_df["indicator"] == indicator)
+    ]
+
+    if len(matched) != 1:
+        raise ValueError(
+            f"比較結果を一意に取得できません: {employment_type}, {indicator}"
+        )
+
+    return float(matched.iloc[0]["change_rate_pct"])
+
+
+def create_tableau_export_dataframe(
+    raw_df: pd.DataFrame,
+    cpi_dataframes: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """Tableau用に全事業所規模・全CPI系列の分析結果を結合する。"""
+
+    results = []
+
+    for establishment_size, establishment_size_code in WAGE_ESTABLISHMENT_SIZES.items():
+        for cpi_series, cpi_df in cpi_dataframes.items():
+            general_df = create_analysis_dataframe(
+                raw_df,
+                cpi_df,
+                establishment_size=establishment_size_code,
+                employment_type="1",
+            )
+
+            part_df = create_analysis_dataframe(
+                raw_df,
+                cpi_df,
+                establishment_size=establishment_size_code,
+                employment_type="2",
+            )
+
+            comparison_df = create_comparison_output_dataframe(
+                general_df,
+                part_df,
+                establishment_size=establishment_size,
+                cpi_series=cpi_series,
+            )
+
+            results.append(comparison_df)
+
+    if not results:
+        raise ValueError("Tableau用データを生成できませんでした。")
+
+    result = (
+        pd.concat(
+            results,
+            ignore_index=True,
+        )
+        .sort_values(
+            [
+                "date",
+                "establishment_size",
+                "cpi_series",
+                "employment_type",
+            ]
+        )
+        .reset_index(drop=True)
+    )
+
+    missing_columns = set(TABLEAU_EXPORT_COLUMNS) - set(result.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"Tableau出力に必要な列がありません: {sorted(missing_columns)}"
+        )
+
+    return result[TABLEAU_EXPORT_COLUMNS]
+
+
 def main() -> None:
     st.title("一般労働者・パートタイム労働者の比較")
 
     st.caption(
         "一般労働者とパートタイム労働者について、"
         "月額賃金・労働時間・概算時間当たり賃金・実質購買力の推移を比較します。"
+    )
+
+    st.markdown(
+        """
+    ### 問い
+
+    **一般労働者とパートタイム労働者では、賃金・労働時間・
+    時間当たり賃金・実質購買力がどのように異なる推移をしてきたか。**
+    """
     )
 
     # -------------------------
@@ -468,69 +664,189 @@ def main() -> None:
     # 生成確認
     # -------------------------
 
-    latest_general = general_df.iloc[-1]
-    latest_part = part_df.iloc[-1]
-
-    st.subheader("最新データ")
-
-    general_col, part_col = st.columns(2)
-
-    with general_col:
-        st.markdown("#### 一般労働者")
-
-        metric_col1, metric_col2, metric_col3 = st.columns(3)
-
-        metric_col1.metric(
-            "月額賃金",
-            f"{latest_general['nominal_wage_amount']:,.0f}円",
-            f"{latest_general['regular_wage_yoy_pct']:+.1f}%",
-        )
-
-        metric_col2.metric(
-            "総実労働時間",
-            f"{latest_general['working_hours']:.1f}時間",
-            f"{latest_general['working_hours_yoy_pct']:+.1f}%",
-        )
-
-        metric_col3.metric(
-            "概算時間当たり賃金",
-            f"{latest_general['approx_hourly_wage']:,.0f}円",
-            f"{latest_general['approx_hourly_wage_yoy_pct']:+.1f}%",
-        )
-
-    with part_col:
-        st.markdown("#### パートタイム労働者")
-
-        metric_col1, metric_col2, metric_col3 = st.columns(3)
-
-        metric_col1.metric(
-            "月額賃金",
-            f"{latest_part['nominal_wage_amount']:,.0f}円",
-            f"{latest_part['regular_wage_yoy_pct']:+.1f}%",
-        )
-
-        metric_col2.metric(
-            "総実労働時間",
-            f"{latest_part['working_hours']:.1f}時間",
-            f"{latest_part['working_hours_yoy_pct']:+.1f}%",
-        )
-
-        metric_col3.metric(
-            "概算時間当たり賃金",
-            f"{latest_part['approx_hourly_wage']:,.0f}円",
-            f"{latest_part['approx_hourly_wage_yoy_pct']:+.1f}%",
-        )
-
-    st.caption(
-        f"最新データ：{latest_general['date'].strftime('%Y年%m月')} "
-        "（各指標の下段は前年同月比）"
-    )
-
     st.caption(
         f"データ期間："
         f"{general_df['date'].min().strftime('%Y年%m月')} ～ "
         f"{general_df['date'].max().strftime('%Y年%m月')}"
     )
+
+    st.subheader("2015年から2025年の変化")
+
+    try:
+        comparison_summary_df = create_yearly_comparison_summary(
+            general_df,
+            part_df,
+            start_year=ANALYSIS_START_YEAR,
+            end_year=ANALYSIS_END_YEAR,
+            columns=ANALYSIS_INDICATORS,
+        )
+
+    except ValueError as exc:
+        st.warning(f"年平均による比較結果を作成できませんでした：{exc}")
+        st.stop()
+
+    else:
+        st.markdown("#### 分析結果")
+
+        change_summary_df = create_change_summary_display(comparison_summary_df)
+
+        st.dataframe(
+            change_summary_df,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "一般労働者": st.column_config.NumberColumn(
+                    "一般労働者",
+                    format="%+.1f%%",
+                ),
+                "パートタイム労働者": st.column_config.NumberColumn(
+                    "パートタイム労働者",
+                    format="%+.1f%%",
+                ),
+                "差（pt）": st.column_config.NumberColumn(
+                    "パート － 一般",
+                    format="%+.1f",
+                ),
+            },
+        )
+
+        st.caption(
+            f"{ANALYSIS_START_YEAR}年平均から"
+            f"{ANALYSIS_END_YEAR}年平均までの変化率。"
+            "「パート－一般」は変化率の差（%ポイント）であり、"
+            "賃金額そのものの差ではありません。"
+        )
+
+        st.markdown("#### 考察")
+
+        analysis_discussion = create_employment_analysis_discussion(
+            comparison_summary_df
+        )
+
+        for discussion in analysis_discussion:
+            st.write(discussion)
+
+        general_wage_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "nominal_wage_amount",
+        )
+
+        part_wage_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "nominal_wage_amount",
+        )
+
+        general_hours_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "working_hours",
+        )
+
+        part_hours_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "working_hours",
+        )
+
+        general_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "approx_hourly_wage",
+        )
+
+        part_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "approx_hourly_wage",
+        )
+
+        general_real_wage_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "real_regular_wage",
+        )
+
+        part_real_wage_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "real_regular_wage",
+        )
+
+        general_real_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "一般労働者",
+            "real_approx_hourly_wage",
+        )
+
+        part_real_hourly_change = get_change_rate(
+            comparison_summary_df,
+            "パートタイム労働者",
+            "real_approx_hourly_wage",
+        )
+
+        st.markdown("#### 年平均の詳細")
+
+        analysis_display_df = comparison_summary_df.copy()
+
+        analysis_display_df["指標"] = analysis_display_df["indicator"].map(
+            ANALYSIS_INDICATOR_LABELS
+        )
+
+        analysis_display_df["単位"] = analysis_display_df["indicator"].map(
+            ANALYSIS_INDICATOR_UNITS
+        )
+
+        analysis_display_df["就業形態"] = analysis_display_df["employment_type"]
+
+        analysis_display_df[f"{ANALYSIS_START_YEAR}年平均"] = analysis_display_df[
+            "start_value"
+        ]
+
+        analysis_display_df[f"{ANALYSIS_END_YEAR}年平均"] = analysis_display_df[
+            "end_value"
+        ]
+
+        analysis_display_df["変化率"] = analysis_display_df["change_rate_pct"]
+
+        analysis_display_df = analysis_display_df[
+            [
+                "指標",
+                "就業形態",
+                "単位",
+                f"{ANALYSIS_START_YEAR}年平均",
+                f"{ANALYSIS_END_YEAR}年平均",
+                "変化率",
+            ]
+        ]
+
+        with st.expander(
+            f"{ANALYSIS_START_YEAR}年・{ANALYSIS_END_YEAR}年の年平均を確認"
+        ):
+            st.dataframe(
+                analysis_display_df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    f"{ANALYSIS_START_YEAR}年平均": st.column_config.NumberColumn(
+                        format="%.1f",
+                    ),
+                    f"{ANALYSIS_END_YEAR}年平均": st.column_config.NumberColumn(
+                        format="%.1f",
+                    ),
+                    "変化率": st.column_config.NumberColumn(
+                        format="%+.1f%%",
+                    ),
+                },
+            )
+
+            st.caption(
+                "実質値は選択中のCPI系列を用いて実質化しています。"
+                "「2020年価格換算」はCPIの2020年基準に対応した表記です。"
+            )
+
+        st.divider()
 
     st.subheader("時系列推移")
 
@@ -587,15 +903,15 @@ def main() -> None:
     )
 
     st.info(
-        """
-    **読み方：** 各就業形態の「きまって支給する給与」が、
-    2020年平均からどの程度変化したかを示します。100を上回れば2020年平均より高い水準です。
+        f"""
+    **読み取れること：**
+    {ANALYSIS_START_YEAR}年平均から{ANALYSIS_END_YEAR}年平均にかけて、
+    月額賃金は一般労働者で **{general_wage_change:+.1f}%**、
+    パートタイム労働者で **{part_wage_change:+.1f}%** 変化しました。
 
-    **分かること：** 一般労働者とパートタイム労働者で、
-    月額賃金の伸び方がどのように異なるかを比較できます。
-
-    **分からないこと：** 両者はそれぞれ個別に2020年平均=100としているため、
-    指数の高さから実際の賃金額の大小や賃金格差を比較することはできません。
+    **注意：**
+    指数は各就業形態をそれぞれ2020年平均=100としているため、
+    指数の高さから両者の実際の賃金額を比較することはできません。
     """
     )
 
@@ -615,15 +931,14 @@ def main() -> None:
     )
 
     st.info(
-        """
-    **読み方：** 月間の総実労働時間が、
-    各就業形態の2020年平均からどの程度変化したかを示します。
+        f"""
+    **読み取れること：**
+    総実労働時間は一般労働者で **{general_hours_change:+.1f}%**、
+    パートタイム労働者で **{part_hours_change:+.1f}%** 変化しました。
+    労働時間の増減は、月額賃金の変化を考える際の重要な要因です。
 
-    **分かること：** 月額賃金の変化が、労働時間の増減から
-    どの程度影響を受けている可能性があるかを考える手掛かりになります。
-
-    **分からないこと：** 労働時間が変化した理由や、
-    本人の希望による変化か企業側の要因による変化かまでは判断できません。
+    **注意：**
+    このデータだけでは、労働時間が変化した原因や本人の希望によるものかは判断できません。
     """
     )
 
@@ -642,16 +957,31 @@ def main() -> None:
         width="stretch",
     )
 
+    hourly_difference = part_hourly_change - general_hourly_change
+
+    if hourly_difference > 0.1:
+        hourly_comparison_text = (
+            f"パートタイム労働者の伸びが一般労働者を"
+            f" **{hourly_difference:.1f}%ポイント** 上回りました。"
+        )
+    elif hourly_difference < -0.1:
+        hourly_comparison_text = (
+            f"一般労働者の伸びがパートタイム労働者を"
+            f" **{abs(hourly_difference):.1f}%ポイント** 上回りました。"
+        )
+    else:
+        hourly_comparison_text = "両者の変化率はほぼ同程度でした。"
+
     st.info(
-        """
-    **読み方：** 「きまって支給する給与 ÷ 総実労働時間」で算出した
-    概算時間当たり賃金の変化を示します。
+        f"""
+    **読み取れること：**
+    概算時間当たり賃金は一般労働者で **{general_hourly_change:+.1f}%**、
+    パートタイム労働者で **{part_hourly_change:+.1f}%** 変化しました。
+    {hourly_comparison_text}
 
-    **分かること：** 労働時間の長短の影響をある程度取り除き、
-    1時間当たりの賃金水準がどのように変化したかを比較できます。
-
-    **分からないこと：** この値は公表された公式の時給ではありません。
-    また、各就業形態の実際の時間当たり賃金額の差を指数から判断することもできません。
+    **注意：**
+    「きまって支給する給与 ÷ 総実労働時間」で算出した概算値であり、
+    公表された公式の時間当たり賃金ではありません。
     """
     )
 
@@ -674,15 +1004,16 @@ def main() -> None:
     )
 
     st.info(
-        """
-    **読み方：** 月額の「きまって支給する給与」を選択したCPIで実質化し、
-    2020年平均=100として購買力の変化を示します。
+        f"""
+    **読み取れること：**
+    物価変動を考慮した実質月額賃金は、
+    一般労働者で **{general_real_wage_change:+.1f}%**、
+    パートタイム労働者で **{part_real_wage_change:+.1f}%** 変化しました。
+    名目月額賃金との差は、物価上昇による購買力への影響を示します。
 
-    **分かること：** 名目賃金の上昇が物価上昇を上回っているかを確認できます。
-    名目賃金が増えていても、物価上昇の方が大きければ実質指数は低下します。
-
-    **分からないこと：** 本アプリで算出した実質値であり、
-    公式に公表される実質賃金指数と同一ではありません。
+    **注意：**
+    本アプリで選択したCPIを用いて算出した実質値であり、
+    公式の実質賃金指数とは一致しない場合があります。
     """
     )
 
@@ -702,23 +1033,35 @@ def main() -> None:
     )
 
     st.info(
-        """
-    **読み方：** 概算時間当たり賃金を選択したCPIで実質化し、
-    1時間当たりの賃金の購買力を2020年平均=100として示します。
+        f"""
+    **読み取れること：**
+    1時間当たりの購買力に相当する実質概算時間当たり賃金は、
+    一般労働者で **{general_real_hourly_change:+.1f}%**、
+    パートタイム労働者で **{part_real_hourly_change:+.1f}%** 変化しました。
+    実質月額賃金と比較することで、労働時間の変化が月単位の購買力に
+    どの程度影響しているかを考えることができます。
 
-    **分かること：** 1時間働くことで得られる実質的な購買力が
-    どのように変化したかを確認できます。実質月額賃金と比較すると、
-    労働時間の変化が月額の購買力に与える影響も考察できます。
-
-    **分からないこと：** 「概算時間当たり賃金」を基にした本アプリ独自の指標であり、
-    公式な実質時給を示すものではありません。
+    **注意：**
+    概算時間当たり賃金をCPIで実質化した本アプリ独自の分析指標です。
     """
     )
 
-    st.markdown("## 3. なぜそうなったか")
+    st.markdown("## 3. 月額賃金の変化を分解")
 
     st.caption(
         "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
+    )
+
+    general_decomposition_summary = summarize_wage_change_decomposition(
+        general_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+    )
+
+    part_decomposition_summary = summarize_wage_change_decomposition(
+        part_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
     )
 
     st.altair_chart(
@@ -727,6 +1070,26 @@ def main() -> None:
             "一般労働者：月額賃金変化の要因分解",
         ),
         width="stretch",
+    )
+
+    st.info(
+        f"""
+    **一般労働者：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年の傾向**
+
+    - 時間当たり賃金要因の平均：\
+    **{general_decomposition_summary["mean_hourly_wage_contribution"]:+.2f}**
+    - 労働時間要因の平均：\
+    **{general_decomposition_summary["mean_working_hours_contribution"]:+.2f}**
+    - 時間当たり賃金要因がプラスだった月：\
+    **{general_decomposition_summary["hourly_positive_share_pct"]:.1f}%**
+    - 労働時間要因がマイナスだった月：\
+    **{general_decomposition_summary["hours_negative_share_pct"]:.1f}%**
+    - 時間当たり賃金要因の絶対値が大きかった月：\
+    **{general_decomposition_summary["hourly_dominant_share_pct"]:.1f}%**
+
+    期間中の前年同月変化を平均した記述統計です。
+    原因そのものを示すものではありません。
+    """
     )
 
     st.altair_chart(
@@ -738,24 +1101,61 @@ def main() -> None:
     )
 
     st.info(
-        """
-    **読み方：** 月額賃金の前年同月からの変化を、
-    「時間当たり賃金要因」と「労働時間要因」に分解しています。
-    棒がプラスなら月額賃金を押し上げる方向、
-    マイナスなら押し下げる方向です。黒線は両要因を合わせた月額賃金の対数変化です。
+        f"""
+    **パートタイム労働者：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年の傾向**
 
-    **分かること：** 月額賃金が増減した背景について、
-    時間当たり賃金の変化と労働時間の変化のどちらが寄与したかを確認できます。
+    - 時間当たり賃金要因の平均：\
+    **{part_decomposition_summary["mean_hourly_wage_contribution"]:+.2f}**
+    - 労働時間要因の平均：\
+    **{part_decomposition_summary["mean_working_hours_contribution"]:+.2f}**
+    - 時間当たり賃金要因がプラスだった月：\
+    **{part_decomposition_summary["hourly_positive_share_pct"]:.1f}%**
+    - 労働時間要因がマイナスだった月：\
+    **{part_decomposition_summary["hours_negative_share_pct"]:.1f}%**
+    - 時間当たり賃金要因の絶対値が大きかった月：\
+    **{part_decomposition_summary["hourly_dominant_share_pct"]:.1f}%**
 
-    **分からないこと：** 労働時間や時間当たり賃金が変化した原因そのものは、
-    この分解だけでは判断できません。また、値は通常の前年比（%）ではなく
-    前年同月からの対数変化を100倍したものです。
+    期間中の前年同月変化を平均した記述統計です。
+    原因そのものを示すものではありません。
     """
+    )
+
+    general_hourly_dominant = general_decomposition_summary["hourly_dominant_share_pct"]
+    part_hourly_dominant = part_decomposition_summary["hourly_dominant_share_pct"]
+
+    st.markdown("#### 要因分解から見た違い")
+
+    if part_hourly_dominant > general_hourly_dominant + 0.1:
+        st.write(
+            "パートタイム労働者では、一般労働者よりも"
+            "時間当たり賃金要因の変動幅が労働時間要因を上回る月の割合が高く、"
+            "月額賃金の変化が時間当たり賃金の変化により強く結び付いていた"
+            "期間が多かったことが確認できます。"
+        )
+    elif general_hourly_dominant > part_hourly_dominant + 0.1:
+        st.write(
+            "一般労働者では、パートタイム労働者よりも"
+            "時間当たり賃金要因の変動幅が労働時間要因を上回る月の割合が高く、"
+            "月額賃金の変化が時間当たり賃金の変化により強く結び付いていた"
+            "期間が多かったことが確認できます。"
+        )
+    else:
+        st.write(
+            "時間当たり賃金要因が労働時間要因を上回る月の割合は、"
+            "一般労働者とパートタイム労働者でおおむね同程度でした。"
+        )
+
+    st.caption(
+        "棒は前年同月からの月額賃金変化を、"
+        "時間当たり賃金要因と労働時間要因に分解したものです。"
+        "値は通常の前年比ではなく、対数変化を100倍した値です。"
     )
 
     comparison_output_df = create_comparison_output_dataframe(
         general_df,
         part_df,
+        establishment_size=establishment_size,
+        cpi_series=selected_series,
     )
 
     st.subheader("分析データ")
@@ -802,8 +1202,36 @@ def main() -> None:
         hide_index=True,
     )
 
+    export_columns = [
+        "date",
+        "employment_type",
+        "establishment_size",
+        "cpi_series",
+        "wage_item",
+        "working_hours_item",
+        "industry",
+        "nominal_wage_amount",
+        "working_hours",
+        "approx_hourly_wage",
+        "real_regular_wage",
+        "real_approx_hourly_wage",
+        "regular_wage_index",
+        "working_hours_index",
+        "approx_hourly_wage_index",
+        "real_regular_wage_index",
+        "real_approx_hourly_wage_index",
+        "regular_wage_yoy_pct",
+        "working_hours_yoy_pct",
+        "approx_hourly_wage_yoy_pct",
+        "real_regular_wage_yoy_pct",
+        "real_approx_hourly_wage_yoy_pct",
+        "wage_log_change",
+        "hourly_wage_log_contribution",
+        "working_hours_log_contribution",
+    ]
+
     csv_data = (
-        comparison_output_df[display_columns]
+        comparison_output_df[export_columns]
         .to_csv(
             index=False,
         )
@@ -816,6 +1244,49 @@ def main() -> None:
         file_name="employment_comparison.csv",
         mime="text/csv",
     )
+
+    st.markdown("#### Tableau用データ")
+
+    st.caption(
+        "事業所規模・CPI系列・雇用形態の全条件を含むCSVを生成します。"
+        "Tableau側で各条件をフィルターして分析できます。"
+    )
+
+    if st.button("Tableau用CSVを生成"):
+        try:
+            cpi_dataframes = {
+                series_name: load_cpi_data(
+                    app_id,
+                    series_code,
+                )
+                for series_name, series_code in CPI_SERIES.items()
+            }
+
+            tableau_df = create_tableau_export_dataframe(
+                raw_df,
+                cpi_dataframes,
+            )
+
+            st.session_state["tableau_export_csv"] = tableau_df.to_csv(
+                index=False
+            ).encode("utf-8-sig")
+
+            st.session_state["tableau_export_rows"] = len(tableau_df)
+
+        except (EStatAPIError, ValueError) as exc:
+            st.error(str(exc))
+
+    if "tableau_export_csv" in st.session_state:
+        st.download_button(
+            label="Tableau用CSVをダウンロード",
+            data=st.session_state["tableau_export_csv"],
+            file_name="employment_comparison_tableau.csv",
+            mime="text/csv",
+        )
+
+        st.caption(
+            f"{st.session_state['tableau_export_rows']:,}行のデータを生成しました。"
+        )
 
     st.subheader("注意事項")
 

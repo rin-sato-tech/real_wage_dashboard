@@ -11,10 +11,18 @@ from real_wage_dashboard.employment_analysis import (
     add_real_employment_indices,
     add_real_employment_values,
     add_wage_change_decomposition,
+    calculate_change_rate,
+    calculate_yearly_averages,
+    calculate_yearly_change_rates,
+    compare_employment_change_rates,
     create_employment_analysis_dataframe,
+    create_employment_analysis_discussion,
     create_full_employment_analysis_dataframe,
+    create_yearly_comparison_summary,
+    describe_change_direction,
     merge_employment_analysis_with_cpi,
     merge_wage_and_working_hours,
+    summarize_wage_change_decomposition,
 )
 
 
@@ -884,4 +892,568 @@ def test_create_full_employment_analysis_dataframe_raises_when_base_year_incompl
             wage_df,
             working_hours_df,
             cpi_df,
+        )
+
+
+def test_calculate_yearly_averages() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [
+                100.0,
+                110.0,
+                120.0,
+                130.0,
+                140.0,
+                150.0,
+                160.0,
+                170.0,
+                180.0,
+                190.0,
+                200.0,
+                210.0,
+            ],
+            "working_hours": [
+                100.0,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_yearly_averages(
+        df,
+        year=2025,
+        columns=[
+            "nominal_wage_amount",
+            "working_hours",
+        ],
+    )
+
+    assert result["nominal_wage_amount"] == pytest.approx(155.0)
+    assert result["working_hours"] == pytest.approx(100.0)
+
+
+def test_calculate_yearly_averages_raises_when_months_missing() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=11,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [
+                100.0,
+            ]
+            * 11,
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2025年のデータが12か月揃っていません",
+    ):
+        calculate_yearly_averages(
+            df,
+            year=2025,
+            columns=["nominal_wage_amount"],
+        )
+
+
+def test_calculate_yearly_averages_raises_when_value_missing() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "nominal_wage_amount": [
+                100.0,
+            ]
+            * 11
+            + [None],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2025年の分析対象データに欠損値があります",
+    ):
+        calculate_yearly_averages(
+            df,
+            year=2025,
+            columns=["nominal_wage_amount"],
+        )
+
+
+def test_calculate_yearly_averages_raises_when_column_missing() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        calculate_yearly_averages(
+            df,
+            year=2025,
+            columns=["nominal_wage_amount"],
+        )
+
+
+def test_calculate_change_rate() -> None:
+    result = calculate_change_rate(
+        100.0,
+        120.0,
+    )
+
+    assert result == pytest.approx(20.0)
+
+
+def test_calculate_change_rate_returns_negative_value() -> None:
+    result = calculate_change_rate(
+        100.0,
+        90.0,
+    )
+
+    assert result == pytest.approx(-10.0)
+
+
+def test_calculate_change_rate_raises_when_start_value_zero() -> None:
+    with pytest.raises(
+        ValueError,
+        match="開始値は0より大きい必要があります",
+    ):
+        calculate_change_rate(
+            0.0,
+            100.0,
+        )
+
+
+def test_calculate_yearly_change_rates() -> None:
+    start = {
+        "nominal_wage_amount": 200_000.0,
+        "working_hours": 100.0,
+    }
+
+    end = {
+        "nominal_wage_amount": 220_000.0,
+        "working_hours": 95.0,
+    }
+
+    result = calculate_yearly_change_rates(
+        start,
+        end,
+    )
+
+    assert result["nominal_wage_amount"] == pytest.approx(10.0)
+    assert result["working_hours"] == pytest.approx(-5.0)
+
+
+def test_calculate_yearly_change_rates_raises_when_columns_differ() -> None:
+    start = {
+        "nominal_wage_amount": 200_000.0,
+    }
+
+    end = {
+        "working_hours": 100.0,
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="比較する年平均の指標が一致していません",
+    ):
+        calculate_yearly_change_rates(
+            start,
+            end,
+        )
+
+
+def test_create_yearly_comparison_summary() -> None:
+    general_df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2015-01-01",
+                "2025-12-01",
+                freq="MS",
+            ),
+        }
+    )
+
+    general_df["nominal_wage_amount"] = general_df["date"].dt.year.map(
+        lambda year: 100.0 if year == 2015 else 120.0
+    )
+
+    part_df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2015-01-01",
+                "2025-12-01",
+                freq="MS",
+            ),
+        }
+    )
+
+    part_df["nominal_wage_amount"] = part_df["date"].dt.year.map(
+        lambda year: 100.0 if year == 2015 else 130.0
+    )
+
+    result = create_yearly_comparison_summary(
+        general_df,
+        part_df,
+        start_year=2015,
+        end_year=2025,
+        columns=["nominal_wage_amount"],
+    )
+
+    assert len(result) == 2
+
+    general_result = result[result["employment_type"] == "一般労働者"].iloc[0]
+
+    part_result = result[result["employment_type"] == "パートタイム労働者"].iloc[0]
+
+    assert general_result["start_value"] == pytest.approx(100.0)
+    assert general_result["end_value"] == pytest.approx(120.0)
+    assert general_result["change_rate_pct"] == pytest.approx(20.0)
+
+    assert part_result["start_value"] == pytest.approx(100.0)
+    assert part_result["end_value"] == pytest.approx(130.0)
+    assert part_result["change_rate_pct"] == pytest.approx(30.0)
+
+
+def test_create_yearly_comparison_summary_handles_multiple_indicators() -> None:
+    dates = pd.date_range(
+        "2015-01-01",
+        "2025-12-01",
+        freq="MS",
+    )
+
+    general_df = pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [
+                100.0 if date.year == 2015 else 110.0 for date in dates
+            ],
+            "working_hours": [100.0 if date.year == 2015 else 95.0 for date in dates],
+        }
+    )
+
+    part_df = pd.DataFrame(
+        {
+            "date": dates,
+            "nominal_wage_amount": [
+                100.0 if date.year == 2015 else 120.0 for date in dates
+            ],
+            "working_hours": [100.0 if date.year == 2015 else 90.0 for date in dates],
+        }
+    )
+
+    result = create_yearly_comparison_summary(
+        general_df,
+        part_df,
+        start_year=2015,
+        end_year=2025,
+        columns=[
+            "nominal_wage_amount",
+            "working_hours",
+        ],
+    )
+
+    assert len(result) == 4
+
+    assert set(result["indicator"]) == {
+        "nominal_wage_amount",
+        "working_hours",
+    }
+
+    assert set(result["employment_type"]) == {
+        "一般労働者",
+        "パートタイム労働者",
+    }
+
+
+def test_compare_employment_change_rates() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+                "パートタイム労働者",
+                "一般労働者",
+                "パートタイム労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+                "nominal_wage_amount",
+                "working_hours",
+                "working_hours",
+            ],
+            "change_rate_pct": [
+                10.0,
+                20.0,
+                -5.0,
+                -10.0,
+            ],
+        }
+    )
+
+    result = compare_employment_change_rates(summary_df)
+
+    wage_result = result[result["indicator"] == "nominal_wage_amount"].iloc[0]
+
+    hours_result = result[result["indicator"] == "working_hours"].iloc[0]
+
+    assert wage_result["一般労働者"] == pytest.approx(10.0)
+    assert wage_result["パートタイム労働者"] == pytest.approx(20.0)
+    assert wage_result["difference_pct_point"] == pytest.approx(10.0)
+    assert wage_result["larger_change"] == "パートタイム労働者"
+
+    assert hours_result["difference_pct_point"] == pytest.approx(-5.0)
+    assert hours_result["larger_change"] == "一般労働者"
+
+
+def test_compare_employment_change_rates_returns_same_when_equal() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+                "パートタイム労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+                "nominal_wage_amount",
+            ],
+            "change_rate_pct": [
+                10.0,
+                10.0,
+            ],
+        }
+    )
+
+    result = compare_employment_change_rates(summary_df)
+
+    assert result.iloc[0]["difference_pct_point"] == pytest.approx(0.0)
+    assert result.iloc[0]["larger_change"] == "同程度"
+
+
+def test_compare_employment_change_rates_raises_when_employment_type_missing() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+            ],
+            "change_rate_pct": [
+                10.0,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="一般労働者とパートタイム労働者の両方のデータが必要です",
+    ):
+        compare_employment_change_rates(summary_df)
+
+
+def test_compare_employment_change_rates_raises_when_column_missing() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "indicator": [
+                "nominal_wage_amount",
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        compare_employment_change_rates(summary_df)
+
+
+def test_describe_change_direction() -> None:
+    assert describe_change_direction(5.0) == "上昇"
+    assert describe_change_direction(-5.0) == "低下"
+    assert describe_change_direction(0.05) == "横ばい"
+
+
+def test_create_employment_analysis_discussion() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "employment_type": [
+                "一般労働者",
+                "一般労働者",
+                "一般労働者",
+                "一般労働者",
+                "一般労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+                "パートタイム労働者",
+            ],
+            "indicator": [
+                "nominal_wage_amount",
+                "working_hours",
+                "approx_hourly_wage",
+                "real_regular_wage",
+                "real_approx_hourly_wage",
+                "nominal_wage_amount",
+                "working_hours",
+                "approx_hourly_wage",
+                "real_regular_wage",
+                "real_approx_hourly_wage",
+            ],
+            "change_rate_pct": [
+                10.0,
+                -5.0,
+                15.8,
+                2.0,
+                7.0,
+                20.0,
+                -10.0,
+                33.3,
+                5.0,
+                15.0,
+            ],
+        }
+    )
+
+    result = create_employment_analysis_discussion(summary_df)
+
+    joined = "\n".join(result)
+
+    assert len(result) == 3
+
+    assert "両就業形態とも、時間当たり賃金が上昇する一方で総実労働時間は減少" in joined
+
+    assert (
+        "パートタイム労働者では、一般労働者より時間当たり賃金の伸びが大きく" in joined
+    )
+
+    assert "時間当たり賃金の改善ほど月額賃金は伸びていません" in joined
+
+    assert (
+        "両就業形態とも名目月額賃金の伸びに比べて実質月額賃金の伸びは小さく" in joined
+    )
+
+    assert "物価上昇によって" in joined
+
+
+def test_summarize_wage_change_decomposition() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(
+                [
+                    "2020-01-01",
+                    "2020-02-01",
+                    "2020-03-01",
+                    "2020-04-01",
+                ]
+            ),
+            "wage_log_change": [
+                2.0,
+                3.0,
+                1.0,
+                4.0,
+            ],
+            "hourly_wage_log_contribution": [
+                3.0,
+                4.0,
+                2.0,
+                5.0,
+            ],
+            "working_hours_log_contribution": [
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+            ],
+        }
+    )
+
+    result = summarize_wage_change_decomposition(
+        df,
+        start_year=2020,
+        end_year=2020,
+    )
+
+    assert result["n_months"] == 4
+    assert result["mean_wage_log_change"] == pytest.approx(2.5)
+    assert result["mean_hourly_wage_contribution"] == pytest.approx(3.5)
+    assert result["mean_working_hours_contribution"] == pytest.approx(-1.0)
+    assert result["hourly_positive_share_pct"] == pytest.approx(100.0)
+    assert result["hours_negative_share_pct"] == pytest.approx(100.0)
+    assert result["hourly_dominant_share_pct"] == pytest.approx(100.0)
+
+
+def test_summarize_wage_change_decomposition_filters_years() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(
+                [
+                    "2019-01-01",
+                    "2020-01-01",
+                    "2021-01-01",
+                ]
+            ),
+            "wage_log_change": [
+                100.0,
+                2.0,
+                100.0,
+            ],
+            "hourly_wage_log_contribution": [
+                100.0,
+                3.0,
+                100.0,
+            ],
+            "working_hours_log_contribution": [
+                0.0,
+                -1.0,
+                0.0,
+            ],
+        }
+    )
+
+    result = summarize_wage_change_decomposition(
+        df,
+        start_year=2020,
+        end_year=2020,
+    )
+
+    assert result["n_months"] == 1
+    assert result["mean_wage_log_change"] == pytest.approx(2.0)
+
+
+def test_summarize_wage_change_decomposition_raises_when_no_data() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2020-01-01"]),
+            "wage_log_change": [2.0],
+            "hourly_wage_log_contribution": [3.0],
+            "working_hours_log_contribution": [-1.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="指定期間に要因分解データがありません",
+    ):
+        summarize_wage_change_decomposition(
+            df,
+            start_year=2025,
+            end_year=2025,
         )
