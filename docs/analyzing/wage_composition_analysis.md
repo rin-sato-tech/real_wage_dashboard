@@ -163,47 +163,45 @@
 
 ### 5.1 前年差
 
-各系列 $(X)$ について、$\Delta X_t=X_t-X_{t-12}$を計算する。
+各系列 $(X)$ について、$`\Delta X_t=X_t-X_{t-12}`$を計算する。
 
-現金給与総額について、$\Delta Total_t =\Delta In_t + \Delta Out_t + \Delta Bonus_t$として前年差を分解する。
+現金給与総額について、$`\Delta Total_t =\Delta In_t + \Delta Out_t + \Delta Bonus_t`$として前年差を分解する。
 
 ### 5.2 前年比
 
-各系列について、$YoY_t = \frac{X_t-X_{t-12}}{X_{t-12}} \times100$を計算する。
+各系列について、$`YoY_t = \frac{X_t-X_{t-12}}{X_{t-12}} \times100`$を計算する。
 
 これは各給与項目自身が前年から何％変化したかを表す。
 
 ### 5.3 現金給与総額前年比への寄与度
 
-現金給与総額の前年比を、$g_t = \frac{Total_t-Total_{t-12}}{Total_{t-12}}\times100$とする。
+現金給与総額の前年比を、$`g_t = \frac{Total_t-Total_{t-12}}{Total_{t-12}}\times100`$とする。
 
-| 項目               | 寄与度式                                                                |
-| ------------------ | ----------------------------------------------------------------------- |
-| 所定内給与の寄与度 | $Cont^{In}_t=\frac{{In}_t-{In}_{t-12}}{Total_{t-12}}\times100$          |
-| 所定外給与の寄与度 | $Cont^{Out}_t=\frac{{Out}_t-{Out}_{t-12}}{Total_{t-12}}\times100$       |
-| 特別給与の寄与度   | $Cont^{Bonus}_t=\frac{{Bonus}_t-{Bonus}_{t-12}}{Total_{t-12}}\times100$ |
+| 項目               | 寄与度式                                                                  |
+| ------------------ | ------------------------------------------------------------------------- |
+| 所定内給与の寄与度 | $`Cont^{In}_t=\frac{{In}_t-{In}_{t-12}}{Total_{t-12}}\times100`$          |
+| 所定外給与の寄与度 | $`Cont^{Out}_t=\frac{{Out}_t-{Out}_{t-12}}{Total_{t-12}}\times100`$       |
+| 特別給与の寄与度   | $`Cont^{Bonus}_t=\frac{{Bonus}_t-{Bonus}_{t-12}}{Total_{t-12}}\times100`$ |
 
-恒等式が成立する場合、$g_t=Cont^{In}_t+Cont^{Out}_t+Cont^{Bonus}_t$となる。
+恒等式が成立する場合、$`g_t=Cont^{In}_t+Cont^{Out}_t+Cont^{Bonus}_t`$となる。
 
 単位は **%ポイント（pt）** とする。
 
 ### 5.4 給与構成比
 
-$S^{In}_t=\frac{In_t}{Total_t}\times100$
+$`S^{In}_t=\frac{In_t}{Total_t}\times100`$
 
-$S^{Out}_t=\frac{Out_t}{Total_t}\times100$
+$`S^{Out}_t=\frac{Out_t}{Total_t}\times100`$
 
-$S^{Bonus}_t=\frac{Bonus_t}{Total_t}\times100$
+$`S^{Bonus}_t=\frac{Bonus_t}{Total_t}\times100`$
 
 月次では賞与月による変動が大きいため、主として年平均または年間集計値で評価する。
 
 ### 5.5 12か月移動平均
 
-給与の基調を確認するため、$MA12_t=\frac{1}{12}\sum_{j=0}^{11}X_{t-j}$を計算する。
+給与の基調を確認するため、$`MA12_t=\frac{1}{12}\sum_{j=0}^{11}X_{t-j}`$を計算する。
 
 連続した12暦月が存在する場合のみ算出する。
-
----
 
 ### 5.6 長期比較
 
@@ -214,9 +212,9 @@ $S^{Bonus}_t=\frac{Bonus_t}{Total_t}\times100$
 
 各年の12か月平均を使用する。
 
-現金給与総額の長期変化：$\Delta\bar{T}=\bar{T}_{2025}-\bar{T}_{2015}$
+現金給与総額の長期変化：$`\Delta\bar{T}=\bar{T}_{2025}-\bar{T}_{2015}`$
 
-所定内給与の寄与度：$Cont^{In}_{2015\rightarrow2025}=\frac{\bar{In}_{2025}-\bar{In}_{2015}}{\bar{Total}_{2015}}\times100$
+所定内給与の寄与度：$`Cont^{In}_{2015\rightarrow2025}=\frac{\bar{In}_{2025}-\bar{In}_{2015}}{\bar{Total}_{2015}}\times100`$
 
 所定外給与・特別給与についても同様に計算する。
 
