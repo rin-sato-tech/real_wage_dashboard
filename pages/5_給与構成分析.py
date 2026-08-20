@@ -703,5 +703,240 @@ def main() -> None:
         "2022年以降の上昇は主として所定内給与の増加によって構成されています。"
     )
 
+    # -------------------------
+    # 分析結果・考察
+    # -------------------------
+
+    st.divider()
+
+    st.subheader("分析結果")
+
+    st.markdown(
+        """
+        - **2015～2025年の現金給与総額上昇の最大要因は所定内給与でした。**
+          現金給与総額は12.72%増加し、
+          所定内給与が+8.46pt、特別給与が+4.22pt寄与しました。
+
+        - **所定外給与の長期的な寄与は小さいです。**
+          2015～2025年の寄与は+0.04ptにとどまりました。
+
+        - **2020年の給与総額低下は、主として所定外給与と特別給与の減少によるものでした。**
+
+        - **2022年以降は所定内給与が主要な上昇要因となっています。**
+          特に2024年は所定内給与の寄与が大きく拡大しました。
+
+        - **直近2026年も、所定内給与中心の上昇構造が続いています。**
+        """
+    )
+
+    st.subheader("考察")
+
+    st.markdown(
+        """
+        近年の現金給与総額上昇は、残業等の所定外給与の増加を主因とするものではなく、
+        **所定内給与の上昇を中心に、特別給与の増加が加わる構造**となっています。
+
+        一方で、特別給与は月ごとの変動が大きく、
+        年や月によって給与総額への影響が大きく変わります。
+
+        また、所定内給与が現金給与総額上昇の最大要因であることと、
+        給与構成そのものが所定内給与中心へ変化していることは同じ意味ではありません。
+        2015年から2025年にかけては、特別給与の構成比も上昇しています。
+        """
+    )
+
+    st.warning(
+        "この分析で分かるのは、"
+        "「どの給与項目の変化が現金給与総額の変化を構成したか」です。"
+        "所定内給与がなぜ上昇したのか、春闘や人手不足がどの程度影響したのかといった"
+        "因果関係までは、この分析だけでは判断できません。"
+    )
+
+    # -------------------------
+    # 分析データ
+    # -------------------------
+
+    st.divider()
+
+    st.subheader("分析データ")
+
+    table_df = df[
+        [
+            "date",
+            "total_cash_earnings",
+            "scheduled_earnings",
+            "overtime_earnings",
+            "special_earnings",
+            "total_cash_earnings_yoy_pct",
+            "scheduled_earnings_yoy_pct",
+            "overtime_earnings_yoy_pct",
+            "special_earnings_yoy_pct",
+            "scheduled_earnings_contribution_pt",
+            "overtime_earnings_contribution_pt",
+            "special_earnings_contribution_pt",
+        ]
+    ].copy()
+
+    table_df = table_df.sort_values(
+        "date",
+        ascending=False,
+    )
+
+    st.dataframe(
+        table_df,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "date": st.column_config.DateColumn(
+                "年月",
+                format="YYYY年MM月",
+            ),
+            "total_cash_earnings": st.column_config.NumberColumn(
+                "現金給与総額",
+                format="%,.0f円",
+            ),
+            "scheduled_earnings": st.column_config.NumberColumn(
+                "所定内給与",
+                format="%,.0f円",
+            ),
+            "overtime_earnings": st.column_config.NumberColumn(
+                "所定外給与",
+                format="%,.0f円",
+            ),
+            "special_earnings": st.column_config.NumberColumn(
+                "特別給与",
+                format="%,.0f円",
+            ),
+            "total_cash_earnings_yoy_pct": st.column_config.NumberColumn(
+                "現金給与総額 前年同月比",
+                format="%+.2f%%",
+            ),
+            "scheduled_earnings_yoy_pct": st.column_config.NumberColumn(
+                "所定内給与 前年同月比",
+                format="%+.2f%%",
+            ),
+            "overtime_earnings_yoy_pct": st.column_config.NumberColumn(
+                "所定外給与 前年同月比",
+                format="%+.2f%%",
+            ),
+            "special_earnings_yoy_pct": st.column_config.NumberColumn(
+                "特別給与 前年同月比",
+                format="%+.2f%%",
+            ),
+            "scheduled_earnings_contribution_pt": st.column_config.NumberColumn(
+                "所定内給与 寄与度",
+                format="%+.2fpt",
+            ),
+            "overtime_earnings_contribution_pt": st.column_config.NumberColumn(
+                "所定外給与 寄与度",
+                format="%+.2fpt",
+            ),
+            "special_earnings_contribution_pt": st.column_config.NumberColumn(
+                "特別給与 寄与度",
+                format="%+.2fpt",
+            ),
+        },
+    )
+
+    # -------------------------
+    # CSV出力
+    # -------------------------
+
+    csv_df = df.copy()
+
+    csv_df.insert(
+        0,
+        "year",
+        csv_df["date"].dt.year,
+    )
+
+    csv_df.insert(
+        1,
+        "month",
+        csv_df["date"].dt.month,
+    )
+
+    csv_df.insert(
+        2,
+        "industry",
+        "調査産業計",
+    )
+
+    csv_df.insert(
+        3,
+        "establishment_size",
+        "5人以上",
+    )
+
+    csv_df.insert(
+        4,
+        "employment_type",
+        "就業形態計",
+    )
+
+    csv_df = csv_df.drop(
+        columns="date",
+    )
+
+    csv_data = csv_df.to_csv(
+        index=False,
+    ).encode("utf-8-sig")
+
+    st.download_button(
+        label="全期間の給与構成分析データをCSVでダウンロード",
+        data=csv_data,
+        file_name="wage_composition_analysis.csv",
+        mime="text/csv",
+    )
+
+    # -------------------------
+    # 出典・算出方法
+    # -------------------------
+
+    with st.expander("データ出典・算出方法"):
+        st.markdown(
+            """
+            ### データ出典
+
+            - **出典**：厚生労働省「毎月勤労統計調査」
+            - **産業**：調査産業計
+            - **事業所規模**：5人以上
+            - **就業形態**：就業形態計
+            - **頻度**：月次
+
+            ### 使用する給与項目
+
+            - 現金給与総額
+            - 所定内給与
+            - 所定外給与
+            - 特別給与
+
+            ### 給与構成
+
+            現金給与総額は、次の恒等式で分解しています。
+
+            ```
+            現金給与総額 = 所定内給与 + 所定外給与 + 特別給与
+            ```
+
+            ### 寄与度
+
+            各給与項目の前年差を前年の現金給与総額で割ることで、
+            現金給与総額の前年同月比に対する寄与度を算出しています。
+
+            3要素の寄与度の合計は、
+            現金給与総額の前年同月比と一致します。
+
+            ### 12か月移動平均
+
+            連続した12暦月が存在する場合のみ算出しています。
+            """
+        )
+
+    st.info(
+        "本ページの寄与度分解は給与項目間の恒等関係を用いた機械的な分解です。"
+        "各給与項目が変化した経済的・制度的な原因そのものを示すものではありません。"
+    )
+
 if __name__ == "__main__":
     main()
