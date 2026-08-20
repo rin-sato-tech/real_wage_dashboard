@@ -16,7 +16,6 @@ from real_wage_dashboard.wage_composition_analysis import (
 )
 from real_wage_dashboard.wage_service import load_wage_csv
 
-
 st.set_page_config(
     page_title="給与構成分析",
     page_icon="🧩",
@@ -51,15 +50,19 @@ def create_analysis_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
 def create_contribution_chart(df: pd.DataFrame) -> alt.LayerChart:
     """現金給与総額前年比と給与3要素の寄与度を表示する。"""
 
-    chart_df = df[
-        [
-            "date",
-            "total_cash_earnings_yoy_pct",
-            "scheduled_earnings_contribution_pt",
-            "overtime_earnings_contribution_pt",
-            "special_earnings_contribution_pt",
+    chart_df = (
+        df[
+            [
+                "date",
+                "total_cash_earnings_yoy_pct",
+                "scheduled_earnings_contribution_pt",
+                "overtime_earnings_contribution_pt",
+                "special_earnings_contribution_pt",
+            ]
         ]
-    ].dropna().copy()
+        .dropna()
+        .copy()
+    )
 
     contribution_df = chart_df.melt(
         id_vars="date",
@@ -173,11 +176,7 @@ def create_contribution_chart(df: pd.DataFrame) -> alt.LayerChart:
         )
     )
 
-    return (
-        bars
-        + line
-        + zero_line
-    ).properties(
+    return (bars + line + zero_line).properties(
         height=420,
     )
 
@@ -185,17 +184,19 @@ def create_contribution_chart(df: pd.DataFrame) -> alt.LayerChart:
 def create_annual_contribution_chart(annual_df: pd.DataFrame) -> alt.LayerChart:
     """年平均現金給与総額前年比と給与3要素の寄与度を表示する。"""
 
-    chart_df = annual_df[
-        annual_df["year"] >= 2015
-    ][
-        [
-            "year",
-            "total_yoy_pct",
-            "scheduled_earnings_contribution_pt",
-            "overtime_earnings_contribution_pt",
-            "special_earnings_contribution_pt",
+    chart_df = (
+        annual_df[annual_df["year"] >= 2015][
+            [
+                "year",
+                "total_yoy_pct",
+                "scheduled_earnings_contribution_pt",
+                "overtime_earnings_contribution_pt",
+                "special_earnings_contribution_pt",
+            ]
         ]
-    ].dropna().copy()
+        .dropna()
+        .copy()
+    )
 
     contribution_df = chart_df.melt(
         id_vars="year",
@@ -308,11 +309,7 @@ def create_annual_contribution_chart(annual_df: pd.DataFrame) -> alt.LayerChart:
         )
     )
 
-    return (
-        bars
-        + line
-        + zero_line
-    ).properties(
+    return (bars + line + zero_line).properties(
         height=420,
     )
 
@@ -414,8 +411,6 @@ def main() -> None:
         st.warning("表示可能な給与構成データがありません。")
         st.stop()
 
-    latest = df.iloc[-1]
-
     # -------------------------
     # 2015年と2025年の長期比較
     # -------------------------
@@ -424,7 +419,9 @@ def main() -> None:
 
     st.subheader("10年間の賃金上昇を何が構成したか")
 
-    st.caption("各年の12か月平均を比較し、現金給与総額の変化を所定内給与・所定外給与・特別給与に分解します。")
+    st.caption(
+        "各年の12か月平均を比較し、現金給与総額の変化を所定内給与・所定外給与・特別給与に分解します。"
+    )
 
     st.caption(
         "最新の完全な暦年である2025年を終点とし、"
@@ -537,7 +534,9 @@ def main() -> None:
 
     st.subheader("月次で見る賃金変動の要因")
 
-    st.caption("棒グラフは各給与項目の寄与度、折れ線は現金給与総額の前年同月比を表します。")
+    st.caption(
+        "棒グラフは各給与項目の寄与度、折れ線は現金給与総額の前年同月比を表します。"
+    )
 
     period_options = {
         "直近5年": 60,
@@ -795,6 +794,7 @@ def main() -> None:
         "本ページの寄与度分解は給与項目間の恒等関係を用いた機械的な分解です。"
         "各給与項目が変化した経済的・制度的な原因そのものを示すものではありません。"
     )
+
 
 if __name__ == "__main__":
     main()

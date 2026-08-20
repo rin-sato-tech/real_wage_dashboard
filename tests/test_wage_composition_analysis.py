@@ -225,10 +225,14 @@ def test_add_wage_composition_moving_averages_starts_after_12_months() -> None:
 
     result = add_wage_composition_moving_averages(df)
 
-    assert result.loc[
-        :10,
-        "total_cash_earnings_ma_12",
-    ].isna().all()
+    assert (
+        result.loc[
+            :10,
+            "total_cash_earnings_ma_12",
+        ]
+        .isna()
+        .all()
+    )
 
     assert result.loc[
         11,
