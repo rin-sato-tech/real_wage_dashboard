@@ -95,6 +95,18 @@ def create_contribution_chart(df: pd.DataFrame) -> alt.LayerChart:
             color=alt.Color(
                 "component:N",
                 title="給与項目",
+                scale=alt.Scale(
+                    domain=[
+                        "所定内給与",
+                        "所定外給与",
+                        "特別給与",
+                    ],
+                    range=[
+                        "#4c78a8",
+                        "#f58518",
+                        "#54a24b",
+                    ],
+                ),
             ),
             tooltip=[
                 alt.Tooltip(
@@ -119,6 +131,7 @@ def create_contribution_chart(df: pd.DataFrame) -> alt.LayerChart:
         alt.Chart(chart_df)
         .mark_line(
             strokeWidth=2.5,
+            color="#222222",
         )
         .encode(
             x=alt.X(
@@ -218,6 +231,18 @@ def create_annual_contribution_chart(annual_df: pd.DataFrame) -> alt.LayerChart:
             color=alt.Color(
                 "component:N",
                 title="給与項目",
+                scale=alt.Scale(
+                    domain=[
+                        "所定内給与",
+                        "所定外給与",
+                        "特別給与",
+                    ],
+                    range=[
+                        "#4c78a8",
+                        "#f58518",
+                        "#54a24b",
+                    ],
+                ),
             ),
             tooltip=[
                 alt.Tooltip(
@@ -242,6 +267,7 @@ def create_annual_contribution_chart(annual_df: pd.DataFrame) -> alt.LayerChart:
         .mark_line(
             strokeWidth=2.5,
             point=True,
+            color="#222222",
         )
         .encode(
             x=alt.X(
@@ -309,15 +335,49 @@ def main() -> None:
         """
         **現金給与総額の変動は、何によって生じているのか。**
 
-        - 所定内給与の上昇によるものか
-        - 残業等の所定外給与によるものか
-        - 賞与等の特別給与によるものか
-
-        を寄与度分解によって確認します。
+        所定内給与・所定外給与・特別給与に分解し、近年の賃金上昇の中身を確認します。
         """
     )
 
     st.caption("分析条件：調査産業計・事業所規模5人以上・就業形態計")
+
+    st.subheader("分析結果")
+
+    st.markdown(
+        """
+        **近年の現金給与総額の上昇は、主として所定内給与の増加によって
+        構成されています。**
+
+        - 2015～2025年の現金給与総額は **12.72%増加**
+        - 所定内給与の寄与は **+8.46pt** と最大
+        - 特別給与は **+4.22pt**
+        - 所定外給与は **+0.04pt** とほぼ寄与していない
+        - 2020年の低下と2022年以降の上昇では、寄与構造が異なる
+        """
+    )
+
+    st.subheader("考察")
+
+    st.markdown(
+        """
+        近年の現金給与総額上昇は、残業等の所定外給与の増加を主因とするものではなく、
+        **所定内給与の上昇を中心に、特別給与の増加が加わる構造**となっています。
+
+        一方で、特別給与は月ごとの変動が大きく、
+        年や月によって給与総額への影響が大きく変わります。
+
+        また、所定内給与が現金給与総額上昇の最大要因であることと、
+        給与構成そのものが所定内給与中心へ変化していることは同じ意味ではありません。
+        2015年から2025年にかけては、特別給与の構成比も上昇しています。
+        """
+    )
+
+    st.warning(
+        "この分析で分かるのは、"
+        "「どの給与項目の変化が現金給与総額の変化を構成したか」です。"
+        "所定内給与がなぜ上昇したのか、春闘や人手不足がどの程度影響したのかといった"
+        "因果関係までは、この分析だけでは判断できません。"
+    )
 
     # -------------------------
     # データ生成
@@ -357,218 +417,21 @@ def main() -> None:
     latest = df.iloc[-1]
 
     # -------------------------
-    # 最新結果
-    # -------------------------
-
-    st.subheader("最新結果")
-
-    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-
-    metric_col1.metric(
-        label="現金給与総額",
-        value=f"{latest['total_cash_earnings']:,.0f}円",
-        delta=(
-            f"{latest['total_cash_earnings_yoy_pct']:+.2f}%"
-            if pd.notna(latest["total_cash_earnings_yoy_pct"])
-            else None
-        ),
-    )
-
-    metric_col2.metric(
-        label="所定内給与の寄与",
-        value=(
-            f"{latest['scheduled_earnings_contribution_pt']:+.2f}pt"
-            if pd.notna(
-                latest["scheduled_earnings_contribution_pt"]
-            )
-            else "算出不可"
-        ),
-    )
-
-    metric_col3.metric(
-        label="所定外給与の寄与",
-        value=(
-            f"{latest['overtime_earnings_contribution_pt']:+.2f}pt"
-            if pd.notna(
-                latest["overtime_earnings_contribution_pt"]
-            )
-            else "算出不可"
-        ),
-    )
-
-    metric_col4.metric(
-        label="特別給与の寄与",
-        value=(
-            f"{latest['special_earnings_contribution_pt']:+.2f}pt"
-            if pd.notna(
-                latest["special_earnings_contribution_pt"]
-            )
-            else "算出不可"
-        ),
-    )
-
-    st.caption(
-        f"最新データ：{latest['date'].strftime('%Y年%m月')}"
-    )
-
-    if pd.notna(latest["scheduled_earnings_contribution_pt"]):
-        contribution_share = (
-            latest["scheduled_earnings_contribution_pt"]
-            / latest["total_cash_earnings_yoy_pct"]
-            * 100
-        )
-
-        st.info(
-            f"{latest['date'].strftime('%Y年%m月')}の現金給与総額は"
-            f"前年同月比{latest['total_cash_earnings_yoy_pct']:+.2f}%です。"
-            f"このうち所定内給与の寄与は"
-            f"{latest['scheduled_earnings_contribution_pt']:+.2f}ptで、"
-            f"総額の変化の約{contribution_share:.0f}%を占めました。"
-        )
-
-    # -------------------------
-    # この後グラフを追加
-    # -------------------------
-
-    st.divider()
-
-    # -------------------------
-    # 給与構成の長期推移
-    # -------------------------
-
-    st.divider()
-
-    st.subheader("給与構成の推移")
-
-    st.caption("月ごとの季節変動をならして基調を確認するため、12か月移動平均を表示しています。")
-
-    period_options = {
-        "直近5年": 60,
-        "直近10年": 120,
-        "直近20年": 240,
-        "直近30年": 360,
-        "全期間": None,
-    }
-
-    period = st.selectbox(
-        "表示期間",
-        options=list(period_options.keys()),
-        index=list(period_options.keys()).index("直近10年"),
-        key="composition_period",
-    )
-
-    period_months = period_options[period]
-
-    if period_months is None:
-        display_df = df.copy()
-    else:
-        display_df = df.tail(period_months).copy()
-
-    # -------------------------
-    # 現金給与総額・所定内給与
-    # -------------------------
-
-    st.markdown("#### 現金給与総額と所定内給与")
-
-    main_chart_df = display_df[
-        [
-            "date",
-            "total_cash_earnings_ma_12",
-            "scheduled_earnings_ma_12",
-        ]
-    ].copy()
-
-    main_chart_df = main_chart_df.rename(
-        columns={
-            "total_cash_earnings_ma_12": "現金給与総額",
-            "scheduled_earnings_ma_12": "所定内給与",
-        }
-    )
-
-    st.line_chart(
-        main_chart_df,
-        x="date",
-        y=[
-            "現金給与総額",
-            "所定内給与",
-        ],
-        x_label="年月",
-        y_label="12か月移動平均（円）",
-    )
-
-    st.caption("現金給与総額と、その最大の構成要素である所定内給与の長期的な動きを比較しています。")
-
-    # -------------------------
-    # 所定外給与・特別給与
-    # -------------------------
-
-    st.markdown("#### 所定外給与と特別給与")
-
-    component_chart_df = display_df[
-        [
-            "date",
-            "overtime_earnings_ma_12",
-            "special_earnings_ma_12",
-        ]
-    ].copy()
-
-    component_chart_df = component_chart_df.rename(
-        columns={
-            "overtime_earnings_ma_12": "所定外給与",
-            "special_earnings_ma_12": "特別給与",
-        }
-    )
-
-    st.line_chart(
-        component_chart_df,
-        x="date",
-        y=[
-            "所定外給与",
-            "特別給与",
-        ],
-        x_label="年月",
-        y_label="12か月移動平均（円）",
-    )
-
-    st.caption(
-        "所定外給与は残業等、特別給与は賞与等を含みます。"
-        "所定内給与とは金額規模が大きく異なるため、別グラフに分けて表示しています。"
-    )
-
-    # -------------------------
-    # 前年比寄与度
-    # -------------------------
-
-    st.divider()
-
-    st.subheader("現金給与総額前年比への寄与度")
-
-    st.caption(
-        "棒グラフは各給与項目の寄与度、"
-        "折れ線は現金給与総額の前年同月比を表します。"
-    )
-
-    contribution_chart = create_contribution_chart(display_df)
-
-    st.altair_chart(
-        contribution_chart,
-        width="stretch",
-    )
-
-    st.info(
-        "各給与項目の寄与度の合計は、現金給与総額の前年同月比と一致します。"
-        "各項目自身の前年比とは異なる指標です。"
-    )
-
-    # -------------------------
     # 2015年と2025年の長期比較
     # -------------------------
 
     st.divider()
 
-    st.subheader("2015年から2025年の長期変化")
+    st.subheader("10年間の賃金上昇を何が構成したか")
 
     st.caption("各年の12か月平均を比較し、現金給与総額の変化を所定内給与・所定外給与・特別給与に分解します。")
+
+    st.caption(
+        "最新の完全な暦年である2025年を終点とし、"
+        "中長期的な変化を見るため10年前の2015年と比較します。"
+        "この期間にはコロナ前、2020～2021年、2022年以降の賃金上昇局面が含まれます。"
+        "なお、2015年自体を経済的な転換点として選んだものではありません。"
+    )
 
     total_row = long_term_df.loc[
         long_term_df["component"] == "total_cash_earnings"
@@ -667,12 +530,56 @@ def main() -> None:
     )
 
     # -------------------------
+    # 前年比寄与度
+    # -------------------------
+
+    st.divider()
+
+    st.subheader("月次で見る賃金変動の要因")
+
+    st.caption("棒グラフは各給与項目の寄与度、折れ線は現金給与総額の前年同月比を表します。")
+
+    period_options = {
+        "直近5年": 60,
+        "直近10年": 120,
+        "直近20年": 240,
+        "直近30年": 360,
+        "全期間": None,
+    }
+
+    period = st.selectbox(
+        "表示期間",
+        options=list(period_options.keys()),
+        index=list(period_options.keys()).index("直近10年"),
+        key="composition_period",
+    )
+
+    period_months = period_options[period]
+
+    if period_months is None:
+        display_df = df.copy()
+    else:
+        display_df = df.tail(period_months).copy()
+
+    contribution_chart = create_contribution_chart(display_df)
+
+    st.altair_chart(
+        contribution_chart,
+        width="stretch",
+    )
+
+    st.info(
+        "各給与項目の寄与度の合計は、現金給与総額の前年同月比と一致します。"
+        "各項目自身の前年比とは異なる指標です。"
+    )
+
+    # -------------------------
     # 年次寄与度
     # -------------------------
 
     st.divider()
 
-    st.subheader("年次で見る給与上昇の構成")
+    st.subheader("年次で見る賃金変動の要因")
 
     st.caption(
         "各年の年平均現金給与総額の前年比を、"
@@ -701,55 +608,6 @@ def main() -> None:
         "年次で見ると、給与総額の変動要因は時期によって異なります。"
         "2020年の低下は主として所定外給与・特別給与の減少、"
         "2022年以降の上昇は主として所定内給与の増加によって構成されています。"
-    )
-
-    # -------------------------
-    # 分析結果・考察
-    # -------------------------
-
-    st.divider()
-
-    st.subheader("分析結果")
-
-    st.markdown(
-        """
-        - **2015～2025年の現金給与総額上昇の最大要因は所定内給与でした。**
-          現金給与総額は12.72%増加し、
-          所定内給与が+8.46pt、特別給与が+4.22pt寄与しました。
-
-        - **所定外給与の長期的な寄与は小さいです。**
-          2015～2025年の寄与は+0.04ptにとどまりました。
-
-        - **2020年の給与総額低下は、主として所定外給与と特別給与の減少によるものでした。**
-
-        - **2022年以降は所定内給与が主要な上昇要因となっています。**
-          特に2024年は所定内給与の寄与が大きく拡大しました。
-
-        - **直近2026年も、所定内給与中心の上昇構造が続いています。**
-        """
-    )
-
-    st.subheader("考察")
-
-    st.markdown(
-        """
-        近年の現金給与総額上昇は、残業等の所定外給与の増加を主因とするものではなく、
-        **所定内給与の上昇を中心に、特別給与の増加が加わる構造**となっています。
-
-        一方で、特別給与は月ごとの変動が大きく、
-        年や月によって給与総額への影響が大きく変わります。
-
-        また、所定内給与が現金給与総額上昇の最大要因であることと、
-        給与構成そのものが所定内給与中心へ変化していることは同じ意味ではありません。
-        2015年から2025年にかけては、特別給与の構成比も上昇しています。
-        """
-    )
-
-    st.warning(
-        "この分析で分かるのは、"
-        "「どの給与項目の変化が現金給与総額の変化を構成したか」です。"
-        "所定内給与がなぜ上昇したのか、春闘や人手不足がどの程度影響したのかといった"
-        "因果関係までは、この分析だけでは判断できません。"
     )
 
     # -------------------------
