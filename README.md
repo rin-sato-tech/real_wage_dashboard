@@ -106,6 +106,25 @@ e-Statの消費者物価指数と毎月勤労統計調査を用いて、
 
 ---
 
+### 給与構成分析
+
+現金給与総額の変動を、
+
+- 所定内給与
+- 所定外給与
+- 特別給与
+
+に分解し、賃金上昇の中身を分析します。
+
+2015年平均と2025年平均の比較では、現金給与総額は12.72%増加し、
+所定内給与が+8.46pt、特別給与が+4.22pt、所定外給与が+0.04pt寄与しました。
+
+また、月次・年次の寄与度を可視化し、2020年と近年で賃金変動の構造が異なることを確認できます。
+
+詳細は `docs/analyzing/wage_composition_analysis.md` を参照してください。
+
+---
+
 ## 使用データ
 
 ### 消費者物価指数
@@ -153,7 +172,8 @@ real_wage_dashboard/
 ├── pages/
 │   ├── 2_名目賃金.py
 │   ├── 3_実質賃金.py
-│   └── 4_雇用形態比較.py
+│   ├── 4_雇用形態比較.py
+│   └── 5_給与構成分析.py
 ├── src/real_wage_dashboard/
 │   ├── cpi_service.py
 │   ├── wage_service.py
@@ -207,6 +227,7 @@ uv run ruff format --check .
 - `nominal_wage.csv`
 - `real_wage.csv`
 - `employment_comparison.csv`
+- `wage_composition_analysis.csv`
 
 雇用形態比較CSVには、賃金・労働時間・概算時間当たり賃金・実質値・指数・前年比・要因分解結果を含みます。
 
