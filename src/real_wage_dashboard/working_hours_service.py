@@ -8,6 +8,7 @@ def create_working_hours_dataframe(
     working_hours_item: str = "総実労働時間",
     establishment_size: str = "T",
     employment_type: str = "1",
+    industry_code: str = "TL",
 ) -> pd.DataFrame:
     """長期時系列表から指定条件の月次労働時間データを抽出する。"""
 
@@ -30,7 +31,7 @@ def create_working_hours_dataframe(
     month = raw_df["月"].astype(str).str.strip()
 
     df = raw_df.loc[
-        (industry == "TL")
+        (industry == industry_code)
         & (size == establishment_size)
         & (employment == employment_type)
         & (month != "CY"),

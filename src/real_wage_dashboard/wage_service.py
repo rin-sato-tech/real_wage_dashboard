@@ -19,6 +19,7 @@ def create_wage_dataframe(
     wage_item: str = "現金給与総額",
     establishment_size: str = "T",
     employment_type: str = "0",
+    industry_code: str = "TL",
 ) -> pd.DataFrame:
     """長期時系列表から指定条件の月次賃金データを抽出する。"""
 
@@ -41,7 +42,7 @@ def create_wage_dataframe(
     month = raw_df["月"].astype(str).str.strip()
 
     df = raw_df.loc[
-        (industry == "TL")
+        (industry == industry_code)
         & (size == establishment_size)
         & (employment == employment_type)
         & (month != "CY"),
