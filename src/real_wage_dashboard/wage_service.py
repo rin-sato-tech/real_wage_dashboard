@@ -11,7 +11,13 @@ def load_wage_csv(file_path: str | Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"賃金データが見つかりません: {path}")
 
-    return pd.read_csv(path, encoding="cp932")
+    return pd.read_csv(
+        path,
+        encoding="cp932",
+        dtype={
+            "月": str,
+        },
+    )
 
 
 def create_wage_dataframe(

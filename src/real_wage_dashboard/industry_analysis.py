@@ -493,3 +493,105 @@ def create_period_comparison_dataframe(
             )
 
     return pd.DataFrame(results)
+
+
+def create_multi_industry_yearly_dataframe(
+    raw_df: pd.DataFrame,
+    industry_codes: list[str],
+    establishment_size: str = "T",
+    employment_type: str = "0",
+) -> pd.DataFrame:
+    """複数産業の年次データを結合する。"""
+
+    frames = []
+
+    for industry_code in industry_codes:
+        monthly_df = create_industry_monthly_dataframe(
+            raw_df,
+            industry_code=industry_code,
+            establishment_size=establishment_size,
+            employment_type=employment_type,
+        )
+
+        yearly_df = create_industry_yearly_dataframe(
+            monthly_df
+        )
+
+        frames.append(yearly_df)
+
+    return pd.concat(
+        frames,
+        ignore_index=True,
+    )
+
+
+def create_industry_analysis_results(
+    summary: dict[str, float],
+    notable: dict[str, str],
+) -> list[str]:
+    """産業別分析の主要な結果文を返す。"""
+
+    return [
+        (
+            "2015年から2025年にかけて、"
+            "16産業すべてで月額賃金が上昇した。"
+        ),
+        (
+            f"月額賃金上昇率の中央値は"
+            f"{summary['wage_change_median']:+.2f}%で、"
+            f"調査産業計の{summary['total_wage_change']:+.2f}%を上回ったのは"
+            f"{summary['above_total_count']}産業だった。"
+        ),
+        (
+            f"月額賃金上昇率は"
+            f"{summary['wage_change_min']:+.2f}%から"
+            f"{summary['wage_change_max']:+.2f}%まで分布し、"
+            "産業間で上昇幅に差があった。"
+        ),
+        (
+            "16産業すべてで1時間あたり賃金（概算）は上昇し、"
+            "総実労働時間は減少した。"
+        ),
+        (
+            f"月額賃金上昇が最も大きかった産業は"
+            f"{INDUSTRY_NAMES[notable['monthly_wage_growth_max']]}、"
+            f"最も小さかった産業は"
+            f"{INDUSTRY_NAMES[notable['monthly_wage_growth_min']]}だった。"
+        ),
+    ]
+
+
+def create_industry_analysis_discussion(
+    notable: dict[str, str],
+) -> list[str]:
+    """産業別分析の考察文を返す。"""
+
+    offset_industry = INDUSTRY_NAMES[
+        notable["monthly_hourly_gap_max"]
+    ]
+
+    return [
+        (
+            "賃金上昇は一部の産業だけに集中していたのではなく、"
+            "幅広い産業で生じていたと考えられる。"
+        ),
+        (
+            "一方で上昇幅には産業差があり、"
+            "産業別に賃金動向を確認する意味は大きい。"
+        ),
+        (
+            f"{offset_industry}では、"
+            "1時間あたり賃金の上昇が大きい一方で"
+            "労働時間の減少も大きく、"
+            "月額賃金の上昇が強く相殺されていた。"
+        ),
+        (
+            "このため、月額賃金だけでは産業ごとの賃金単価の変化を"
+            "十分に把握できず、労働時間と分けて見る必要がある。"
+        ),
+        (
+            "また、労働時間減少の時期は産業によって異なり、"
+            "2015年から2025年の変化を2020年だけの影響として"
+            "説明することはできない。"
+        ),
+    ]
