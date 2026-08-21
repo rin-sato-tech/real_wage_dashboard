@@ -151,6 +151,22 @@ e-Statの消費者物価指数と厚生労働省「毎月勤労統計調査」�
 
 ---
 
+### 産業別賃金分析
+
+主要16産業について、2015年平均から2025年平均までの
+
+- 月額賃金
+- 1時間あたり賃金（概算）
+- 総実労働時間
+
+の変化を比較し、月額賃金の変化を「時間当たり賃金要因」と「労働時間要因」に分解します。
+
+主要16産業すべてで月額賃金と概算時間当たり賃金が上昇する一方、総実労働時間は減少しており、上昇幅には大きな産業差が確認されました。
+
+詳細は `docs/analyzing/industry_wage_analysis.md` を参照してください。
+
+---
+
 ## 使用データ
 
 ### 消費者物価指数
@@ -165,7 +181,7 @@ e-Statの消費者物価指数と厚生労働省「毎月勤労統計調査」�
 
 - 出典：政府統計の総合窓口 e-Stat
 - 統計：毎月勤労統計調査
-- 産業：調査産業計
+- 産業：調査産業計 / 主要産業分類
 - 事業所規模：5人以上 / 30人以上
 - 就業形態：就業形態計 / 一般労働者 / パートタイム労働者
 
@@ -196,7 +212,8 @@ real_wage_dashboard/
 │   ├── 3_実質賃金.py
 │   ├── 4_雇用形態比較.py
 │   ├── 5_給与構成分析.py
-│   └── 6_労働投入分析.py
+│   ├── 6_労働投入分析.py
+│   └── 7_産業別分析.py
 ├── src/real_wage_dashboard/
 │   ├── cpi_service.py
 │   ├── wage_service.py
@@ -204,13 +221,15 @@ real_wage_dashboard/
 │   ├── working_hours_service.py
 │   ├── working_days_service.py
 │   ├── employment_analysis.py
-│   └── labor_input_analysis.py
+│   ├── labor_input_analysis.py
+│   └── industry_analysis.py
 ├── docs/
 │   ├── employment_comparison_analysis.md
 │   ├── wage_analysis_roadmap.md
 │   └── analyzing/
 │       ├── wage_composition_analysis.md
-│       └── labor_input_analysis.md
+│       ├── labor_input_analysis.md
+│       └── industry_wage_analysis.md
 ├── data/raw/
 └── tests/
 ```
@@ -258,6 +277,8 @@ uv run ruff format --check .
 - `employment_comparison.csv`
 - `wage_composition_analysis.csv`
 - `labor_input_analysis.csv`
+- `industry_comparison_2015_2025.csv`
+- `industry_yearly.csv`
 
 CSVには分析に使用した条件列も含め、Tableau等での二次分析にも利用できる形式としています。
 
