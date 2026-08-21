@@ -46,6 +46,7 @@ INDUSTRY_NAMES = {
     "R": "その他のサービス業",
 }
 
+
 def create_industry_monthly_dataframe(
     raw_df: pd.DataFrame,
     industry_code: str,
@@ -513,9 +514,7 @@ def create_multi_industry_yearly_dataframe(
             employment_type=employment_type,
         )
 
-        yearly_df = create_industry_yearly_dataframe(
-            monthly_df
-        )
+        yearly_df = create_industry_yearly_dataframe(monthly_df)
 
         frames.append(yearly_df)
 
@@ -532,10 +531,7 @@ def create_industry_analysis_results(
     """産業別分析の主要な結果文を返す。"""
 
     return [
-        (
-            "2015年から2025年にかけて、"
-            "16産業すべてで月額賃金が上昇した。"
-        ),
+        ("2015年から2025年にかけて、16産業すべてで月額賃金が上昇した。"),
         (
             f"月額賃金上昇率の中央値は"
             f"{summary['wage_change_median']:+.2f}%で、"
@@ -548,10 +544,7 @@ def create_industry_analysis_results(
             f"{summary['wage_change_max']:+.2f}%まで分布し、"
             "産業間で上昇幅に差があった。"
         ),
-        (
-            "16産業すべてで1時間あたり賃金（概算）は上昇し、"
-            "総実労働時間は減少した。"
-        ),
+        ("16産業すべてで1時間あたり賃金（概算）は上昇し、総実労働時間は減少した。"),
         (
             f"月額賃金上昇が最も大きかった産業は"
             f"{INDUSTRY_NAMES[notable['monthly_wage_growth_max']]}、"
@@ -566,19 +559,14 @@ def create_industry_analysis_discussion(
 ) -> list[str]:
     """産業別分析の考察文を返す。"""
 
-    offset_industry = INDUSTRY_NAMES[
-        notable["monthly_hourly_gap_max"]
-    ]
+    offset_industry = INDUSTRY_NAMES[notable["monthly_hourly_gap_max"]]
 
     return [
         (
             "賃金上昇は一部の産業だけに集中していたのではなく、"
             "幅広い産業で生じていたと考えられる。"
         ),
-        (
-            "一方で上昇幅には産業差があり、"
-            "産業別に賃金動向を確認する意味は大きい。"
-        ),
+        ("一方で上昇幅には産業差があり、産業別に賃金動向を確認する意味は大きい。"),
         (
             f"{offset_industry}では、"
             "1時間あたり賃金の上昇が大きい一方で"

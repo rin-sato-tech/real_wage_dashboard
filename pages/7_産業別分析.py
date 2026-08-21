@@ -33,6 +33,7 @@ def load_raw_wage_data() -> pd.DataFrame:
 
     return load_wage_csv(WAGE_DATA_PATH)
 
+
 raw_df = load_raw_wage_data()
 
 comparison_df = create_industry_comparison_dataframe(
@@ -62,9 +63,7 @@ def create_monthly_wage_change_chart(
         ],
     ].copy()
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     chart_df = chart_df.sort_values(
         "monthly_wage_change_pct",
@@ -124,10 +123,7 @@ def create_monthly_wage_change_chart(
         )
     )
 
-    return (
-        bars
-        + total_line
-    ).properties(
+    return (bars + total_line).properties(
         height=500,
     )
 
@@ -145,9 +141,7 @@ def create_hourly_wage_change_chart(
         ],
     ].copy()
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     chart_df = chart_df.sort_values(
         "hourly_wage_change_pct",
@@ -207,10 +201,7 @@ def create_hourly_wage_change_chart(
         )
     )
 
-    return (
-        bars
-        + total_line
-    ).properties(
+    return (bars + total_line).properties(
         height=500,
     )
 
@@ -228,9 +219,7 @@ def create_total_hours_change_chart(
         ],
     ].copy()
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     chart_df = chart_df.sort_values(
         "total_hours_change_pct",
@@ -306,11 +295,7 @@ def create_total_hours_change_chart(
         )
     )
 
-    return (
-        bars
-        + zero_line
-        + total_line
-    ).properties(
+    return (bars + zero_line + total_line).properties(
         height=500,
     )
 
@@ -330,9 +315,7 @@ def create_industry_decomposition_chart(
         ],
     ].copy()
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     chart_df = chart_df.sort_values(
         "wage_log_change",
@@ -355,12 +338,8 @@ def create_industry_decomposition_chart(
 
     long_df["要因"] = long_df["要因"].replace(
         {
-            "hourly_wage_log_contribution": (
-                "1時間あたり賃金（概算）"
-            ),
-            "total_hours_log_contribution": (
-                "総実労働時間"
-            ),
+            "hourly_wage_log_contribution": ("1時間あたり賃金（概算）"),
+            "total_hours_log_contribution": ("総実労働時間"),
         }
     )
 
@@ -434,10 +413,7 @@ def create_industry_decomposition_chart(
         )
     )
 
-    return (
-        bars
-        + zero_line
-    ).properties(
+    return (bars + zero_line).properties(
         height=500,
     )
 
@@ -457,9 +433,7 @@ def create_hourly_hours_scatter_chart(
         ],
     ].copy()
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     points = (
         alt.Chart(chart_df)
@@ -545,12 +519,7 @@ def create_hourly_hours_scatter_chart(
         )
     )
 
-    return (
-        points
-        + labels
-        + zero_x
-        + zero_y
-    ).properties(
+    return (points + labels + zero_x + zero_y).properties(
         height=500,
     )
 
@@ -570,19 +539,16 @@ def create_industry_wage_index_chart(
         ],
     ].copy()
 
-    base_df = (
-        chart_df.loc[
-            chart_df["year"] == base_year,
-            [
-                "industry",
-                "monthly_wage",
-            ],
-        ]
-        .rename(
-            columns={
-                "monthly_wage": "base_monthly_wage",
-            }
-        )
+    base_df = chart_df.loc[
+        chart_df["year"] == base_year,
+        [
+            "industry",
+            "monthly_wage",
+        ],
+    ].rename(
+        columns={
+            "monthly_wage": "base_monthly_wage",
+        }
     )
 
     chart_df = chart_df.merge(
@@ -592,15 +558,9 @@ def create_industry_wage_index_chart(
         validate="many_to_one",
     )
 
-    chart_df["index"] = (
-        chart_df["monthly_wage"]
-        / chart_df["base_monthly_wage"]
-        * 100
-    )
+    chart_df["index"] = chart_df["monthly_wage"] / chart_df["base_monthly_wage"] * 100
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     lines = (
         alt.Chart(chart_df)
@@ -658,10 +618,7 @@ def create_industry_wage_index_chart(
         )
     )
 
-    return (
-        lines
-        + baseline
-    ).properties(
+    return (lines + baseline).properties(
         height=450,
     )
 
@@ -681,19 +638,16 @@ def create_industry_hours_index_chart(
         ],
     ].copy()
 
-    base_df = (
-        chart_df.loc[
-            chart_df["year"] == base_year,
-            [
-                "industry",
-                "total_hours",
-            ],
-        ]
-        .rename(
-            columns={
-                "total_hours": "base_total_hours",
-            }
-        )
+    base_df = chart_df.loc[
+        chart_df["year"] == base_year,
+        [
+            "industry",
+            "total_hours",
+        ],
+    ].rename(
+        columns={
+            "total_hours": "base_total_hours",
+        }
     )
 
     chart_df = chart_df.merge(
@@ -703,15 +657,9 @@ def create_industry_hours_index_chart(
         validate="many_to_one",
     )
 
-    chart_df["index"] = (
-        chart_df["total_hours"]
-        / chart_df["base_total_hours"]
-        * 100
-    )
+    chart_df["index"] = chart_df["total_hours"] / chart_df["base_total_hours"] * 100
 
-    chart_df["産業"] = chart_df["industry"].map(
-        INDUSTRY_NAMES
-    )
+    chart_df["産業"] = chart_df["industry"].map(INDUSTRY_NAMES)
 
     lines = (
         alt.Chart(chart_df)
@@ -769,12 +717,10 @@ def create_industry_hours_index_chart(
         )
     )
 
-    return (
-        lines
-        + baseline
-    ).properties(
+    return (lines + baseline).properties(
         height=450,
     )
+
 
 st.title("産業別賃金分析")
 
@@ -805,15 +751,6 @@ st.markdown(
 
     のどちらによって生じたのかを確認します。
     """
-)
-
-st.code(
-    """
-    産業別の月額賃金変化
-    ├─ 1時間あたり賃金（概算）の変化
-    └─ 総実労働時間の変化
-    """,
-    language=None,
 )
 
 st.divider()
@@ -869,20 +806,15 @@ st.markdown(
 )
 
 st.altair_chart(
-    create_monthly_wage_change_chart(
-        decomposition_df
-    ),
-    use_container_width=True,
+    create_monthly_wage_change_chart(decomposition_df),
+    width="stretch",
 )
 
-st.caption(
-    f"破線：調査産業計 "
-    f"{summary['total_wage_change']:+.2f}%"
-)
+st.caption(f"破線：調査産業計 {summary['total_wage_change']:+.2f}%")
 
-st.subheader(
-    f"{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の1時間あたり賃金変化"
-)
+st.divider()
+
+st.subheader(f"{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の1時間あたり賃金変化")
 
 st.markdown(
     """
@@ -892,10 +824,8 @@ st.markdown(
 )
 
 st.altair_chart(
-    create_hourly_wage_change_chart(
-        decomposition_df
-    ),
-    use_container_width=True,
+    create_hourly_wage_change_chart(decomposition_df),
+    width="stretch",
 )
 
 total_hourly_change = decomposition_df.loc[
@@ -903,14 +833,11 @@ total_hourly_change = decomposition_df.loc[
     "hourly_wage_change_pct",
 ].iloc[0]
 
-st.caption(
-    f"破線：調査産業計 "
-    f"{total_hourly_change:+.2f}%"
-)
+st.caption(f"破線：調査産業計 {total_hourly_change:+.2f}%")
 
-st.subheader(
-    f"{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の総実労働時間変化"
-)
+st.divider()
+
+st.subheader(f"{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の総実労働時間変化")
 
 st.markdown(
     """
@@ -920,10 +847,8 @@ st.markdown(
 )
 
 st.altair_chart(
-    create_total_hours_change_chart(
-        decomposition_df
-    ),
-    use_container_width=True,
+    create_total_hours_change_chart(decomposition_df),
+    width="stretch",
 )
 
 total_hours_change = decomposition_df.loc[
@@ -931,14 +856,11 @@ total_hours_change = decomposition_df.loc[
     "total_hours_change_pct",
 ].iloc[0]
 
-st.caption(
-    f"破線：調査産業計 "
-    f"{total_hours_change:+.2f}%"
-)
+st.caption(f"破線：調査産業計 {total_hours_change:+.2f}%")
 
-st.subheader(
-    f"{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の月額賃金の要因分解"
-)
+st.divider()
+
+st.subheader(f"{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の月額賃金の要因分解")
 
 st.markdown(
     """
@@ -952,20 +874,15 @@ st.markdown(
 )
 
 st.altair_chart(
-    create_industry_decomposition_chart(
-        decomposition_df
-    ),
-    use_container_width=True,
+    create_industry_decomposition_chart(decomposition_df),
+    width="stretch",
 )
 
-st.caption(
-    "対数分解のため、各要因の寄与の合計は"
-    "月額賃金の対数変化と一致します。"
-)
+st.caption("対数分解のため、各要因の寄与の合計は月額賃金の対数変化と一致します。")
 
-st.subheader(
-    "1時間あたり賃金と労働時間の寄与の関係"
-)
+st.divider()
+
+st.subheader("1時間あたり賃金と労働時間の寄与の関係")
 
 st.markdown(
     """
@@ -978,10 +895,8 @@ st.markdown(
 )
 
 st.altair_chart(
-    create_hourly_hours_scatter_chart(
-        decomposition_df
-    ),
-    use_container_width=True,
+    create_hourly_hours_scatter_chart(decomposition_df),
+    width="stretch",
 )
 
 st.caption(
@@ -1004,6 +919,8 @@ trend_df = create_multi_industry_yearly_dataframe(
     industry_codes=TREND_INDUSTRIES,
 )
 
+st.divider()
+
 st.subheader("代表産業の年次推移")
 
 st.markdown(
@@ -1014,17 +931,13 @@ st.markdown(
 )
 
 st.altair_chart(
-    create_industry_wage_index_chart(
-        trend_df
-    ),
-    use_container_width=True,
+    create_industry_wage_index_chart(trend_df),
+    width="stretch",
 )
 
 st.altair_chart(
-    create_industry_hours_index_chart(
-        trend_df
-    ),
-    use_container_width=True,
+    create_industry_hours_index_chart(trend_df),
+    width="stretch",
 )
 
 st.caption(

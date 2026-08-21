@@ -49,9 +49,7 @@ def test_total_hours_equals_scheduled_plus_overtime() -> None:
     )
 
     error = (
-        result["total_hours"]
-        - result["scheduled_hours"]
-        - result["overtime_hours"]
+        result["total_hours"] - result["scheduled_hours"] - result["overtime_hours"]
     ).abs()
 
     assert error.max() < 1e-10
@@ -80,15 +78,9 @@ def test_yearly_wage_identity() -> None:
 
     yearly = create_industry_yearly_dataframe(monthly)
 
-    reconstructed = (
-        yearly["approx_hourly_wage"]
-        * yearly["total_hours"]
-    )
+    reconstructed = yearly["approx_hourly_wage"] * yearly["total_hours"]
 
-    error = (
-        yearly["monthly_wage"]
-        - reconstructed
-    ).abs()
+    error = (yearly["monthly_wage"] - reconstructed).abs()
 
     assert error.max() < 1e-8
 
@@ -113,9 +105,7 @@ def test_industry_wage_decomposition_identity() -> None:
         end_year=2025,
     )
 
-    result = add_industry_wage_decomposition(
-        comparison
-    )
+    result = add_industry_wage_decomposition(comparison)
 
     assert result["decomposition_error"].abs().max() < 1e-10
 
@@ -126,13 +116,9 @@ def test_industry_summary() -> None:
         industry_codes=MAIN_INDUSTRIES,
     )
 
-    decomposition = add_industry_wage_decomposition(
-        comparison
-    )
+    decomposition = add_industry_wage_decomposition(comparison)
 
-    summary = summarize_industry_changes(
-        decomposition
-    )
+    summary = summarize_industry_changes(decomposition)
 
     assert summary["industry_count"] == 16
     assert summary["wage_rise_count"] == 16
@@ -146,13 +132,9 @@ def test_identify_notable_industries() -> None:
         industry_codes=MAIN_INDUSTRIES,
     )
 
-    decomposition = add_industry_wage_decomposition(
-        comparison
-    )
+    decomposition = add_industry_wage_decomposition(comparison)
 
-    result = identify_notable_industries(
-        decomposition
-    )
+    result = identify_notable_industries(decomposition)
 
     assert result == {
         "monthly_wage_growth_max": "C",
@@ -169,17 +151,11 @@ def test_industry_analysis_texts() -> None:
         industry_codes=MAIN_INDUSTRIES,
     )
 
-    decomposition = add_industry_wage_decomposition(
-        comparison
-    )
+    decomposition = add_industry_wage_decomposition(comparison)
 
-    summary = summarize_industry_changes(
-        decomposition
-    )
+    summary = summarize_industry_changes(decomposition)
 
-    notable = identify_notable_industries(
-        decomposition
-    )
+    notable = identify_notable_industries(decomposition)
 
     results = create_industry_analysis_results(
         summary,
@@ -193,12 +169,6 @@ def test_industry_analysis_texts() -> None:
     assert len(results) > 0
     assert len(discussion) > 0
 
-    assert any(
-        "16産業すべて" in text
-        for text in results
-    )
+    assert any("16産業すべて" in text for text in results)
 
-    assert any(
-        "2020年" in text
-        for text in discussion
-    )
+    assert any("2020年" in text for text in discussion)
