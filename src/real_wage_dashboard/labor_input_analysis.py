@@ -500,6 +500,10 @@ def summarize_long_term_working_hours_decomposition(
         overtime_diff / start_total * 100
     )
 
+    overtime_hours_change_pct = (
+        (end_overtime / start_overtime) - 1
+    ) * 100
+
     return {
         "start_year": start_year,
         "end_year": end_year,
@@ -515,6 +519,7 @@ def summarize_long_term_working_hours_decomposition(
         "total_hours_change_pct": total_change_pct,
         "scheduled_hours_contribution_pct": scheduled_contribution_pct,
         "overtime_hours_contribution_pct": overtime_contribution_pct,
+        "overtime_hours_change_pct": overtime_hours_change_pct,
     }
 
 
