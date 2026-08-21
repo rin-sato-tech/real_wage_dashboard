@@ -4,6 +4,10 @@ import streamlit as st
 
 from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.labor_input_analysis import (
+    add_scheduled_hours_decomposition,
+    add_wage_decomposition,
+    add_working_hours_decomposition,
+    add_year_over_year_pct,
     create_labor_input_dataframe,
     create_yearly_labor_input_summary,
     summarize_long_term_scheduled_hours_decomposition,
@@ -692,13 +696,84 @@ with st.expander("分析上の注意点"):
 
 st.subheader("データダウンロード")
 
-download_df = labor_df.copy()
+output_df = add_year_over_year_pct(
+    labor_df,
+    columns=[
+        "nominal_wage_amount",
+        "approx_hourly_wage",
+        "total_hours",
+        "scheduled_hours",
+        "overtime_hours",
+        "working_days",
+        "scheduled_hours_per_workday",
+    ],
+)
 
-download_df["establishment_size"] = "5人以上"
-download_df["employment_type"] = "就業形態計"
-download_df["industry"] = "調査産業計"
+output_df = add_wage_decomposition(
+    output_df
+)
 
-csv = download_df.to_csv(
+output_df = add_working_hours_decomposition(
+    output_df
+)
+
+output_df = add_scheduled_hours_decomposition(
+    output_df
+)
+
+output_df["industry"] = "調査産業計"
+output_df["establishment_size"] = "5人以上"
+output_df["employment_type"] = "就業形態計"
+
+output_columns = [
+    # 分析条件
+    "date",
+    "industry",
+    "establishment_size",
+    "employment_type",
+
+    # 基本指標
+    "nominal_wage_amount",
+    "total_hours",
+    "scheduled_hours",
+    "overtime_hours",
+    "working_days",
+
+    # 派生指標
+    "approx_hourly_wage",
+    "scheduled_hours_per_workday",
+
+    # 前年比
+    "nominal_wage_amount_yoy_pct",
+    "approx_hourly_wage_yoy_pct",
+    "total_hours_yoy_pct",
+    "scheduled_hours_yoy_pct",
+    "overtime_hours_yoy_pct",
+    "working_days_yoy_pct",
+    "scheduled_hours_per_workday_yoy_pct",
+
+    # 月額賃金の要因分解
+    "wage_log_change",
+    "hourly_wage_log_contribution",
+    "total_hours_log_contribution",
+
+    # 総実労働時間の要因分解
+    "total_hours_yoy_diff",
+    "scheduled_hours_yoy_diff",
+    "overtime_hours_yoy_diff",
+    "total_hours_decomposition_yoy_pct",
+    "scheduled_hours_contribution_pct",
+    "overtime_hours_contribution_pct",
+
+    # 所定内労働時間の要因分解
+    "scheduled_hours_log_change",
+    "working_days_log_contribution",
+    "hours_per_workday_log_contribution",
+]
+
+output_df = output_df[output_columns]
+
+csv = output_df.to_csv(
     index=False
 ).encode("utf-8-sig")
 
