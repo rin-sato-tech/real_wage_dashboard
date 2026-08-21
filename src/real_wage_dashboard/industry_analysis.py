@@ -583,3 +583,147 @@ def create_industry_analysis_discussion(
             "説明することはできない。"
         ),
     ]
+
+
+ESTABLISHMENT_SIZE_NAMES = {
+    "T": "5人以上",
+}
+
+EMPLOYMENT_TYPE_NAMES = {
+    "0": "就業形態計",
+    "1": "一般労働者",
+    "2": "パートタイム労働者",
+}
+
+INDUSTRY_COMPARISON_EXPORT_COLUMNS = [
+    "industry",
+    "industry_name",
+    "establishment_size_code",
+    "establishment_size_name",
+    "employment_type_code",
+    "employment_type_name",
+    "start_year",
+    "end_year",
+    "start_monthly_wage",
+    "end_monthly_wage",
+    "start_hourly_wage",
+    "end_hourly_wage",
+    "start_total_hours",
+    "end_total_hours",
+    "monthly_wage_change_pct",
+    "hourly_wage_change_pct",
+    "total_hours_change_pct",
+    "scheduled_hours_change_pct",
+    "overtime_hours_change_pct",
+    "wage_log_change",
+    "hourly_wage_log_contribution",
+    "total_hours_log_contribution",
+    "decomposition_error",
+]
+
+INDUSTRY_YEARLY_EXPORT_COLUMNS = [
+    "industry",
+    "industry_name",
+    "establishment_size_code",
+    "establishment_size_name",
+    "employment_type_code",
+    "employment_type_name",
+    "year",
+    "monthly_wage",
+    "approx_hourly_wage",
+    "total_hours",
+    "scheduled_hours",
+    "overtime_hours",
+    "month_count",
+]
+
+ESTABLISHMENT_SIZE_NAMES = {
+    "T": "5人以上",
+}
+
+EMPLOYMENT_TYPE_NAMES = {
+    "0": "就業形態計",
+    "1": "一般労働者",
+    "2": "パートタイム労働者",
+}
+
+
+def create_industry_comparison_export_dataframe(
+    decomposition_df: pd.DataFrame,
+    establishment_size: str = "T",
+    employment_type: str = "0",
+) -> pd.DataFrame:
+    """産業別長期比較のCSV出力用DataFrameを作成する。"""
+
+    result = decomposition_df.copy()
+
+    result["industry_name"] = result["industry"].map(INDUSTRY_NAMES)
+
+    result["establishment_size_code"] = establishment_size
+    result["establishment_size_name"] = ESTABLISHMENT_SIZE_NAMES.get(
+        establishment_size,
+        establishment_size,
+    )
+
+    result["employment_type_code"] = employment_type
+    result["employment_type_name"] = EMPLOYMENT_TYPE_NAMES.get(
+        employment_type,
+        employment_type,
+    )
+
+    missing_columns = set(INDUSTRY_COMPARISON_EXPORT_COLUMNS) - set(result.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"産業別比較CSVに必要な列がありません: {sorted(missing_columns)}"
+        )
+
+    return result[INDUSTRY_COMPARISON_EXPORT_COLUMNS].reset_index(drop=True)
+
+
+def create_industry_yearly_export_dataframe(
+    raw_df: pd.DataFrame,
+    industry_codes: list[str],
+    establishment_size: str = "T",
+    employment_type: str = "0",
+) -> pd.DataFrame:
+    """産業別年次CSV出力用DataFrameを作成する。"""
+
+    yearly_df = create_multi_industry_yearly_dataframe(
+        raw_df,
+        industry_codes=industry_codes,
+        establishment_size=establishment_size,
+        employment_type=employment_type,
+    ).copy()
+
+    yearly_df["industry_name"] = yearly_df["industry"].map(INDUSTRY_NAMES)
+
+    yearly_df["establishment_size_code"] = establishment_size
+    yearly_df["establishment_size_name"] = ESTABLISHMENT_SIZE_NAMES.get(
+        establishment_size,
+        establishment_size,
+    )
+
+    yearly_df["employment_type_code"] = employment_type
+    yearly_df["employment_type_name"] = EMPLOYMENT_TYPE_NAMES.get(
+        employment_type,
+        employment_type,
+    )
+
+    missing_columns = set(INDUSTRY_YEARLY_EXPORT_COLUMNS) - set(yearly_df.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"産業別年次CSVに必要な列がありません: {sorted(missing_columns)}"
+        )
+
+    return (
+        yearly_df[INDUSTRY_YEARLY_EXPORT_COLUMNS]
+        .sort_values(
+            [
+                "year",
+                "industry",
+            ]
+        )
+        .reset_index(drop=True)
+    )

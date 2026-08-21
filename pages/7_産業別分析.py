@@ -10,6 +10,8 @@ from real_wage_dashboard.industry_analysis import (
     create_industry_analysis_discussion,
     create_industry_analysis_results,
     create_industry_comparison_dataframe,
+    create_industry_comparison_export_dataframe,
+    create_industry_yearly_export_dataframe,
     create_multi_industry_yearly_dataframe,
     identify_notable_industries,
     summarize_industry_changes,
@@ -944,4 +946,48 @@ st.caption(
     "2015年=100。M・Nでは2020年に大きく低下した一方、"
     "2015～2019年にもすでに労働時間の減少が見られます。"
     "2020年以降の動きも産業によって異なります。"
+)
+
+st.divider()
+
+st.subheader("データ出力")
+
+comparison_export_df = create_industry_comparison_export_dataframe(decomposition_df)
+
+yearly_export_df = create_industry_yearly_export_dataframe(
+    raw_df,
+    industry_codes=MAIN_INDUSTRIES,
+)
+
+comparison_csv = comparison_export_df.to_csv(
+    index=False,
+).encode("utf-8-sig")
+
+yearly_csv = yearly_export_df.to_csv(
+    index=False,
+).encode("utf-8-sig")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.download_button(
+        label="2015→2025年の産業別比較CSV",
+        data=comparison_csv,
+        file_name="industry_comparison_2015_2025.csv",
+        mime="text/csv",
+    )
+
+with col2:
+    st.download_button(
+        label="産業別年次データCSV",
+        data=yearly_csv,
+        file_name="industry_yearly.csv",
+        mime="text/csv",
+    )
+
+st.caption(
+    "産業別比較CSVは、2015年平均と2025年平均の比較・変化率・"
+    "要因分解を収録しています。"
+    "年次データCSVは12か月のデータが揃った年のみを収録しています。"
+    "産業によって収録開始年が異なるため、長期比較では対象期間に注意してください。"
 )
