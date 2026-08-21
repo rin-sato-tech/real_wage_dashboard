@@ -64,8 +64,7 @@ def create_labor_input_dataframe(
     )
 
     result = (
-        wage_df
-        .merge(
+        wage_df.merge(
             total_hours_df,
             on="date",
             how="inner",
@@ -91,14 +90,10 @@ def create_labor_input_dataframe(
         )
     )
 
-    result["approx_hourly_wage"] = (
-        result["nominal_wage_amount"]
-        / result["total_hours"]
-    )
+    result["approx_hourly_wage"] = result["nominal_wage_amount"] / result["total_hours"]
 
     result["scheduled_hours_per_workday"] = (
-        result["scheduled_hours"]
-        / result["working_days"]
+        result["scheduled_hours"] / result["working_days"]
     )
 
     return result
@@ -112,19 +107,12 @@ def add_year_over_year_pct(
 
     result = df.copy()
 
-    previous = result[
-        ["date", *columns]
-    ].copy()
+    previous = result[["date", *columns]].copy()
 
-    previous["date"] = (
-        previous["date"] + pd.DateOffset(years=1)
-    )
+    previous["date"] = previous["date"] + pd.DateOffset(years=1)
 
     previous = previous.rename(
-        columns={
-            column: f"{column}_previous_year"
-            for column in columns
-        }
+        columns={column: f"{column}_previous_year" for column in columns}
     )
 
     result = result.merge(
@@ -138,17 +126,10 @@ def add_year_over_year_pct(
         previous_column = f"{column}_previous_year"
 
         result[f"{column}_yoy_pct"] = (
-            (
-                result[column]
-                / result[previous_column]
-                - 1
-            )
-            * 100
-        )
+            result[column] / result[previous_column] - 1
+        ) * 100
 
-        result = result.drop(
-            columns=[previous_column]
-        )
+        result = result.drop(columns=[previous_column])
 
     return result
 
@@ -169,9 +150,7 @@ def add_wage_decomposition(
         ]
     ].copy()
 
-    previous["date"] = (
-        previous["date"] + pd.DateOffset(years=1)
-    )
+    previous["date"] = previous["date"] + pd.DateOffset(years=1)
 
     previous = previous.rename(
         columns={
@@ -190,26 +169,20 @@ def add_wage_decomposition(
 
     result["wage_log_change"] = (
         np.log(
-            result["nominal_wage_amount"]
-            / result["nominal_wage_amount_previous_year"]
+            result["nominal_wage_amount"] / result["nominal_wage_amount_previous_year"]
         )
         * 100
     )
 
     result["hourly_wage_log_contribution"] = (
         np.log(
-            result["approx_hourly_wage"]
-            / result["approx_hourly_wage_previous_year"]
+            result["approx_hourly_wage"] / result["approx_hourly_wage_previous_year"]
         )
         * 100
     )
 
     result["total_hours_log_contribution"] = (
-        np.log(
-            result["total_hours"]
-            / result["total_hours_previous_year"]
-        )
-        * 100
+        np.log(result["total_hours"] / result["total_hours_previous_year"]) * 100
     )
 
     result = result.drop(
@@ -234,9 +207,7 @@ def summarize_long_term_wage_decomposition(
     end_df = df.loc[df["date"].dt.year == end_year]
 
     if len(start_df) != 12 or len(end_df) != 12:
-        raise ValueError(
-            "長期比較には開始年・終了年ともに12か月分のデータが必要です。"
-        )
+        raise ValueError("長期比較には開始年・終了年ともに12か月分のデータが必要です。")
 
     start_wage = start_df["nominal_wage_amount"].mean()
     end_wage = end_df["nominal_wage_amount"].mean()
@@ -247,38 +218,20 @@ def summarize_long_term_wage_decomposition(
     # 年間の賃金総額 ÷ 年間の総実労働時間
     # 年平均月額賃金 = 加重概算時間当たり賃金 × 年平均労働時間
     # が厳密に成立するようにする。
-    start_hourly = (
-        start_df["nominal_wage_amount"].sum()
-        / start_df["total_hours"].sum()
-    )
-    end_hourly = (
-        end_df["nominal_wage_amount"].sum()
-        / end_df["total_hours"].sum()
-    )
+    start_hourly = start_df["nominal_wage_amount"].sum() / start_df["total_hours"].sum()
+    end_hourly = end_df["nominal_wage_amount"].sum() / end_df["total_hours"].sum()
 
-    wage_change_pct = (
-        (end_wage / start_wage) - 1
-    ) * 100
+    wage_change_pct = ((end_wage / start_wage) - 1) * 100
 
-    hourly_change_pct = (
-        (end_hourly / start_hourly) - 1
-    ) * 100
+    hourly_change_pct = ((end_hourly / start_hourly) - 1) * 100
 
-    hours_change_pct = (
-        (end_hours / start_hours) - 1
-    ) * 100
+    hours_change_pct = ((end_hours / start_hours) - 1) * 100
 
-    wage_log_change = (
-        np.log(end_wage / start_wage) * 100
-    )
+    wage_log_change = np.log(end_wage / start_wage) * 100
 
-    hourly_log_contribution = (
-        np.log(end_hourly / start_hourly) * 100
-    )
+    hourly_log_contribution = np.log(end_hourly / start_hourly) * 100
 
-    hours_log_contribution = (
-        np.log(end_hours / start_hours) * 100
-    )
+    hours_log_contribution = np.log(end_hours / start_hours) * 100
 
     return {
         "start_year": start_year,
@@ -316,32 +269,22 @@ def create_yearly_wage_decomposition(
     )
 
     # 12か月揃っている年だけ分析対象とする
-    yearly = yearly.loc[
-        yearly["month_count"] == 12
-    ].copy()
+    yearly = yearly.loc[yearly["month_count"] == 12].copy()
 
     yearly["weighted_approx_hourly_wage"] = (
-        yearly["annual_wage_sum"]
-        / yearly["annual_hours_sum"]
+        yearly["annual_wage_sum"] / yearly["annual_hours_sum"]
     )
 
-    yearly["wage_change_pct"] = (
-        yearly["nominal_wage_amount"].pct_change() * 100
-    )
+    yearly["wage_change_pct"] = yearly["nominal_wage_amount"].pct_change() * 100
 
     yearly["hourly_wage_change_pct"] = (
         yearly["weighted_approx_hourly_wage"].pct_change() * 100
     )
 
-    yearly["total_hours_change_pct"] = (
-        yearly["total_hours"].pct_change() * 100
-    )
+    yearly["total_hours_change_pct"] = yearly["total_hours"].pct_change() * 100
 
     yearly["wage_log_change"] = (
-        np.log(
-            yearly["nominal_wage_amount"]
-            / yearly["nominal_wage_amount"].shift(1)
-        )
+        np.log(yearly["nominal_wage_amount"] / yearly["nominal_wage_amount"].shift(1))
         * 100
     )
 
@@ -354,11 +297,7 @@ def create_yearly_wage_decomposition(
     )
 
     yearly["total_hours_log_contribution"] = (
-        np.log(
-            yearly["total_hours"]
-            / yearly["total_hours"].shift(1)
-        )
-        * 100
+        np.log(yearly["total_hours"] / yearly["total_hours"].shift(1)) * 100
     )
 
     return yearly[
@@ -393,9 +332,7 @@ def add_working_hours_decomposition(
         ]
     ].copy()
 
-    previous["date"] = (
-        previous["date"] + pd.DateOffset(years=1)
-    )
+    previous["date"] = previous["date"] + pd.DateOffset(years=1)
 
     previous = previous.rename(
         columns={
@@ -414,39 +351,30 @@ def add_working_hours_decomposition(
 
     # 前年差
     result["total_hours_yoy_diff"] = (
-        result["total_hours"]
-        - result["total_hours_previous_year"]
+        result["total_hours"] - result["total_hours_previous_year"]
     )
 
     result["scheduled_hours_yoy_diff"] = (
-        result["scheduled_hours"]
-        - result["scheduled_hours_previous_year"]
+        result["scheduled_hours"] - result["scheduled_hours_previous_year"]
     )
 
     result["overtime_hours_yoy_diff"] = (
-        result["overtime_hours"]
-        - result["overtime_hours_previous_year"]
+        result["overtime_hours"] - result["overtime_hours_previous_year"]
     )
 
     # 総実労働時間前年比
     result["total_hours_decomposition_yoy_pct"] = (
-        result["total_hours_yoy_diff"]
-        / result["total_hours_previous_year"]
-        * 100
+        result["total_hours_yoy_diff"] / result["total_hours_previous_year"] * 100
     )
 
     # 所定内労働時間の寄与度
     result["scheduled_hours_contribution_pct"] = (
-        result["scheduled_hours_yoy_diff"]
-        / result["total_hours_previous_year"]
-        * 100
+        result["scheduled_hours_yoy_diff"] / result["total_hours_previous_year"] * 100
     )
 
     # 所定外労働時間の寄与度
     result["overtime_hours_contribution_pct"] = (
-        result["overtime_hours_yoy_diff"]
-        / result["total_hours_previous_year"]
-        * 100
+        result["overtime_hours_yoy_diff"] / result["total_hours_previous_year"] * 100
     )
 
     result = result.drop(
@@ -471,9 +399,7 @@ def summarize_long_term_working_hours_decomposition(
     end_df = df.loc[df["date"].dt.year == end_year]
 
     if len(start_df) != 12 or len(end_df) != 12:
-        raise ValueError(
-            "長期比較には開始年・終了年ともに12か月分のデータが必要です。"
-        )
+        raise ValueError("長期比較には開始年・終了年ともに12か月分のデータが必要です。")
 
     start_total = start_df["total_hours"].mean()
     end_total = end_df["total_hours"].mean()
@@ -488,21 +414,13 @@ def summarize_long_term_working_hours_decomposition(
     scheduled_diff = end_scheduled - start_scheduled
     overtime_diff = end_overtime - start_overtime
 
-    total_change_pct = (
-        total_diff / start_total * 100
-    )
+    total_change_pct = total_diff / start_total * 100
 
-    scheduled_contribution_pct = (
-        scheduled_diff / start_total * 100
-    )
+    scheduled_contribution_pct = scheduled_diff / start_total * 100
 
-    overtime_contribution_pct = (
-        overtime_diff / start_total * 100
-    )
+    overtime_contribution_pct = overtime_diff / start_total * 100
 
-    overtime_hours_change_pct = (
-        (end_overtime / start_overtime) - 1
-    ) * 100
+    overtime_hours_change_pct = ((end_overtime / start_overtime) - 1) * 100
 
     return {
         "start_year": start_year,
@@ -539,9 +457,7 @@ def add_scheduled_hours_decomposition(
         ]
     ].copy()
 
-    previous["date"] = (
-        previous["date"] + pd.DateOffset(years=1)
-    )
+    previous["date"] = previous["date"] + pd.DateOffset(years=1)
 
     previous = previous.rename(
         columns={
@@ -561,19 +477,12 @@ def add_scheduled_hours_decomposition(
     )
 
     result["scheduled_hours_log_change"] = (
-        np.log(
-            result["scheduled_hours"]
-            / result["scheduled_hours_previous_year"]
-        )
+        np.log(result["scheduled_hours"] / result["scheduled_hours_previous_year"])
         * 100
     )
 
     result["working_days_log_contribution"] = (
-        np.log(
-            result["working_days"]
-            / result["working_days_previous_year"]
-        )
-        * 100
+        np.log(result["working_days"] / result["working_days_previous_year"]) * 100
     )
 
     result["hours_per_workday_log_contribution"] = (
@@ -606,9 +515,7 @@ def summarize_long_term_scheduled_hours_decomposition(
     end_df = df.loc[df["date"].dt.year == end_year]
 
     if len(start_df) != 12 or len(end_df) != 12:
-        raise ValueError(
-            "長期比較には開始年・終了年ともに12か月分のデータが必要です。"
-        )
+        raise ValueError("長期比較には開始年・終了年ともに12か月分のデータが必要です。")
 
     start_scheduled = start_df["scheduled_hours"].mean()
     end_scheduled = end_df["scheduled_hours"].mean()
@@ -618,39 +525,23 @@ def summarize_long_term_scheduled_hours_decomposition(
 
     # 完全分解を維持するため、
     # 年平均所定内労働時間 ÷ 年平均出勤日数で算出する
-    start_hours_per_workday = (
-        start_scheduled / start_days
-    )
-    end_hours_per_workday = (
-        end_scheduled / end_days
-    )
+    start_hours_per_workday = start_scheduled / start_days
+    end_hours_per_workday = end_scheduled / end_days
 
-    scheduled_change_pct = (
-        (end_scheduled / start_scheduled) - 1
-    ) * 100
+    scheduled_change_pct = ((end_scheduled / start_scheduled) - 1) * 100
 
-    working_days_change_pct = (
-        (end_days / start_days) - 1
-    ) * 100
+    working_days_change_pct = ((end_days / start_days) - 1) * 100
 
     hours_per_workday_change_pct = (
         (end_hours_per_workday / start_hours_per_workday) - 1
     ) * 100
 
-    scheduled_log_change = (
-        np.log(end_scheduled / start_scheduled) * 100
-    )
+    scheduled_log_change = np.log(end_scheduled / start_scheduled) * 100
 
-    working_days_log_contribution = (
-        np.log(end_days / start_days) * 100
-    )
+    working_days_log_contribution = np.log(end_days / start_days) * 100
 
     hours_per_workday_log_contribution = (
-        np.log(
-            end_hours_per_workday
-            / start_hours_per_workday
-        )
-        * 100
+        np.log(end_hours_per_workday / start_hours_per_workday) * 100
     )
 
     return {
@@ -667,9 +558,7 @@ def summarize_long_term_scheduled_hours_decomposition(
         "hours_per_workday_change_pct": hours_per_workday_change_pct,
         "scheduled_hours_log_change": scheduled_log_change,
         "working_days_log_contribution": working_days_log_contribution,
-        "hours_per_workday_log_contribution": (
-            hours_per_workday_log_contribution
-        ),
+        "hours_per_workday_log_contribution": (hours_per_workday_log_contribution),
     }
 
 
@@ -694,20 +583,16 @@ def create_yearly_labor_input_summary(
     )
 
     # 12か月揃っている年だけを年次比較に使用
-    yearly = yearly.loc[
-        yearly["month_count"] == 12
-    ].copy()
+    yearly = yearly.loc[yearly["month_count"] == 12].copy()
 
     # 年間加重概算時間当たり賃金
     yearly["weighted_approx_hourly_wage"] = (
-        yearly["annual_wage_sum"]
-        / yearly["annual_total_hours_sum"]
+        yearly["annual_wage_sum"] / yearly["annual_total_hours_sum"]
     )
 
     # 年平均値同士で完全分解できる1出勤日当たり所定内労働時間
     yearly["scheduled_hours_per_workday"] = (
-        yearly["scheduled_hours"]
-        / yearly["working_days"]
+        yearly["scheduled_hours"] / yearly["working_days"]
     )
 
     # -------------------------------------------------
@@ -715,10 +600,7 @@ def create_yearly_labor_input_summary(
     # -------------------------------------------------
 
     yearly["wage_log_change"] = (
-        np.log(
-            yearly["nominal_wage_amount"]
-            / yearly["nominal_wage_amount"].shift(1)
-        )
+        np.log(yearly["nominal_wage_amount"] / yearly["nominal_wage_amount"].shift(1))
         * 100
     )
 
@@ -731,42 +613,29 @@ def create_yearly_labor_input_summary(
     )
 
     yearly["total_hours_log_contribution"] = (
-        np.log(
-            yearly["total_hours"]
-            / yearly["total_hours"].shift(1)
-        )
-        * 100
+        np.log(yearly["total_hours"] / yearly["total_hours"].shift(1)) * 100
     )
 
     # -------------------------------------------------
     # 総実労働時間 = 所定内 + 所定外
     # -------------------------------------------------
 
-    yearly["total_hours_diff"] = (
-        yearly["total_hours"]
-        - yearly["total_hours"].shift(1)
-    )
+    yearly["total_hours_diff"] = yearly["total_hours"] - yearly["total_hours"].shift(1)
 
-    yearly["scheduled_hours_diff"] = (
-        yearly["scheduled_hours"]
-        - yearly["scheduled_hours"].shift(1)
-    )
+    yearly["scheduled_hours_diff"] = yearly["scheduled_hours"] - yearly[
+        "scheduled_hours"
+    ].shift(1)
 
-    yearly["overtime_hours_diff"] = (
-        yearly["overtime_hours"]
-        - yearly["overtime_hours"].shift(1)
-    )
+    yearly["overtime_hours_diff"] = yearly["overtime_hours"] - yearly[
+        "overtime_hours"
+    ].shift(1)
 
     yearly["scheduled_hours_contribution_pct"] = (
-        yearly["scheduled_hours_diff"]
-        / yearly["total_hours"].shift(1)
-        * 100
+        yearly["scheduled_hours_diff"] / yearly["total_hours"].shift(1) * 100
     )
 
     yearly["overtime_hours_contribution_pct"] = (
-        yearly["overtime_hours_diff"]
-        / yearly["total_hours"].shift(1)
-        * 100
+        yearly["overtime_hours_diff"] / yearly["total_hours"].shift(1) * 100
     )
 
     # -------------------------------------------------
@@ -774,19 +643,11 @@ def create_yearly_labor_input_summary(
     # -------------------------------------------------
 
     yearly["scheduled_hours_log_change"] = (
-        np.log(
-            yearly["scheduled_hours"]
-            / yearly["scheduled_hours"].shift(1)
-        )
-        * 100
+        np.log(yearly["scheduled_hours"] / yearly["scheduled_hours"].shift(1)) * 100
     )
 
     yearly["working_days_log_contribution"] = (
-        np.log(
-            yearly["working_days"]
-            / yearly["working_days"].shift(1)
-        )
-        * 100
+        np.log(yearly["working_days"] / yearly["working_days"].shift(1)) * 100
     )
 
     yearly["hours_per_workday_log_contribution"] = (

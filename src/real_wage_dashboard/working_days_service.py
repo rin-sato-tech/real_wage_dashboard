@@ -65,10 +65,7 @@ def create_working_days_dataframe(
     )
 
     df["working_days"] = pd.to_numeric(
-        df["working_days"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .str.strip(),
+        df["working_days"].astype(str).str.replace(",", "", regex=False).str.strip(),
         errors="coerce",
     )
 
@@ -88,9 +85,7 @@ def create_working_days_dataframe(
     )
 
     if df.empty:
-        raise ValueError(
-            "選択した条件では有効な出勤日数データを取得できません。"
-        )
+        raise ValueError("選択した条件では有効な出勤日数データを取得できません。")
 
     return df[
         [

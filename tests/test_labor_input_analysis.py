@@ -49,9 +49,7 @@ def test_create_labor_input_dataframe() -> None:
 
 
 def test_wage_decomposition_identity() -> None:
-    df = add_wage_decomposition(
-        load_analysis_df()
-    )
+    df = add_wage_decomposition(load_analysis_df())
 
     error = (
         df["wage_log_change"]
@@ -63,9 +61,7 @@ def test_wage_decomposition_identity() -> None:
 
 
 def test_working_hours_decomposition_identity() -> None:
-    df = add_working_hours_decomposition(
-        load_analysis_df()
-    )
+    df = add_working_hours_decomposition(load_analysis_df())
 
     diff_error = (
         df["total_hours_yoy_diff"]
@@ -84,9 +80,7 @@ def test_working_hours_decomposition_identity() -> None:
 
 
 def test_scheduled_hours_decomposition_identity() -> None:
-    df = add_scheduled_hours_decomposition(
-        load_analysis_df()
-    )
+    df = add_scheduled_hours_decomposition(load_analysis_df())
 
     error = (
         df["scheduled_hours_log_change"]
@@ -106,10 +100,7 @@ def test_long_term_summaries() -> None:
 
     assert np.isclose(
         wage["wage_log_change"],
-        (
-            wage["hourly_wage_log_contribution"]
-            + wage["total_hours_log_contribution"]
-        ),
+        (wage["hourly_wage_log_contribution"] + wage["total_hours_log_contribution"]),
         atol=1e-10,
     )
 
@@ -135,9 +126,7 @@ def test_long_term_summaries() -> None:
 def test_long_term_summary_requires_full_year() -> None:
     df = load_analysis_df()
 
-    incomplete_df = df.loc[
-        df["date"] != pd.Timestamp("2015-01-01")
-    ].copy()
+    incomplete_df = df.loc[df["date"] != pd.Timestamp("2015-01-01")].copy()
 
     with pytest.raises(ValueError):
         summarize_long_term_wage_decomposition(

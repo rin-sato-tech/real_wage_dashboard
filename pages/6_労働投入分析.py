@@ -25,6 +25,7 @@ st.set_page_config(
     layout="wide",
 )
 
+
 @st.cache_data
 def load_raw_wage_data() -> pd.DataFrame:
     """毎月勤労統計の元CSVを読み込む。"""
@@ -201,9 +202,7 @@ def create_scheduled_hours_index_chart(
         ],
     ].copy()
 
-    base = chart_df.loc[
-        chart_df["year"] == base_year
-    ]
+    base = chart_df.loc[chart_df["year"] == base_year]
 
     if len(base) != 1:
         raise ValueError(f"{base_year}年の基準値を一意に取得できません。")
@@ -215,11 +214,7 @@ def create_scheduled_hours_index_chart(
     ]:
         base_value = base.iloc[0][column]
 
-        chart_df[f"{column}_index"] = (
-            chart_df[column]
-            / base_value
-            * 100
-        )
+        chart_df[f"{column}_index"] = chart_df[column] / base_value * 100
 
     long_df = chart_df.melt(
         id_vars="year",
@@ -236,8 +231,7 @@ def create_scheduled_hours_index_chart(
         {
             "scheduled_hours_index": "所定内労働時間",
             "working_days_index": "出勤日数",
-            "scheduled_hours_per_workday_index":
-                "1出勤日当たり所定内労働時間",
+            "scheduled_hours_per_workday_index": "1出勤日当たり所定内労働時間",
         }
     )
 
@@ -333,19 +327,13 @@ def create_cumulative_working_hours_decomposition_chart(
     base = chart_df.loc[chart_df["year"] == base_year]
 
     if len(base) != 1:
-        raise ValueError(
-            f"{base_year}年の基準値を一意に取得できません。"
-        )
+        raise ValueError(f"{base_year}年の基準値を一意に取得できません。")
 
     base_scheduled = base.iloc[0]["scheduled_hours"]
     base_overtime = base.iloc[0]["overtime_hours"]
 
-    chart_df["scheduled_hours_change"] = (
-        chart_df["scheduled_hours"] - base_scheduled
-    )
-    chart_df["overtime_hours_change"] = (
-        chart_df["overtime_hours"] - base_overtime
-    )
+    chart_df["scheduled_hours_change"] = chart_df["scheduled_hours"] - base_scheduled
+    chart_df["overtime_hours_change"] = chart_df["overtime_hours"] - base_overtime
 
     long_df = chart_df.melt(
         id_vars="year",
@@ -423,6 +411,7 @@ def create_cumulative_working_hours_decomposition_chart(
         height=400,
     )
 
+
 st.title("労働投入分析")
 
 st.markdown(
@@ -488,20 +477,16 @@ wage_summary = summarize_long_term_wage_decomposition(
     end_year=ANALYSIS_END_YEAR,
 )
 
-working_hours_summary = (
-    summarize_long_term_working_hours_decomposition(
-        labor_df,
-        start_year=ANALYSIS_START_YEAR,
-        end_year=ANALYSIS_END_YEAR,
-    )
+working_hours_summary = summarize_long_term_working_hours_decomposition(
+    labor_df,
+    start_year=ANALYSIS_START_YEAR,
+    end_year=ANALYSIS_END_YEAR,
 )
 
-scheduled_hours_summary = (
-    summarize_long_term_scheduled_hours_decomposition(
-        labor_df,
-        start_year=ANALYSIS_START_YEAR,
-        end_year=ANALYSIS_END_YEAR,
-    )
+scheduled_hours_summary = summarize_long_term_scheduled_hours_decomposition(
+    labor_df,
+    start_year=ANALYSIS_START_YEAR,
+    end_year=ANALYSIS_END_YEAR,
 )
 
 st.divider()
@@ -563,74 +548,52 @@ summary_table = pd.DataFrame(
         {
             "階層": "月額賃金",
             "指標": "きまって支給する給与",
-            "2015年": f'{wage_summary["start_wage"]:,.0f}円',
-            "2025年": f'{wage_summary["end_wage"]:,.0f}円',
-            "変化": f'{wage_summary["wage_change_pct"]:+.2f}%',
+            "2015年": f"{wage_summary['start_wage']:,.0f}円",
+            "2025年": f"{wage_summary['end_wage']:,.0f}円",
+            "変化": f"{wage_summary['wage_change_pct']:+.2f}%",
         },
         {
             "階層": "月額賃金",
             "指標": "1時間あたり賃金（概算・年間加重）",
-            "2015年": f'{wage_summary["start_hourly_wage"]:,.2f}円/時',
-            "2025年": f'{wage_summary["end_hourly_wage"]:,.2f}円/時',
-            "変化": f'{wage_summary["hourly_wage_change_pct"]:+.2f}%',
+            "2015年": f"{wage_summary['start_hourly_wage']:,.2f}円/時",
+            "2025年": f"{wage_summary['end_hourly_wage']:,.2f}円/時",
+            "変化": f"{wage_summary['hourly_wage_change_pct']:+.2f}%",
         },
         {
             "階層": "月額賃金",
             "指標": "総実労働時間",
-            "2015年": f'{wage_summary["start_total_hours"]:.2f}時間',
-            "2025年": f'{wage_summary["end_total_hours"]:.2f}時間',
-            "変化": f'{wage_summary["total_hours_change_pct"]:+.2f}%',
+            "2015年": f"{wage_summary['start_total_hours']:.2f}時間",
+            "2025年": f"{wage_summary['end_total_hours']:.2f}時間",
+            "変化": f"{wage_summary['total_hours_change_pct']:+.2f}%",
         },
         {
             "階層": "総実労働時間",
             "指標": "所定内労働時間",
-            "2015年": (
-                f'{working_hours_summary["start_scheduled_hours"]:.2f}時間'
-            ),
-            "2025年": (
-                f'{working_hours_summary["end_scheduled_hours"]:.2f}時間'
-            ),
-            "変化": (
-                f'{scheduled_hours_summary["scheduled_hours_change_pct"]:+.2f}%'
-            ),
+            "2015年": (f"{working_hours_summary['start_scheduled_hours']:.2f}時間"),
+            "2025年": (f"{working_hours_summary['end_scheduled_hours']:.2f}時間"),
+            "変化": (f"{scheduled_hours_summary['scheduled_hours_change_pct']:+.2f}%"),
         },
         {
             "階層": "総実労働時間",
             "指標": "所定外労働時間",
-            "2015年": (
-                f'{working_hours_summary["start_overtime_hours"]:.2f}時間'
-            ),
-            "2025年": (
-                f'{working_hours_summary["end_overtime_hours"]:.2f}時間'
-            ),
-            "変化": (
-                f'{working_hours_summary["overtime_hours_change_pct"]:+.2f}%'
-            ),
+            "2015年": (f"{working_hours_summary['start_overtime_hours']:.2f}時間"),
+            "2025年": (f"{working_hours_summary['end_overtime_hours']:.2f}時間"),
+            "変化": (f"{working_hours_summary['overtime_hours_change_pct']:+.2f}%"),
         },
         {
             "階層": "所定内労働時間",
             "指標": "出勤日数",
-            "2015年": (
-                f'{scheduled_hours_summary["start_working_days"]:.3f}日'
-            ),
-            "2025年": (
-                f'{scheduled_hours_summary["end_working_days"]:.3f}日'
-            ),
-            "変化": (
-                f'{scheduled_hours_summary["working_days_change_pct"]:+.2f}%'
-            ),
+            "2015年": (f"{scheduled_hours_summary['start_working_days']:.3f}日"),
+            "2025年": (f"{scheduled_hours_summary['end_working_days']:.3f}日"),
+            "変化": (f"{scheduled_hours_summary['working_days_change_pct']:+.2f}%"),
         },
         {
             "階層": "所定内労働時間",
             "指標": "1出勤日当たり所定内労働時間",
-            "2015年": (
-                f'{scheduled_hours_summary["start_hours_per_workday"]:.3f}時間'
-            ),
-            "2025年": (
-                f'{scheduled_hours_summary["end_hours_per_workday"]:.3f}時間'
-            ),
+            "2015年": (f"{scheduled_hours_summary['start_hours_per_workday']:.3f}時間"),
+            "2025年": (f"{scheduled_hours_summary['end_hours_per_workday']:.3f}時間"),
             "変化": (
-                f'{scheduled_hours_summary["hours_per_workday_change_pct"]:+.2f}%'
+                f"{scheduled_hours_summary['hours_per_workday_change_pct']:+.2f}%"
             ),
         },
     ]
@@ -642,15 +605,9 @@ st.dataframe(
     width="stretch",
 )
 
-available_years = (
-    labor_df.assign(year=labor_df["date"].dt.year)
-    .groupby("year")
-    .size()
-)
+available_years = labor_df.assign(year=labor_df["date"].dt.year).groupby("year").size()
 
-full_years = available_years[
-    available_years == 12
-].index.tolist()
+full_years = available_years[available_years == 12].index.tolist()
 
 with st.expander("比較期間を変えて確認"):
     col1, col2 = st.columns(2)
@@ -663,11 +620,7 @@ with st.expander("比較期間を変えて確認"):
         )
 
     with col2:
-        end_year_options = [
-            year
-            for year in full_years
-            if year > custom_start_year
-        ]
+        end_year_options = [year for year in full_years if year > custom_start_year]
 
         custom_end_year = st.selectbox(
             "終了年",
@@ -691,12 +644,10 @@ with st.expander("比較期間を変えて確認"):
         end_year=custom_end_year,
     )
 
-    custom_scheduled_summary = (
-        summarize_long_term_scheduled_hours_decomposition(
-            labor_df,
-            start_year=custom_start_year,
-            end_year=custom_end_year,
-        )
+    custom_scheduled_summary = summarize_long_term_scheduled_hours_decomposition(
+        labor_df,
+        start_year=custom_start_year,
+        end_year=custom_end_year,
     )
 
     custom_comparison_table = pd.DataFrame(
@@ -715,27 +666,19 @@ with st.expander("比較期間を変えて確認"):
             },
             {
                 "指標": "所定内労働時間",
-                "変化率": custom_scheduled_summary[
-                    "scheduled_hours_change_pct"
-                ],
+                "変化率": custom_scheduled_summary["scheduled_hours_change_pct"],
             },
             {
                 "指標": "所定外労働時間",
-                "変化率": custom_hours_summary[
-                    "overtime_hours_change_pct"
-                ],
+                "変化率": custom_hours_summary["overtime_hours_change_pct"],
             },
             {
                 "指標": "出勤日数",
-                "変化率": custom_scheduled_summary[
-                    "working_days_change_pct"
-                ],
+                "変化率": custom_scheduled_summary["working_days_change_pct"],
             },
             {
                 "指標": "1出勤日あたり所定内労働時間",
-                "変化率": custom_scheduled_summary[
-                    "hours_per_workday_change_pct"
-                ],
+                "変化率": custom_scheduled_summary["hours_per_workday_change_pct"],
             },
         ]
     )
@@ -760,13 +703,13 @@ st.divider()
 st.subheader("月額賃金の変化要因")
 
 st.altair_chart(
-    create_wage_decomposition_chart(
-        wage_summary
-    ),
+    create_wage_decomposition_chart(wage_summary),
     width="stretch",
 )
 
-st.caption("対数変化による機械的な要因分解。各寄与の合計が月額賃金の対数変化に一致します。")
+st.caption(
+    "対数変化による機械的な要因分解。各寄与の合計が月額賃金の対数変化に一致します。"
+)
 
 st.markdown(
     f"""
@@ -872,9 +815,7 @@ def create_employment_type_comparison_table(
         "total_hours": "総実労働時間",
         "scheduled_hours": "所定内労働時間",
         "working_days": "出勤日数",
-        "scheduled_hours_per_workday": (
-            "1出勤日当たり所定内労働時間"
-        ),
+        "scheduled_hours_per_workday": ("1出勤日当たり所定内労働時間"),
     }
 
     rows = []
@@ -898,9 +839,7 @@ def create_employment_type_comparison_table(
                 column,
             ].mean()
 
-            change_pct = (
-                (end_value / start_value) - 1
-            ) * 100
+            change_pct = ((end_value / start_value) - 1) * 100
 
             row[employment_label] = change_pct
 
@@ -909,13 +848,11 @@ def create_employment_type_comparison_table(
     return pd.DataFrame(rows)
 
 
-employment_comparison_table = (
-    create_employment_type_comparison_table(
-        general_df,
-        part_df,
-        start_year=ANALYSIS_START_YEAR,
-        end_year=ANALYSIS_END_YEAR,
-    )
+employment_comparison_table = create_employment_type_comparison_table(
+    general_df,
+    part_df,
+    start_year=ANALYSIS_START_YEAR,
+    end_year=ANALYSIS_END_YEAR,
 )
 
 with st.expander("雇用形態別の補助分析"):
@@ -984,17 +921,11 @@ output_df = add_year_over_year_pct(
     ],
 )
 
-output_df = add_wage_decomposition(
-    output_df
-)
+output_df = add_wage_decomposition(output_df)
 
-output_df = add_working_hours_decomposition(
-    output_df
-)
+output_df = add_working_hours_decomposition(output_df)
 
-output_df = add_scheduled_hours_decomposition(
-    output_df
-)
+output_df = add_scheduled_hours_decomposition(output_df)
 
 output_df["industry"] = "調査産業計"
 output_df["establishment_size"] = "5人以上"
@@ -1006,18 +937,15 @@ output_columns = [
     "industry",
     "establishment_size",
     "employment_type",
-
     # 基本指標
     "nominal_wage_amount",
     "total_hours",
     "scheduled_hours",
     "overtime_hours",
     "working_days",
-
     # 派生指標
     "approx_hourly_wage",
     "scheduled_hours_per_workday",
-
     # 前年比
     "nominal_wage_amount_yoy_pct",
     "approx_hourly_wage_yoy_pct",
@@ -1026,12 +954,10 @@ output_columns = [
     "overtime_hours_yoy_pct",
     "working_days_yoy_pct",
     "scheduled_hours_per_workday_yoy_pct",
-
     # 月額賃金の要因分解
     "wage_log_change",
     "hourly_wage_log_contribution",
     "total_hours_log_contribution",
-
     # 総実労働時間の要因分解
     "total_hours_yoy_diff",
     "scheduled_hours_yoy_diff",
@@ -1039,7 +965,6 @@ output_columns = [
     "total_hours_decomposition_yoy_pct",
     "scheduled_hours_contribution_pct",
     "overtime_hours_contribution_pct",
-
     # 所定内労働時間の要因分解
     "scheduled_hours_log_change",
     "working_days_log_contribution",
@@ -1048,9 +973,7 @@ output_columns = [
 
 output_df = output_df[output_columns]
 
-csv = output_df.to_csv(
-    index=False
-).encode("utf-8-sig")
+csv = output_df.to_csv(index=False).encode("utf-8-sig")
 
 st.download_button(
     label="労働投入分析データをCSVでダウンロード",

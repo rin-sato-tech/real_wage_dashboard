@@ -26,6 +26,7 @@ MAIN_INDUSTRIES = [
     "R",
 ]
 
+
 def create_industry_monthly_dataframe(
     raw_df: pd.DataFrame,
     industry_code: str,
@@ -83,8 +84,7 @@ def create_industry_monthly_dataframe(
     )
 
     result = (
-        wage_df
-        .merge(
+        wage_df.merge(
             total_hours_df,
             on="date",
             how="inner",
@@ -106,10 +106,7 @@ def create_industry_monthly_dataframe(
 
     result["industry"] = industry_code
 
-    result["approx_hourly_wage"] = (
-        result["monthly_wage"]
-        / result["total_hours"]
-    )
+    result["approx_hourly_wage"] = result["monthly_wage"] / result["total_hours"]
 
     return result[
         [
@@ -140,9 +137,7 @@ def create_industry_yearly_dataframe(
 
     if not required_columns.issubset(monthly_df.columns):
         missing = required_columns - set(monthly_df.columns)
-        raise ValueError(
-            f"必要な列がありません: {sorted(missing)}"
-        )
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     yearly = (
         monthly_df.assign(
@@ -163,13 +158,10 @@ def create_industry_yearly_dataframe(
         )
     )
 
-    yearly = yearly.loc[
-        yearly["month_count"] == 12
-    ].copy()
+    yearly = yearly.loc[yearly["month_count"] == 12].copy()
 
     yearly["approx_hourly_wage"] = (
-        yearly["annual_wage_sum"]
-        / yearly["annual_hours_sum"]
+        yearly["annual_wage_sum"] / yearly["annual_hours_sum"]
     )
 
     return yearly[
@@ -210,13 +202,9 @@ def create_industry_comparison_dataframe(
             monthly_df,
         )
 
-        start_df = yearly_df.loc[
-            yearly_df["year"] == start_year
-        ]
+        start_df = yearly_df.loc[yearly_df["year"] == start_year]
 
-        end_df = yearly_df.loc[
-            yearly_df["year"] == end_year
-        ]
+        end_df = yearly_df.loc[yearly_df["year"] == end_year]
 
         if start_df.empty or end_df.empty:
             continue
@@ -232,37 +220,27 @@ def create_industry_comparison_dataframe(
                 "start_monthly_wage": start["monthly_wage"],
                 "end_monthly_wage": end["monthly_wage"],
                 "monthly_wage_change_pct": (
-                    end["monthly_wage"]
-                    / start["monthly_wage"]
-                    - 1
+                    end["monthly_wage"] / start["monthly_wage"] - 1
                 )
                 * 100,
                 "start_hourly_wage": start["approx_hourly_wage"],
                 "end_hourly_wage": end["approx_hourly_wage"],
                 "hourly_wage_change_pct": (
-                    end["approx_hourly_wage"]
-                    / start["approx_hourly_wage"]
-                    - 1
+                    end["approx_hourly_wage"] / start["approx_hourly_wage"] - 1
                 )
                 * 100,
                 "start_total_hours": start["total_hours"],
                 "end_total_hours": end["total_hours"],
                 "total_hours_change_pct": (
-                    end["total_hours"]
-                    / start["total_hours"]
-                    - 1
+                    end["total_hours"] / start["total_hours"] - 1
                 )
                 * 100,
                 "scheduled_hours_change_pct": (
-                    end["scheduled_hours"]
-                    / start["scheduled_hours"]
-                    - 1
+                    end["scheduled_hours"] / start["scheduled_hours"] - 1
                 )
                 * 100,
                 "overtime_hours_change_pct": (
-                    end["overtime_hours"]
-                    / start["overtime_hours"]
-                    - 1
+                    end["overtime_hours"] / start["overtime_hours"] - 1
                 )
                 * 100,
             }
@@ -279,35 +257,19 @@ def add_industry_wage_decomposition(
     result = comparison_df.copy()
 
     result["wage_log_change"] = (
-        np.log(
-            result["end_monthly_wage"]
-            / result["start_monthly_wage"]
-        )
-        * 100
+        np.log(result["end_monthly_wage"] / result["start_monthly_wage"]) * 100
     )
 
     result["hourly_wage_log_contribution"] = (
-        np.log(
-            result["end_hourly_wage"]
-            / result["start_hourly_wage"]
-        )
-        * 100
+        np.log(result["end_hourly_wage"] / result["start_hourly_wage"]) * 100
     )
 
     result["total_hours_log_contribution"] = (
-        np.log(
-            result["end_total_hours"]
-            / result["start_total_hours"]
-        )
-        * 100
+        np.log(result["end_total_hours"] / result["start_total_hours"]) * 100
     )
 
-    result["decomposition_error"] = (
-        result["wage_log_change"]
-        - (
-            result["hourly_wage_log_contribution"]
-            + result["total_hours_log_contribution"]
-        )
+    result["decomposition_error"] = result["wage_log_change"] - (
+        result["hourly_wage_log_contribution"] + result["total_hours_log_contribution"]
     )
 
     return result
@@ -318,22 +280,14 @@ def summarize_industry_changes(
 ) -> dict[str, float]:
     """大分類産業間の変化率分布と全国平均との差を要約する。"""
 
-    industries = decomposition_df.loc[
-        decomposition_df["industry"] != "TL"
-    ].copy()
+    industries = decomposition_df.loc[decomposition_df["industry"] != "TL"].copy()
 
-    total_row = decomposition_df.loc[
-        decomposition_df["industry"] == "TL"
-    ]
+    total_row = decomposition_df.loc[decomposition_df["industry"] == "TL"]
 
     if total_row.empty:
-        raise ValueError(
-            "調査産業計（TL）がありません。"
-        )
+        raise ValueError("調査産業計（TL）がありません。")
 
-    total_wage_change = total_row.iloc[0][
-        "monthly_wage_change_pct"
-    ]
+    total_wage_change = total_row.iloc[0]["monthly_wage_change_pct"]
 
     wage_changes = industries["monthly_wage_change_pct"]
     hourly_changes = industries["hourly_wage_change_pct"]
@@ -341,7 +295,6 @@ def summarize_industry_changes(
 
     return {
         "industry_count": len(industries),
-
         "wage_change_mean": wage_changes.mean(),
         "wage_change_median": wage_changes.median(),
         "wage_change_std": wage_changes.std(),
@@ -349,11 +302,7 @@ def summarize_industry_changes(
         "wage_change_q1": wage_changes.quantile(0.25),
         "wage_change_q3": wage_changes.quantile(0.75),
         "wage_change_max": wage_changes.max(),
-        "wage_change_iqr": (
-            wage_changes.quantile(0.75)
-            - wage_changes.quantile(0.25)
-        ),
-
+        "wage_change_iqr": (wage_changes.quantile(0.75) - wage_changes.quantile(0.25)),
         "hourly_change_mean": hourly_changes.mean(),
         "hourly_change_median": hourly_changes.median(),
         "hourly_change_std": hourly_changes.std(),
@@ -362,10 +311,8 @@ def summarize_industry_changes(
         "hourly_change_q3": hourly_changes.quantile(0.75),
         "hourly_change_max": hourly_changes.max(),
         "hourly_change_iqr": (
-            hourly_changes.quantile(0.75)
-            - hourly_changes.quantile(0.25)
+            hourly_changes.quantile(0.75) - hourly_changes.quantile(0.25)
         ),
-
         "hours_change_mean": hours_changes.mean(),
         "hours_change_median": hours_changes.median(),
         "hours_change_std": hours_changes.std(),
@@ -374,24 +321,12 @@ def summarize_industry_changes(
         "hours_change_q3": hours_changes.quantile(0.75),
         "hours_change_max": hours_changes.max(),
         "hours_change_iqr": (
-            hours_changes.quantile(0.75)
-            - hours_changes.quantile(0.25)
+            hours_changes.quantile(0.75) - hours_changes.quantile(0.25)
         ),
-
-        "wage_rise_count": int(
-            (wage_changes > 0).sum()
-        ),
-        "wage_rise_share": (
-            (wage_changes > 0).mean() * 100
-        ),
-
-        "above_total_count": int(
-            (wage_changes > total_wage_change).sum()
-        ),
-        "above_total_share": (
-            (wage_changes > total_wage_change).mean() * 100
-        ),
-
+        "wage_rise_count": int((wage_changes > 0).sum()),
+        "wage_rise_share": ((wage_changes > 0).mean() * 100),
+        "above_total_count": int((wage_changes > total_wage_change).sum()),
+        "above_total_share": ((wage_changes > total_wage_change).mean() * 100),
         "total_wage_change": total_wage_change,
     }
 
@@ -401,27 +336,29 @@ def calculate_industry_correlations(
 ) -> dict[str, float]:
     """大分類産業について時間単価変化と労働時間変化の相関を算出する。"""
 
-    industries = decomposition_df.loc[
-        decomposition_df["industry"] != "TL"
-    ].copy()
+    industries = decomposition_df.loc[decomposition_df["industry"] != "TL"].copy()
 
-    pearson = industries[
-        [
-            "hourly_wage_log_contribution",
-            "total_hours_log_contribution",
+    pearson = (
+        industries[
+            [
+                "hourly_wage_log_contribution",
+                "total_hours_log_contribution",
+            ]
         ]
-    ].corr(
-        method="pearson"
-    ).iloc[0, 1]
+        .corr(method="pearson")
+        .iloc[0, 1]
+    )
 
-    spearman = industries[
-        [
-            "hourly_wage_log_contribution",
-            "total_hours_log_contribution",
+    spearman = (
+        industries[
+            [
+                "hourly_wage_log_contribution",
+                "total_hours_log_contribution",
+            ]
         ]
-    ].corr(
-        method="spearman"
-    ).iloc[0, 1]
+        .corr(method="spearman")
+        .iloc[0, 1]
+    )
 
     return {
         "pearson": pearson,
@@ -461,34 +398,19 @@ def identify_notable_industries(
 ) -> dict[str, str]:
     """産業別比較から特徴的な産業コードを抽出する。"""
 
-    industries = decomposition_df.loc[
-        decomposition_df["industry"] != "TL"
-    ].copy()
+    industries = decomposition_df.loc[decomposition_df["industry"] != "TL"].copy()
 
-    monthly_max = industries.loc[
-        industries["monthly_wage_change_pct"].idxmax()
-    ]
+    monthly_max = industries.loc[industries["monthly_wage_change_pct"].idxmax()]
 
-    monthly_min = industries.loc[
-        industries["monthly_wage_change_pct"].idxmin()
-    ]
+    monthly_min = industries.loc[industries["monthly_wage_change_pct"].idxmin()]
 
-    hourly_max = industries.loc[
-        industries["hourly_wage_change_pct"].idxmax()
-    ]
+    hourly_max = industries.loc[industries["hourly_wage_change_pct"].idxmax()]
 
-    hours_decline_max = industries.loc[
-        industries["total_hours_change_pct"].idxmin()
-    ]
+    hours_decline_max = industries.loc[industries["total_hours_change_pct"].idxmin()]
 
-    gap = (
-        industries["hourly_wage_change_pct"]
-        - industries["monthly_wage_change_pct"]
-    )
+    gap = industries["hourly_wage_change_pct"] - industries["monthly_wage_change_pct"]
 
-    monthly_hourly_gap_max = industries.loc[
-        gap.idxmax()
-    ]
+    monthly_hourly_gap_max = industries.loc[gap.idxmax()]
 
     return {
         "monthly_wage_growth_max": monthly_max["industry"],
@@ -518,18 +440,12 @@ def create_period_comparison_dataframe(
             employment_type=employment_type,
         )
 
-        yearly_df = create_industry_yearly_dataframe(
-            monthly_df
-        )
+        yearly_df = create_industry_yearly_dataframe(monthly_df)
 
         for start_year, end_year in periods:
-            start_df = yearly_df.loc[
-                yearly_df["year"] == start_year
-            ]
+            start_df = yearly_df.loc[yearly_df["year"] == start_year]
 
-            end_df = yearly_df.loc[
-                yearly_df["year"] == end_year
-            ]
+            end_df = yearly_df.loc[yearly_df["year"] == end_year]
 
             if start_df.empty or end_df.empty:
                 continue
@@ -543,21 +459,15 @@ def create_period_comparison_dataframe(
                     "start_year": start_year,
                     "end_year": end_year,
                     "monthly_wage_change_pct": (
-                        end["monthly_wage"]
-                        / start["monthly_wage"]
-                        - 1
+                        end["monthly_wage"] / start["monthly_wage"] - 1
                     )
                     * 100,
                     "hourly_wage_change_pct": (
-                        end["approx_hourly_wage"]
-                        / start["approx_hourly_wage"]
-                        - 1
+                        end["approx_hourly_wage"] / start["approx_hourly_wage"] - 1
                     )
                     * 100,
                     "total_hours_change_pct": (
-                        end["total_hours"]
-                        / start["total_hours"]
-                        - 1
+                        end["total_hours"] / start["total_hours"] - 1
                     )
                     * 100,
                 }
