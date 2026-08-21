@@ -314,6 +314,114 @@ def create_scheduled_hours_index_chart(
     )
 
 
+def create_cumulative_working_hours_decomposition_chart(
+    yearly_df: pd.DataFrame,
+    base_year: int = 2015,
+    end_year: int = 2025,
+) -> alt.Chart:
+    """基準年からの総実労働時間変化を所定内・所定外に分解する。"""
+
+    chart_df = yearly_df.loc[
+        yearly_df["year"].between(base_year, end_year),
+        [
+            "year",
+            "scheduled_hours",
+            "overtime_hours",
+        ],
+    ].copy()
+
+    base = chart_df.loc[chart_df["year"] == base_year]
+
+    if len(base) != 1:
+        raise ValueError(
+            f"{base_year}年の基準値を一意に取得できません。"
+        )
+
+    base_scheduled = base.iloc[0]["scheduled_hours"]
+    base_overtime = base.iloc[0]["overtime_hours"]
+
+    chart_df["scheduled_hours_change"] = (
+        chart_df["scheduled_hours"] - base_scheduled
+    )
+    chart_df["overtime_hours_change"] = (
+        chart_df["overtime_hours"] - base_overtime
+    )
+
+    long_df = chart_df.melt(
+        id_vars="year",
+        value_vars=[
+            "scheduled_hours_change",
+            "overtime_hours_change",
+        ],
+        var_name="要因",
+        value_name="変化時間",
+    )
+
+    long_df["要因"] = long_df["要因"].replace(
+        {
+            "scheduled_hours_change": "所定内労働時間",
+            "overtime_hours_change": "所定外労働時間",
+        }
+    )
+
+    bars = (
+        alt.Chart(long_df)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "year:O",
+                title="年",
+            ),
+            y=alt.Y(
+                "変化時間:Q",
+                title=f"{base_year}年からの変化（時間/月）",
+            ),
+            color=alt.Color(
+                "要因:N",
+                title="要因",
+                scale=alt.Scale(
+                    domain=[
+                        "所定内労働時間",
+                        "所定外労働時間",
+                    ],
+                    range=[
+                        "#4c78a8",
+                        "#f58518",
+                    ],
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "year:O",
+                    title="年",
+                ),
+                alt.Tooltip(
+                    "要因:N",
+                    title="要因",
+                ),
+                alt.Tooltip(
+                    "変化時間:Q",
+                    title="2015年比",
+                    format="+.2f",
+                ),
+            ],
+        )
+    )
+
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(
+            color="#666666",
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (bars + zero_line).properties(
+        height=400,
+    )
 
 st.title("労働投入分析")
 
@@ -534,6 +642,119 @@ st.dataframe(
     width="stretch",
 )
 
+available_years = (
+    labor_df.assign(year=labor_df["date"].dt.year)
+    .groupby("year")
+    .size()
+)
+
+full_years = available_years[
+    available_years == 12
+].index.tolist()
+
+with st.expander("比較期間を変えて確認"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        custom_start_year = st.selectbox(
+            "開始年",
+            options=full_years,
+            index=full_years.index(ANALYSIS_START_YEAR),
+        )
+
+    with col2:
+        end_year_options = [
+            year
+            for year in full_years
+            if year > custom_start_year
+        ]
+
+        custom_end_year = st.selectbox(
+            "終了年",
+            options=end_year_options,
+            index=(
+                end_year_options.index(ANALYSIS_END_YEAR)
+                if ANALYSIS_END_YEAR in end_year_options
+                else len(end_year_options) - 1
+            ),
+        )
+
+    custom_wage_summary = summarize_long_term_wage_decomposition(
+        labor_df,
+        start_year=custom_start_year,
+        end_year=custom_end_year,
+    )
+
+    custom_hours_summary = summarize_long_term_working_hours_decomposition(
+        labor_df,
+        start_year=custom_start_year,
+        end_year=custom_end_year,
+    )
+
+    custom_scheduled_summary = (
+        summarize_long_term_scheduled_hours_decomposition(
+            labor_df,
+            start_year=custom_start_year,
+            end_year=custom_end_year,
+        )
+    )
+
+    custom_comparison_table = pd.DataFrame(
+        [
+            {
+                "指標": "月額のきまって支給する給与",
+                "変化率": custom_wage_summary["wage_change_pct"],
+            },
+            {
+                "指標": "1時間あたり賃金（概算）",
+                "変化率": custom_wage_summary["hourly_wage_change_pct"],
+            },
+            {
+                "指標": "総実労働時間",
+                "変化率": custom_wage_summary["total_hours_change_pct"],
+            },
+            {
+                "指標": "所定内労働時間",
+                "変化率": custom_scheduled_summary[
+                    "scheduled_hours_change_pct"
+                ],
+            },
+            {
+                "指標": "所定外労働時間",
+                "変化率": custom_hours_summary[
+                    "overtime_hours_change_pct"
+                ],
+            },
+            {
+                "指標": "出勤日数",
+                "変化率": custom_scheduled_summary[
+                    "working_days_change_pct"
+                ],
+            },
+            {
+                "指標": "1出勤日あたり所定内労働時間",
+                "変化率": custom_scheduled_summary[
+                    "hours_per_workday_change_pct"
+                ],
+            },
+        ]
+    )
+
+    st.dataframe(
+        custom_comparison_table.style.format(
+            {
+                "変化率": "{:+.2f}%",
+            }
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+
+    st.caption(
+        "主分析は2015→2025年で固定しています。"
+        "この比較機能は、起点・終点を変えても傾向が維持されるかを確認するための補助機能です。"
+    )
+
 st.divider()
 
 st.subheader("月額賃金の変化要因")
@@ -564,32 +785,39 @@ st.markdown(
 
 st.divider()
 
-st.subheader("総実労働時間の年次分解")
+st.subheader("総実労働時間の長期変化")
 
 st.altair_chart(
-    create_working_hours_decomposition_chart(
-        yearly_df
+    create_cumulative_working_hours_decomposition_chart(
+        yearly_df,
+        base_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
     ),
     width="stretch",
 )
 
 st.caption(
-    "各年の値は前年からの変化です。"
-    "所定内労働時間と所定外労働時間の寄与を合計すると、"
-    "総実労働時間の前年比変化に一致します。"
+    f"{ANALYSIS_START_YEAR}年を基準として、"
+    "総実労働時間の変化を所定内労働時間と所定外労働時間に分解しています。"
 )
 
-st.markdown(
-    """
-    2019年は総実労働時間の減少の大部分を所定内労働時間が占めました。
+with st.expander("前年差で確認"):
+    st.altair_chart(
+        create_working_hours_decomposition_chart(yearly_df),
+        width="stretch",
+    )
 
-    2020年は所定内労働時間に加えて、所定外労働時間のマイナス寄与も大きくなっています。
+    st.markdown(
+        """
+        2019年は総実労働時間の減少の大部分を所定内労働時間が占めました。
 
-    2021年には所定内・所定外労働時間がともにプラス寄与へ転じました。
+        2020年は所定内労働時間に加えて、所定外労働時間のマイナス寄与も大きくなっています。
 
-    2025年は再び総実労働時間が減少し、その中心は所定内労働時間でした。
-    """
-)
+        2021年には所定内・所定外労働時間がともにプラス寄与へ転じました。
+
+        2025年は再び総実労働時間が減少し、その中心は所定内労働時間でした。
+        """
+    )
 
 st.divider()
 
