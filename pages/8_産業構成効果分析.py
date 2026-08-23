@@ -5,8 +5,10 @@ import streamlit as st
 from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.industry_analysis import INDUSTRY_NAMES
 from real_wage_dashboard.industry_composition_analysis import (
+    COMPOSITION_INDUSTRIES,
     add_industry_employment_share,
     create_all_industry_employment_monthly_dataframe,
+    create_employment_type_composition_summary,
     create_industry_composition_analysis_discussion,
     create_industry_composition_analysis_results,
     create_industry_composition_base_dataframe,
@@ -604,4 +606,70 @@ st.markdown(
     前半の押し下げと後半の押し上げが一部相殺された結果、
     10年間全体では -0.21pt にとどまりました。
     """
+)
+
+st.divider()
+
+st.subheader("就業形態別にみても同じ傾向か")
+
+st.markdown(
+    """
+    主分析では就業形態計を使用していますが、産業内では
+    一般労働者とパートタイム労働者の構成も変化し得ます。
+
+    そこで、両方で賃金データが揃う15産業に対象を統一し、
+    就業形態別にも同じ要因分解を行いました。
+    """
+)
+
+comparison_industries = [
+    industry
+    for industry in COMPOSITION_INDUSTRIES
+    if industry != "C"
+]
+
+employment_type_summary = (
+    create_employment_type_composition_summary(
+        raw_df,
+        industry_codes=comparison_industries,
+        start_year=2015,
+        end_year=2025,
+    )
+)
+
+employment_type_display = employment_type_summary.rename(
+    columns={
+        "employment_type": "就業形態",
+        "industry_count": "産業数",
+        "within_effect_pt": "産業内賃金効果（pt）",
+        "composition_effect_pt": "産業構成効果（pt）",
+        "interaction_effect_pt": "交差効果（pt）",
+        "total_change_pct": "平均賃金変化（%）",
+    }
+)
+
+st.dataframe(
+    employment_type_display.style.format(
+        {
+            "産業内賃金効果（pt）": "{:+.3f}",
+            "産業構成効果（pt）": "{:+.3f}",
+            "交差効果（pt）": "{:+.3f}",
+            "平均賃金変化（%）": "{:+.3f}",
+        }
+    ),
+    width="stretch",
+    hide_index=True,
+)
+
+st.markdown(
+    """
+    - 一般労働者・パートタイム労働者のどちらでも、平均賃金変化の大部分は**産業内賃金効果**による。
+    - 産業構成効果は、一般労働者ではわずかなマイナス、パートタイム労働者ではプラスとなり、就業形態によって方向が異なる。
+    - したがって、就業形態計では産業構成効果が小さく見えても、その内部では異なる構造変化が生じている可能性がある。
+    """
+)
+
+st.caption(
+    "就業形態別比較では、2025年のパートタイム労働者について"
+    "産業Cの賃金データが揃わないため、Cを除く共通15産業を対象としています。"
 )

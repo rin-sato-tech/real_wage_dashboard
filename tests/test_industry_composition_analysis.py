@@ -6,6 +6,7 @@ from real_wage_dashboard.industry_composition_analysis import (
     COMPOSITION_INDUSTRIES,
     add_industry_employment_share,
     create_all_industry_employment_monthly_dataframe,
+    create_employment_type_composition_summary,
     create_industry_composition_analysis_discussion,
     create_industry_composition_analysis_results,
     create_industry_composition_base_dataframe,
@@ -301,3 +302,50 @@ def test_industry_composition_analysis_texts() -> None:
     assert any("産業内賃金効果" in text for text in results)
 
     assert any("2015→2019" in text for text in discussion)
+
+
+def test_create_employment_type_composition_summary() -> None:
+    raw_df = load_raw_wage_df()
+
+    comparison_industries = [
+        industry
+        for industry in COMPOSITION_INDUSTRIES
+        if industry != "C"
+    ]
+
+    result = create_employment_type_composition_summary(
+        raw_df,
+        industry_codes=comparison_industries,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    assert result["employment_type"].to_list() == [
+        "就業形態計",
+        "一般労働者",
+        "パートタイム労働者",
+    ]
+
+    assert result["industry_count"].eq(15).all()
+
+    actual = result.set_index("employment_type")
+
+    assert actual.loc[
+        "就業形態計",
+        "composition_effect_pt",
+    ] == pytest.approx(-0.212, abs=0.001)
+
+    assert actual.loc[
+        "一般労働者",
+        "composition_effect_pt",
+    ] == pytest.approx(-0.082, abs=0.001)
+
+    assert actual.loc[
+        "パートタイム労働者",
+        "composition_effect_pt",
+    ] == pytest.approx(0.377, abs=0.001)
+
+    assert actual.loc[
+        "パートタイム労働者",
+        "within_effect_pt",
+    ] == pytest.approx(15.070, abs=0.001)

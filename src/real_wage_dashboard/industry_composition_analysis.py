@@ -327,8 +327,12 @@ def create_industry_composition_decomposition(
     base_df: pd.DataFrame,
     start_year: int = 2015,
     end_year: int = 2025,
+    expected_industries: list[str] | None = None,
 ) -> pd.DataFrame:
     """平均賃金変化を産業内賃金効果・産業構成効果・交差効果に分解する。"""
+
+    if expected_industries is None:
+        expected_industries = COMPOSITION_INDUSTRIES
 
     start_df = base_df.loc[
         base_df["year"] == start_year,
@@ -365,8 +369,13 @@ def create_industry_composition_decomposition(
         validate="one_to_one",
     )
 
-    if df["industry"].nunique() != len(COMPOSITION_INDUSTRIES):
-        raise ValueError("分解対象年で主要16産業が揃っていません。")
+    expected_industry_set = set(expected_industries)
+
+    if (
+        set(start_df["industry"]) != expected_industry_set
+        or set(end_df["industry"]) != expected_industry_set
+    ):
+        raise ValueError("分解対象年で対象産業が揃っていません。")
 
     df["wage_change"] = df["end_wage"] - df["start_wage"]
 
@@ -533,3 +542,86 @@ def create_industry_composition_analysis_discussion(
             "雇用規模・産業内賃金上昇・シェア変化を分けて解釈する必要がある。"
         ),
     ]
+
+
+def create_employment_type_composition_summary(
+    raw_df: pd.DataFrame,
+    industry_codes: list[str],
+    start_year: int = 2015,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """就業形態別に産業構成効果を集計する。"""
+
+    employment_types = {
+        "就業形態計": "0",
+        "一般労働者": "1",
+        "パートタイム労働者": "2",
+    }
+
+    rows = []
+
+    for name, employment_type in employment_types.items():
+        employment_monthly = (
+            create_all_industry_employment_monthly_dataframe(
+                raw_df,
+                industry_codes=industry_codes,
+                employment_type=employment_type,
+            )
+        )
+
+        employment_yearly = create_industry_employment_yearly_dataframe(
+            employment_monthly,
+        )
+
+        employment_yearly = add_industry_employment_share(
+            employment_yearly,
+        )
+
+        wage_yearly = create_industry_wage_yearly_dataframe(
+            raw_df,
+            industry_codes=industry_codes,
+            employment_type=employment_type,
+        )
+
+        base_df = create_industry_composition_base_dataframe(
+            wage_yearly,
+            employment_yearly,
+        )
+
+        decomposition = create_industry_composition_decomposition(
+            base_df,
+            start_year=start_year,
+            end_year=end_year,
+            expected_industries=industry_codes,
+        )
+
+        start_average_wage = (
+            decomposition["start_wage"]
+            * decomposition["start_share"]
+        ).sum()
+
+        within = decomposition["within_wage_effect"].sum()
+        composition = decomposition["composition_effect"].sum()
+        interaction = decomposition["interaction_effect"].sum()
+        total = within + composition + interaction
+
+        rows.append(
+            {
+                "employment_type": name,
+                "industry_count": len(decomposition),
+                "within_effect_pt": (
+                    within / start_average_wage * 100
+                ),
+                "composition_effect_pt": (
+                    composition / start_average_wage * 100
+                ),
+                "interaction_effect_pt": (
+                    interaction / start_average_wage * 100
+                ),
+                "total_change_pct": (
+                    total / start_average_wage * 100
+                ),
+            }
+        )
+
+    return pd.DataFrame(rows)
