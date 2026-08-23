@@ -34,9 +34,16 @@ st.subheader("問い")
 
 st.markdown(
     """
-    **2015年から2025年にかけての平均賃金上昇は、\
-    各産業の中で賃金が上昇した効果と、\
-    産業別の雇用シェアが変化した効果にどの程度分けられるか。**
+    **2015年から2025年にかけての平均賃金上昇は、何によって生じたのか。**
+
+    平均賃金は、各産業の賃金が上昇するだけでなく、賃金水準の異なる産業の雇用シェアが変化することでも動きます。
+
+    そこで、平均賃金の変化を
+
+    - 各産業の中で賃金が変化した効果
+    - 産業別の雇用シェアが変化した効果
+
+    に分けることで、平均賃金の上昇が「各産業で賃金が上がったため」なのか、「雇用される産業の構成が変わったため」なのかを切り分けます。
     """
 )
 
@@ -52,6 +59,12 @@ st.markdown(
     - **主比較期間**：2015年平均 → 2025年平均
     - **雇用ウェイト**：前月末労働者数と本月末労働者数の平均
     """
+)
+
+st.caption(
+    "本分析は就業形態計を用いているため、産業内賃金効果には、"
+    "一般労働者・パートタイム労働者それぞれの賃金変化だけでなく、"
+    "産業内部の就業形態構成の変化も含まれます。"
 )
 
 raw_df = load_wage_csv(WAGE_DATA_PATH)
@@ -117,12 +130,12 @@ analysis_discussion = create_industry_composition_analysis_discussion(
     decomposition_df,
 )
 
-st.header("分析結果")
+st.subheader("分析結果")
 
 for result in analysis_results:
     st.markdown(f"- {result}")
 
-st.header("考察")
+st.subheader("考察")
 
 for discussion in analysis_discussion:
     st.markdown(f"- {discussion}")
@@ -130,6 +143,83 @@ for discussion in analysis_discussion:
 st.caption(
     "本分析は平均賃金変化を恒等的に分解するものであり、"
     "産業構成変化が賃金変化を因果的に生じさせたことを示すものではありません。"
+)
+
+st.divider()
+
+st.subheader("平均賃金変化の要因分解")
+
+st.info(
+    """
+    平均賃金の変化を、次の3つの効果に分けます。
+
+    - **産業内賃金効果**：各産業の雇用シェアが変わらなかったと仮定したときの、産業内の賃金変化による効果
+    - **産業構成効果**：各産業の賃金が変わらなかったと仮定したときの、雇用シェア変化による効果
+    - **交差効果**：賃金と雇用シェアが同時に変化したことで生じる残りの効果
+    """
+)
+
+decomposition_summary = pd.DataFrame(
+    {
+        "factor": [
+            "産業内賃金効果",
+            "産業構成効果",
+            "交差効果",
+        ],
+        "effect_yen": [
+            within,
+            composition,
+            interaction,
+        ],
+    }
+)
+
+decomposition_chart = (
+    alt.Chart(decomposition_summary)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "effect_yen:Q",
+            title="平均賃金への寄与（円）",
+        ),
+        y=alt.Y(
+            "factor:N",
+            title=None,
+            sort=[
+                "産業内賃金効果",
+                "産業構成効果",
+                "交差効果",
+            ],
+        ),
+        tooltip=[
+            alt.Tooltip(
+                "factor:N",
+                title="要因",
+            ),
+            alt.Tooltip(
+                "effect_yen:Q",
+                title="寄与",
+                format="+,.0f",
+            ),
+        ],
+    )
+    .properties(
+        height=220,
+    )
+)
+
+decomposition_zero_line = alt.Chart({"values": [{"x": 0}]}).mark_rule().encode(x="x:Q")
+
+st.altair_chart(
+    decomposition_chart + decomposition_zero_line,
+    width="stretch",
+)
+
+st.caption(
+    f"2015→2025の平均賃金変化は {total_change:+,.0f}円（{total_change_pt:+.2f}%）。"
+    f"内訳は、産業内賃金効果 {within:+,.0f}円（{within_pt:+.2f}pt）、"
+    f"産業構成効果 {composition:+,.0f}円（{composition_pt:+.2f}pt）、"
+    f"交差効果 {interaction:+,.0f}円（{interaction_pt:+.2f}pt）です。"
 )
 
 st.divider()
@@ -222,70 +312,7 @@ st.caption(
     "雇用シェアが上昇する一方、製造業、運輸業・郵便業、建設業では低下しました。"
 )
 
-st.subheader("平均賃金変化の要因分解")
-
-decomposition_summary = pd.DataFrame(
-    {
-        "factor": [
-            "産業内賃金効果",
-            "産業構成効果",
-            "交差効果",
-        ],
-        "effect_yen": [
-            within,
-            composition,
-            interaction,
-        ],
-    }
-)
-
-decomposition_chart = (
-    alt.Chart(decomposition_summary)
-    .mark_bar()
-    .encode(
-        x=alt.X(
-            "effect_yen:Q",
-            title="平均賃金への寄与（円）",
-        ),
-        y=alt.Y(
-            "factor:N",
-            title=None,
-            sort=[
-                "産業内賃金効果",
-                "産業構成効果",
-                "交差効果",
-            ],
-        ),
-        tooltip=[
-            alt.Tooltip(
-                "factor:N",
-                title="要因",
-            ),
-            alt.Tooltip(
-                "effect_yen:Q",
-                title="寄与",
-                format="+,.0f",
-            ),
-        ],
-    )
-    .properties(
-        height=220,
-    )
-)
-
-decomposition_zero_line = alt.Chart({"values": [{"x": 0}]}).mark_rule().encode(x="x:Q")
-
-st.altair_chart(
-    decomposition_chart + decomposition_zero_line,
-    width="stretch",
-)
-
-st.caption(
-    f"2015→2025の平均賃金変化は {total_change:+,.0f}円（{total_change_pt:+.2f}%）。"
-    f"内訳は、産業内賃金効果 {within:+,.0f}円（{within_pt:+.2f}pt）、"
-    f"産業構成効果 {composition:+,.0f}円（{composition_pt:+.2f}pt）、"
-    f"交差効果 {interaction:+,.0f}円（{interaction_pt:+.2f}pt）です。"
-)
+st.divider()
 
 st.subheader("産業別の構成寄与")
 
@@ -407,82 +434,98 @@ comparison_chart_df["series_name"] = comparison_chart_df["series"].map(
     }
 )
 
-st.subheader("再構築平均賃金と調査産業計")
+st.divider()
 
-reconstructed_chart = (
-    alt.Chart(comparison_chart_df)
-    .mark_line(
-        point=True,
-    )
+st.subheader("雇用シェア変化と産業構成寄与")
+
+scatter_df = decomposition_df.copy()
+
+scatter_df["industry_name"] = scatter_df["industry"].map(
+    INDUSTRY_NAMES
+)
+
+scatter_df["share_change_pt"] = (
+    scatter_df["share_change"] * 100
+)
+
+scatter_chart = (
+    alt.Chart(scatter_df)
+    .mark_circle(size=100)
     .encode(
         x=alt.X(
-            "year:O",
-            title="年",
+            "share_change_pt:Q",
+            title="雇用シェア変化（pt）",
         ),
         y=alt.Y(
-            "monthly_wage:Q",
-            title="きまって支給する給与（円）",
-            scale=alt.Scale(
-                zero=False,
-            ),
-        ),
-        color=alt.Color(
-            "series_name:N",
-            title=None,
+            "centered_composition_effect_pt:Q",
+            title="産業構成寄与（pt）",
         ),
         tooltip=[
             alt.Tooltip(
-                "year:O",
-                title="年",
+                "industry_name:N",
+                title="産業",
             ),
             alt.Tooltip(
-                "series_name:N",
-                title="系列",
+                "share_change_pt:Q",
+                title="シェア変化",
+                format="+.2f",
             ),
             alt.Tooltip(
-                "monthly_wage:Q",
-                title="月額賃金",
+                "start_wage:Q",
+                title="2015年賃金",
                 format=",.0f",
+            ),
+            alt.Tooltip(
+                "centered_composition_effect_pt:Q",
+                title="構成寄与",
+                format="+.3f",
             ),
         ],
     )
-    .properties(
-        height=380,
+)
+
+zero_x = alt.Chart(
+    pd.DataFrame({"x": [0]})
+).mark_rule().encode(
+    x="x:Q"
+)
+
+zero_y = alt.Chart(
+    pd.DataFrame({"y": [0]})
+).mark_rule().encode(
+    y="y:Q"
+)
+
+labels = (
+    alt.Chart(scatter_df)
+    .mark_text(
+        align="left",
+        dx=6,
+        dy=-6,
+    )
+    .encode(
+        x="share_change_pt:Q",
+        y="centered_composition_effect_pt:Q",
+        text="industry:N",
     )
 )
 
 st.altair_chart(
-    reconstructed_chart,
+    scatter_chart + labels + zero_x + zero_y,
     width="stretch",
 )
 
-reconstructed_2015 = comparison_yearly_df.loc[
-    comparison_yearly_df["year"] == 2015,
-    "reconstructed_wage",
-].iloc[0]
+st.divider()
 
-tl_2015 = comparison_yearly_df.loc[
-    comparison_yearly_df["year"] == 2015,
-    "tl_monthly_wage",
-].iloc[0]
+st.subheader("再構築平均賃金と調査産業計")
 
-reconstructed_2025 = comparison_yearly_df.loc[
-    comparison_yearly_df["year"] == 2025,
-    "reconstructed_wage",
-].iloc[0]
-
-tl_2025 = comparison_yearly_df.loc[
-    comparison_yearly_df["year"] == 2025,
-    "tl_monthly_wage",
-].iloc[0]
-
-st.caption(
-    f"再構築平均と調査産業計の差は、"
-    f"2015年で {reconstructed_2015 - tl_2015:+.1f}円、"
-    f"2025年で {reconstructed_2025 - tl_2025:+.1f}円です。"
-    "主要16産業の賃金と雇用ウェイトによる再構築平均は、"
-    "調査産業計をほぼ完全に再現しています。"
+st.write(
+    "妥当性確認：16産業の雇用シェアから再構築した平均賃金は、"
+    "調査産業計との差が2015年で約2.8円、2025年で約4.8円であり、"
+    "ほぼ一致しました。"
 )
+
+st.divider()
 
 st.subheader("時期別にみた要因分解")
 
@@ -546,4 +589,19 @@ st.caption(
     "2015→2025全体で産業構成効果が小さいのは、"
     "産業構成がほとんど変化しなかったためではなく、"
     "前半の押し下げと後半の押し上げが相殺されたためです。"
+)
+
+st.markdown(
+    """
+    **2015→2025全体の産業構成効果は -0.21pt でした。**
+
+    ただし、これは10年間を通じて産業構成効果が常に小さかったことを意味しません。
+
+    - 2015→2019：**-0.50pt**
+    - 2019→2020：**-0.01pt**
+    - 2020→2025：**+0.29pt**
+
+    前半の押し下げと後半の押し上げが一部相殺された結果、
+    10年間全体では -0.21pt にとどまりました。
+    """
 )

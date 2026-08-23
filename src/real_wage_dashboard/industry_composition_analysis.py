@@ -473,7 +473,8 @@ def create_industry_composition_analysis_results(
 
     return [
         (
-            f"2015→2025の平均賃金は {total_change_pt:+.2f}% "
+            "分析対象16産業から再構築した平均賃金は、"
+            f"2015→2025で {total_change_pt:+.2f}% "
             f"（{total_change:+,.0f}円）変化した。"
         ),
         (
