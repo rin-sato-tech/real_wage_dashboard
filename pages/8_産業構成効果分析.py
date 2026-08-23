@@ -7,6 +7,8 @@ from real_wage_dashboard.industry_analysis import INDUSTRY_NAMES
 from real_wage_dashboard.industry_composition_analysis import (
     add_industry_employment_share,
     create_all_industry_employment_monthly_dataframe,
+    create_industry_composition_analysis_discussion,
+    create_industry_composition_analysis_results,
     create_industry_composition_base_dataframe,
     create_industry_composition_decomposition,
     create_industry_employment_yearly_dataframe,
@@ -17,7 +19,6 @@ from real_wage_dashboard.industry_composition_analysis import (
 )
 from real_wage_dashboard.wage_service import load_wage_csv
 
-
 st.set_page_config(
     page_title="産業構成効果分析",
     layout="wide",
@@ -25,7 +26,9 @@ st.set_page_config(
 
 st.title("産業構成効果分析")
 
-st.caption("2015年から2025年の平均賃金変化を、各産業内の賃金変化と産業別雇用シェアの変化に分解します。")
+st.caption(
+    "2015年から2025年の平均賃金変化を、各産業内の賃金変化と産業別雇用シェアの変化に分解します。"
+)
 
 st.subheader("問い")
 
@@ -53,16 +56,12 @@ st.markdown(
 
 raw_df = load_wage_csv(WAGE_DATA_PATH)
 
-employment_monthly_df = (
-    create_all_industry_employment_monthly_dataframe(
-        raw_df,
-    )
+employment_monthly_df = create_all_industry_employment_monthly_dataframe(
+    raw_df,
 )
 
-employment_yearly_df = (
-    create_industry_employment_yearly_dataframe(
-        employment_monthly_df,
-    )
+employment_yearly_df = create_industry_employment_yearly_dataframe(
+    employment_monthly_df,
 )
 
 employment_yearly_df = add_industry_employment_share(
@@ -109,30 +108,24 @@ composition_pt = composition / start_wage * 100
 interaction_pt = interaction / start_wage * 100
 total_change_pt = total_change / start_wage * 100
 
-st.subheader("分析結果")
-
-st.markdown(
-    f"""
-    - **平均賃金変化**：{total_change_pt:+.2f}%
-    - **産業内賃金効果**：{within_pt:+.2f}pt
-    - **産業構成効果**：{composition_pt:+.2f}pt
-    - **交差効果**：{interaction_pt:+.2f}pt
-    """
+analysis_results = create_industry_composition_analysis_results(
+    decomposition_df,
+    reconstructed_df,
 )
 
-st.subheader("考察")
-
-st.markdown(
-    f"""
-    2015年から2025年の平均賃金は **{total_change_pt:+.2f}%** 上昇しました。
-
-    このうち産業内賃金効果は **{within_pt:+.2f}pt** であり、
-    平均賃金上昇の大部分は各産業の中で賃金が上昇したことによって説明されます。
-
-    一方、産業構成効果は **{composition_pt:+.2f}pt** で、
-    産業構成の変化は平均賃金をわずかに押し下げる方向に作用しました。
-    """
+analysis_discussion = create_industry_composition_analysis_discussion(
+    decomposition_df,
 )
+
+st.header("分析結果")
+
+for result in analysis_results:
+    st.markdown(f"- {result}")
+
+st.header("考察")
+
+for discussion in analysis_discussion:
+    st.markdown(f"- {discussion}")
 
 st.caption(
     "本分析は平均賃金変化を恒等的に分解するものであり、"
@@ -161,14 +154,10 @@ share_comparison = (
 )
 
 share_comparison["share_change_pt"] = (
-    share_comparison["share_2025"]
-    - share_comparison["share_2015"]
+    share_comparison["share_2025"] - share_comparison["share_2015"]
 ) * 100
 
-share_comparison["industry_name"] = (
-    share_comparison["industry"]
-    .map(INDUSTRY_NAMES)
-)
+share_comparison["industry_name"] = share_comparison["industry"].map(INDUSTRY_NAMES)
 
 share_comparison = share_comparison.sort_values(
     "share_change_pt",
@@ -221,15 +210,7 @@ share_chart = (
     )
 )
 
-zero_line = (
-    alt.Chart(
-        {"values": [{"x": 0}]}
-    )
-    .mark_rule()
-    .encode(
-        x="x:Q"
-    )
-)
+zero_line = alt.Chart({"values": [{"x": 0}]}).mark_rule().encode(x="x:Q")
 
 st.altair_chart(
     share_chart + zero_line,
@@ -292,15 +273,7 @@ decomposition_chart = (
     )
 )
 
-decomposition_zero_line = (
-    alt.Chart(
-        {"values": [{"x": 0}]}
-    )
-    .mark_rule()
-    .encode(
-        x="x:Q"
-    )
-)
+decomposition_zero_line = alt.Chart({"values": [{"x": 0}]}).mark_rule().encode(x="x:Q")
 
 st.altair_chart(
     decomposition_chart + decomposition_zero_line,
@@ -318,9 +291,8 @@ st.subheader("産業別の構成寄与")
 
 composition_industry_df = decomposition_df.copy()
 
-composition_industry_df["industry_name"] = (
-    composition_industry_df["industry"]
-    .map(INDUSTRY_NAMES)
+composition_industry_df["industry_name"] = composition_industry_df["industry"].map(
+    INDUSTRY_NAMES
 )
 
 composition_industry_df = composition_industry_df.sort_values(
@@ -376,15 +348,7 @@ composition_industry_chart = (
     )
 )
 
-composition_zero_line = (
-    alt.Chart(
-        {"values": [{"x": 0}]}
-    )
-    .mark_rule()
-    .encode(
-        x="x:Q"
-    )
-)
+composition_zero_line = alt.Chart({"values": [{"x": 0}]}).mark_rule().encode(x="x:Q")
 
 st.altair_chart(
     composition_industry_chart + composition_zero_line,
@@ -422,9 +386,7 @@ comparison_yearly_df = reconstructed_df.merge(
     validate="one_to_one",
 )
 
-comparison_yearly_df = comparison_yearly_df[
-    comparison_yearly_df["year"] >= 2010
-].copy()
+comparison_yearly_df = comparison_yearly_df[comparison_yearly_df["year"] >= 2010].copy()
 
 comparison_chart_df = comparison_yearly_df[
     [
@@ -438,14 +400,11 @@ comparison_chart_df = comparison_yearly_df[
     value_name="monthly_wage",
 )
 
-comparison_chart_df["series_name"] = (
-    comparison_chart_df["series"]
-    .map(
-        {
-            "reconstructed_wage": "主要16産業の再構築平均",
-            "tl_monthly_wage": "調査産業計（TL）",
-        }
-    )
+comparison_chart_df["series_name"] = comparison_chart_df["series"].map(
+    {
+        "reconstructed_wage": "主要16産業の再構築平均",
+        "tl_monthly_wage": "調査産業計（TL）",
+    }
 )
 
 st.subheader("再構築平均賃金と調査産業計")
@@ -542,20 +501,13 @@ for start_year, end_year in periods:
         end_year=end_year,
     )
 
-    start_average_wage = (
-        period_df["start_wage"]
-        * period_df["start_share"]
-    ).sum()
+    start_average_wage = (period_df["start_wage"] * period_df["start_share"]).sum()
 
     within_period = period_df["within_wage_effect"].sum()
     composition_period = period_df["composition_effect"].sum()
     interaction_period = period_df["interaction_effect"].sum()
 
-    total_period = (
-        within_period
-        + composition_period
-        + interaction_period
-    )
+    total_period = within_period + composition_period + interaction_period
 
     period_rows.append(
         {
