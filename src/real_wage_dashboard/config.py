@@ -1,6 +1,7 @@
 from pathlib import Path
 
 CPI_STATS_DATA_ID = "0003427113"
+LABOR_FORCE_STATS_DATA_ID = "0003005865"
 
 CPI_BASE_FILTERS = {
     "cdTab": "1",
