@@ -561,12 +561,10 @@ def create_employment_type_composition_summary(
     rows = []
 
     for name, employment_type in employment_types.items():
-        employment_monthly = (
-            create_all_industry_employment_monthly_dataframe(
-                raw_df,
-                industry_codes=industry_codes,
-                employment_type=employment_type,
-            )
+        employment_monthly = create_all_industry_employment_monthly_dataframe(
+            raw_df,
+            industry_codes=industry_codes,
+            employment_type=employment_type,
         )
 
         employment_yearly = create_industry_employment_yearly_dataframe(
@@ -596,8 +594,7 @@ def create_employment_type_composition_summary(
         )
 
         start_average_wage = (
-            decomposition["start_wage"]
-            * decomposition["start_share"]
+            decomposition["start_wage"] * decomposition["start_share"]
         ).sum()
 
         within = decomposition["within_wage_effect"].sum()
@@ -609,18 +606,10 @@ def create_employment_type_composition_summary(
             {
                 "employment_type": name,
                 "industry_count": len(decomposition),
-                "within_effect_pt": (
-                    within / start_average_wage * 100
-                ),
-                "composition_effect_pt": (
-                    composition / start_average_wage * 100
-                ),
-                "interaction_effect_pt": (
-                    interaction / start_average_wage * 100
-                ),
-                "total_change_pct": (
-                    total / start_average_wage * 100
-                ),
+                "within_effect_pt": (within / start_average_wage * 100),
+                "composition_effect_pt": (composition / start_average_wage * 100),
+                "interaction_effect_pt": (interaction / start_average_wage * 100),
+                "total_change_pct": (total / start_average_wage * 100),
             }
         )
 

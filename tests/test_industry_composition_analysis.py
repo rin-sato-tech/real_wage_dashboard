@@ -308,9 +308,7 @@ def test_create_employment_type_composition_summary() -> None:
     raw_df = load_raw_wage_df()
 
     comparison_industries = [
-        industry
-        for industry in COMPOSITION_INDUSTRIES
-        if industry != "C"
+        industry for industry in COMPOSITION_INDUSTRIES if industry != "C"
     ]
 
     result = create_employment_type_composition_summary(

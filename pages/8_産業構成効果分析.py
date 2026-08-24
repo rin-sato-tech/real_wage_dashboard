@@ -442,13 +442,9 @@ st.subheader("雇用シェア変化と産業構成寄与")
 
 scatter_df = decomposition_df.copy()
 
-scatter_df["industry_name"] = scatter_df["industry"].map(
-    INDUSTRY_NAMES
-)
+scatter_df["industry_name"] = scatter_df["industry"].map(INDUSTRY_NAMES)
 
-scatter_df["share_change_pt"] = (
-    scatter_df["share_change"] * 100
-)
+scatter_df["share_change_pt"] = scatter_df["share_change"] * 100
 
 scatter_chart = (
     alt.Chart(scatter_df)
@@ -486,17 +482,9 @@ scatter_chart = (
     )
 )
 
-zero_x = alt.Chart(
-    pd.DataFrame({"x": [0]})
-).mark_rule().encode(
-    x="x:Q"
-)
+zero_x = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule().encode(x="x:Q")
 
-zero_y = alt.Chart(
-    pd.DataFrame({"y": [0]})
-).mark_rule().encode(
-    y="y:Q"
-)
+zero_y = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule().encode(y="y:Q")
 
 labels = (
     alt.Chart(scatter_df)
@@ -521,21 +509,13 @@ st.subheader("分析データのダウンロード")
 
 main_csv_df = decomposition_df.copy()
 
-main_csv_df["industry_name"] = main_csv_df["industry"].map(
-    INDUSTRY_NAMES
-)
+main_csv_df["industry_name"] = main_csv_df["industry"].map(INDUSTRY_NAMES)
 
-main_csv_df["start_share_pct"] = (
-    main_csv_df["start_share"] * 100
-)
+main_csv_df["start_share_pct"] = main_csv_df["start_share"] * 100
 
-main_csv_df["end_share_pct"] = (
-    main_csv_df["end_share"] * 100
-)
+main_csv_df["end_share_pct"] = main_csv_df["end_share"] * 100
 
-main_csv_df["share_change_pt"] = (
-    main_csv_df["share_change"] * 100
-)
+main_csv_df["share_change_pt"] = main_csv_df["share_change"] * 100
 
 main_csv_df = main_csv_df[
     [
@@ -688,18 +668,14 @@ st.markdown(
 )
 
 comparison_industries = [
-    industry
-    for industry in COMPOSITION_INDUSTRIES
-    if industry != "C"
+    industry for industry in COMPOSITION_INDUSTRIES if industry != "C"
 ]
 
-employment_type_summary = (
-    create_employment_type_composition_summary(
-        raw_df,
-        industry_codes=comparison_industries,
-        start_year=2015,
-        end_year=2025,
-    )
+employment_type_summary = create_employment_type_composition_summary(
+    raw_df,
+    industry_codes=comparison_industries,
+    start_year=2015,
+    end_year=2025,
 )
 
 employment_type_display = employment_type_summary.rename(
