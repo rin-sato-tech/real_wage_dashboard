@@ -517,6 +517,71 @@ st.altair_chart(
     width="stretch",
 )
 
+st.subheader("分析データのダウンロード")
+
+main_csv_df = decomposition_df.copy()
+
+main_csv_df["industry_name"] = main_csv_df["industry"].map(
+    INDUSTRY_NAMES
+)
+
+main_csv_df["start_share_pct"] = (
+    main_csv_df["start_share"] * 100
+)
+
+main_csv_df["end_share_pct"] = (
+    main_csv_df["end_share"] * 100
+)
+
+main_csv_df["share_change_pt"] = (
+    main_csv_df["share_change"] * 100
+)
+
+main_csv_df = main_csv_df[
+    [
+        "industry",
+        "industry_name",
+        "start_wage",
+        "end_wage",
+        "start_share_pct",
+        "end_share_pct",
+        "share_change_pt",
+        "within_wage_effect",
+        "composition_effect",
+        "centered_composition_effect",
+        "centered_composition_effect_pt",
+        "interaction_effect",
+        "total_contribution",
+    ]
+].rename(
+    columns={
+        "industry": "industry_code",
+        "industry_name": "industry_name",
+        "start_wage": "wage_2015",
+        "end_wage": "wage_2025",
+        "start_share_pct": "employment_share_2015_pct",
+        "end_share_pct": "employment_share_2025_pct",
+        "share_change_pt": "employment_share_change_pt",
+        "within_wage_effect": "within_wage_effect_yen",
+        "composition_effect": "composition_effect_yen",
+        "centered_composition_effect": "centered_composition_effect_yen",
+        "centered_composition_effect_pt": "centered_composition_effect_pt",
+        "interaction_effect": "interaction_effect_yen",
+        "total_contribution": "total_contribution_yen",
+    }
+)
+
+main_csv = main_csv_df.to_csv(
+    index=False,
+).encode("utf-8-sig")
+
+st.download_button(
+    label="産業構成効果分析CSVをダウンロード",
+    data=main_csv,
+    file_name="industry_composition_analysis.csv",
+    mime="text/csv",
+)
+
 st.divider()
 
 st.subheader("再構築平均賃金と調査産業計")
@@ -672,4 +737,30 @@ st.markdown(
 st.caption(
     "就業形態別比較では、2025年のパートタイム労働者について"
     "産業Cの賃金データが揃わないため、Cを除く共通15産業を対象としています。"
+)
+
+employment_type_csv_df = employment_type_summary.rename(
+    columns={
+        "employment_type": "employment_type",
+        "industry_count": "industry_count",
+        "within_effect_pt": "within_wage_effect_pt",
+        "composition_effect_pt": "composition_effect_pt",
+        "interaction_effect_pt": "interaction_effect_pt",
+        "total_change_pct": "total_wage_change_pct",
+    }
+)
+
+employment_type_csv_df["industry_scope"] = "Cを除く共通15産業"
+employment_type_csv_df["start_year"] = 2015
+employment_type_csv_df["end_year"] = 2025
+
+employment_type_csv = employment_type_csv_df.to_csv(
+    index=False,
+).encode("utf-8-sig")
+
+st.download_button(
+    label="就業形態別比較CSVをダウンロード",
+    data=employment_type_csv,
+    file_name="industry_composition_by_employment_type.csv",
+    mime="text/csv",
 )
