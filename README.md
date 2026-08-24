@@ -167,6 +167,32 @@ e-Statの消費者物価指数と厚生労働省「毎月勤労統計調査」�
 
 ---
 
+### 産業構成効果分析
+
+2015年平均から2025年平均までの平均賃金変化を、
+
+- 産業内賃金効果
+- 産業構成効果
+- 交差効果
+
+に分解し、平均賃金上昇が各産業内部の賃金上昇によるものか、産業別の雇用シェア変化によるものかを確認します。
+
+主要16産業から再構築した平均賃金は2015→2025年で約10.30%上昇し、
+
+- 産業内賃金効果：+10.66pt
+- 産業構成効果：-0.21pt
+- 交差効果：-0.15pt
+
+となりました。
+
+平均賃金上昇の中心は各産業内部の賃金上昇であり、産業構成変化は10年間全体ではわずかな押し下げ要因でした。
+
+また、産業別の雇用シェア変化と構成寄与、時期別分解、一般労働者・パートタイム労働者別の補助分析も確認できます。
+
+詳細は `docs/analyzing/industry_composition_analysis.md` を参照してください。
+
+---
+
 ## 使用データ
 
 ### 消費者物価指数
@@ -213,7 +239,8 @@ real_wage_dashboard/
 │   ├── 4_雇用形態比較.py
 │   ├── 5_給与構成分析.py
 │   ├── 6_労働投入分析.py
-│   └── 7_産業別分析.py
+│   ├── 7_産業別分析.py
+│   └── 8_産業構成効果分析.py
 ├── src/real_wage_dashboard/
 │   ├── cpi_service.py
 │   ├── wage_service.py
@@ -222,14 +249,16 @@ real_wage_dashboard/
 │   ├── working_days_service.py
 │   ├── employment_analysis.py
 │   ├── labor_input_analysis.py
-│   └── industry_analysis.py
+│   ├── industry_analysis.py
+│   └── industry_composition_analysis.py
 ├── docs/
 │   ├── employment_comparison_analysis.md
 │   ├── wage_analysis_roadmap.md
 │   └── analyzing/
 │       ├── wage_composition_analysis.md
 │       ├── labor_input_analysis.md
-│       └── industry_wage_analysis.md
+│       ├── industry_wage_analysis.md
+│       └── industry_composition_analysis.md
 ├── data/raw/
 └── tests/
 ```
@@ -279,6 +308,8 @@ uv run ruff format --check .
 - `labor_input_analysis.csv`
 - `industry_comparison_2015_2025.csv`
 - `industry_yearly.csv`
+- `industry_composition_analysis.csv`
+- `industry_composition_by_employment_type.csv`
 
 CSVには分析に使用した条件列も含め、Tableau等での二次分析にも利用できる形式としています。
 
