@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 EFFECTIVE_JOB_OPENINGS_SHEET = "第３表ー１（パート含む）"
 
 # Excel上の季節調整値（月次）の列番号
@@ -41,15 +40,16 @@ def load_effective_job_openings_excel(
     )
 
 
-def create_effective_job_openings_dataframe(
-    raw_df: pd.DataFrame,
-) -> pd.DataFrame:
+def create_effective_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
     """有効求人倍率の季節調整済み月次系列を作成する。"""
 
-    if raw_df.shape[1] <= max(SEASONALLY_ADJUSTED_MONTH_COLUMNS):
-        raise ValueError(
-            "有効求人倍率データに必要な列がありません。"
-        )
+    required_columns = {
+        0,
+        *SEASONALLY_ADJUSTED_MONTH_COLUMNS.keys(),
+    }
+
+    if not required_columns.issubset(raw_df.columns):
+        raise ValueError("有効求人倍率データに必要な列がありません。")
 
     # 西暦列と季節調整済み月次列だけ取得
     df = raw_df.loc[
@@ -269,15 +269,16 @@ def load_new_job_openings_excel(
     )
 
 
-def create_new_job_openings_dataframe(
-    raw_df: pd.DataFrame,
-) -> pd.DataFrame:
+def create_new_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
     """新規求人倍率の季節調整済み月次系列を作成する。"""
 
-    if raw_df.shape[1] <= max(SEASONALLY_ADJUSTED_MONTH_COLUMNS):
-        raise ValueError(
-            "新規求人倍率データに必要な列がありません。"
-        )
+    required_columns = {
+        0,
+        *SEASONALLY_ADJUSTED_MONTH_COLUMNS.keys(),
+    }
+
+    if not required_columns.issubset(raw_df.columns):
+        raise ValueError("新規求人倍率データに必要な列がありません。")
 
     df = raw_df.loc[
         :,

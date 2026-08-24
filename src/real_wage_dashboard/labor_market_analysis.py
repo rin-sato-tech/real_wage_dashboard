@@ -9,15 +9,23 @@ def calculate_lag_correlations(
 ) -> pd.DataFrame:
     """労働需給指標の先行ラグと賃金前年比の相関を計算する。"""
 
+    sorted_df = (
+        df.sort_values("date")
+        .reset_index(drop=True)
+        .copy()
+    )
+
     results = []
 
     for lag in range(max_lag + 1):
-        lagged_labor_market = df[labor_market_column].shift(lag)
+        lagged_labor_market = sorted_df[
+            labor_market_column
+        ].shift(lag)
 
         valid_df = pd.DataFrame(
             {
                 "labor_market": lagged_labor_market,
-                "wage": df[wage_column],
+                "wage": sorted_df[wage_column],
             }
         ).dropna()
 
@@ -36,9 +44,7 @@ def calculate_lag_correlations(
     return pd.DataFrame(results)
 
 
-def add_labor_market_regime(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+def add_labor_market_regime(df: pd.DataFrame) -> pd.DataFrame:
     """分析期間に局面区分を付与する。"""
 
     result = df.copy()
@@ -104,10 +110,13 @@ def calculate_regime_lag_correlations(
     labor_market_columns: dict[str, str],
     wage_column: str = "scheduled_cash_earnings_yoy",
     max_lag: int = 12,
+    analysis_start: str = "2000-01-01",
+    analysis_end: str = "2025-12-01",
 ) -> pd.DataFrame:
     """局面別に労働需給指標の先行ラグと賃金前年比の相関を計算する。
 
-    ラグは全期間で作成してから、賃金時点の局面ごとに集計する。
+    ラグは分析期間以前のデータも含めて作成し、
+    相関計算時に分析対象期間へ絞り込む。
     """
 
     sorted_df = (
@@ -126,7 +135,14 @@ def calculate_regime_lag_correlations(
                 sorted_df[column_name].shift(lag)
             )
 
-            for regime, regime_df in sorted_df.groupby(
+            analysis_df = sorted_df.loc[
+                sorted_df["date"].between(
+                    analysis_start,
+                    analysis_end,
+                )
+            ]
+
+            for regime, regime_df in analysis_df.groupby(
                 "regime",
                 sort=False,
             ):
@@ -134,7 +150,9 @@ def calculate_regime_lag_correlations(
                     [lagged_column, wage_column]
                 ].dropna()
 
-                correlation = valid_df[lagged_column].corr(
+                correlation = valid_df[
+                    lagged_column
+                ].corr(
                     valid_df[wage_column]
                 )
 
@@ -200,23 +218,27 @@ def calculate_quarterly_lag_correlations(
 ) -> pd.DataFrame:
     """四半期データの先行ラグと賃金前年比の相関を計算する。"""
 
+    sorted_df = (
+        df.sort_values("date")
+        .reset_index(drop=True)
+        .copy()
+    )
+
     results = []
 
     for lag in range(max_lag + 1):
-        lagged_labor_market = df[
+        lagged_labor_market = sorted_df[
             labor_market_column
         ].shift(lag)
 
         valid_df = pd.DataFrame(
             {
                 "labor_market": lagged_labor_market,
-                "wage": df[wage_column],
+                "wage": sorted_df[wage_column],
             }
         ).dropna()
 
-        correlation = valid_df[
-            "labor_market"
-        ].corr(
+        correlation = valid_df["labor_market"].corr(
             valid_df["wage"]
         )
 
