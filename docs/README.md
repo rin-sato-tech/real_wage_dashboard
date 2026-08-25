@@ -55,6 +55,7 @@
 | [data_sources.md](reference/data_sources.md)             | 使用データの出典、取得方法、保存先、更新手順 |
 | [metric_definitions.md](reference/metric_definitions.md) | 指標、計算式、単位、解釈上の注意             |
 | [methodology.md](reference/methodology.md)               | 共通分析条件、比較期間、検証・解釈方針       |
+| [implementation_map.md](reference/implementation_map.md) | 画面、処理モジュール、テスト、分析文書の対応 |
 
 ---
 
@@ -105,3 +106,4 @@
 - 入力データ、取得方法、統計表ID、読み込み条件を変更した場合は、`reference/data_sources.md`を更新する。
 - 指標、計算式、単位、列の意味を変更した場合は、`reference/metric_definitions.md`を更新する。
 - 共通分析条件、比較期間、集計・分解・相関の方針を変更した場合は、`reference/methodology.md`を更新する。
+- ページ、処理モジュール、テスト、分析文書の対応関係を変更した場合は、`reference/implementation_map.md`を更新する。
