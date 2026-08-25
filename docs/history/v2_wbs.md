@@ -35,7 +35,7 @@ git switch -c feature/v2-wage-analysis
 
 ```text
 docs/history/v2_requirements.md
-docs/v2_wbs.md
+docs/history/v2_wbs.md
 ```
 
 #### 1-3. v1状態確認
