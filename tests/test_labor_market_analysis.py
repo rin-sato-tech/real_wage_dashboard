@@ -2,6 +2,8 @@ import pandas as pd
 
 from real_wage_dashboard.labor_market_analysis import (
     add_labor_market_regime,
+    add_labor_market_tightness_columns,
+    calculate_correlations,
     calculate_lag_correlations,
     calculate_regime_lag_correlations,
 )
@@ -71,3 +73,57 @@ def test_regime_lag_uses_data_before_analysis_start():
     ].iloc[0]
 
     assert target["observation_count"] == 12
+
+
+def test_add_labor_market_tightness_columns():
+    df = pd.DataFrame(
+        {
+            "effective_job_openings_ratio": [1.2],
+            "unemployment_rate": [2.5],
+            "new_job_openings_ratio": [2.0],
+        }
+    )
+
+    result = add_labor_market_tightness_columns(df)
+
+    assert result.loc[
+        0,
+        "labor_market_tightness_effective_jobs",
+    ] == 1.2
+
+    assert result.loc[
+        0,
+        "labor_market_tightness_unemployment",
+    ] == -2.5
+
+    assert result.loc[
+        0,
+        "labor_market_tightness_new_jobs",
+    ] == 2.0
+
+def test_calculate_correlations():
+    df = pd.DataFrame(
+        {
+            "indicator_a": [1.0, 2.0, 3.0],
+            "indicator_b": [3.0, 2.0, 1.0],
+            "scheduled_cash_earnings_yoy": [
+                1.0,
+                2.0,
+                3.0,
+            ],
+        }
+    )
+
+    result = calculate_correlations(
+        df,
+        {
+            "A": "indicator_a",
+            "B": "indicator_b",
+        },
+    )
+
+    result = result.set_index("indicator")
+
+    assert result.loc["A", "correlation"] == 1.0
+    assert result.loc["B", "correlation"] == -1.0
+    assert result.loc["A", "observation_count"] == 3

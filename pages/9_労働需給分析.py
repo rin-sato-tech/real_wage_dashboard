@@ -5,6 +5,8 @@ import streamlit as st
 from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.labor_market_analysis import (
     add_labor_market_regime,
+    add_labor_market_tightness_columns,
+    calculate_correlations,
     calculate_lag_correlations,
     calculate_quarterly_lag_correlations,
     calculate_regime_correlations,
@@ -226,17 +228,7 @@ full_analysis_df = (
     .reset_index(drop=True)
 )
 
-full_analysis_df["labor_market_tightness_effective_jobs"] = full_analysis_df[
-    "effective_job_openings_ratio"
-]
-
-full_analysis_df["labor_market_tightness_unemployment"] = -full_analysis_df[
-    "unemployment_rate"
-]
-
-full_analysis_df["labor_market_tightness_new_jobs"] = full_analysis_df[
-    "new_job_openings_ratio"
-]
+full_analysis_df = add_labor_market_tightness_columns(full_analysis_df)
 
 full_analysis_df = add_labor_market_regime(full_analysis_df)
 
@@ -258,19 +250,10 @@ labor_market_columns = {
     "新規求人倍率": "labor_market_tightness_new_jobs",
 }
 
-correlation_rows = []
-
-for indicator_name, column_name in labor_market_columns.items():
-    correlation_rows.append(
-        {
-            "indicator": indicator_name,
-            "correlation": analysis_df[column_name].corr(
-                analysis_df["scheduled_cash_earnings_yoy"]
-            ),
-        }
-    )
-
-correlation_df = pd.DataFrame(correlation_rows)
+correlation_df = calculate_correlations(
+    analysis_df,
+    labor_market_columns,
+)
 
 regime_correlation_df = calculate_regime_correlations(
     analysis_df,

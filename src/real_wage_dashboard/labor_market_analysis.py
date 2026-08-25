@@ -213,3 +213,58 @@ def calculate_quarterly_lag_correlations(
         )
 
     return pd.DataFrame(results)
+
+def add_labor_market_tightness_columns(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """労働需給指標を、値が大きいほど逼迫する方向に統一する。"""
+
+    result = df.copy()
+
+    result["labor_market_tightness_effective_jobs"] = result[
+        "effective_job_openings_ratio"
+    ]
+
+    result["labor_market_tightness_unemployment"] = -result[
+        "unemployment_rate"
+    ]
+
+    result["labor_market_tightness_new_jobs"] = result[
+        "new_job_openings_ratio"
+    ]
+
+    return result
+
+
+def calculate_correlations(
+    df: pd.DataFrame,
+    labor_market_columns: dict[str, str],
+    wage_column: str = "scheduled_cash_earnings_yoy",
+) -> pd.DataFrame:
+    """労働需給指標と賃金前年比の同時点相関を計算する。"""
+
+    results = []
+
+    for indicator_name, column_name in labor_market_columns.items():
+        valid_df = df[
+            [
+                column_name,
+                wage_column,
+            ]
+        ].dropna()
+
+        correlation = valid_df[
+            column_name
+        ].corr(
+            valid_df[wage_column]
+        )
+
+        results.append(
+            {
+                "indicator": indicator_name,
+                "correlation": correlation,
+                "observation_count": len(valid_df),
+            }
+        )
+
+    return pd.DataFrame(results)
