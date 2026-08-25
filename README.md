@@ -111,7 +111,9 @@ real_wage_dashboard/
 │       ├── v2_requirements.md
 │       ├── v2_wbs.md
 │       └── v2_release_notes.md
-├── data/raw/                       # 入力データ
+├── data/
+│   ├── README.md                   # 入力データの運用方法
+│   └── raw/                        # 公表元から取得した入力データ
 ├── scripts/                        # データ確認用スクリプト
 └── tests/                          # 自動テスト
 ```
@@ -201,3 +203,4 @@ CSVには分析条件列を含め、Tableau等での二次分析にも利用で�
 - [産業構成効果分析](docs/analysis/05_industry_composition.md)
 - [労働需給と賃金分析](docs/analysis/06_labor_market.md)
 - [分析ロードマップ](docs/planning/wage_analysis_roadmap.md)
+- [データディレクトリ運用ガイド](data/README.md)
