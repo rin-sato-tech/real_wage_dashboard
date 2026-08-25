@@ -34,8 +34,8 @@ git switch -c feature/v2-wage-analysis
 追加する。
 
 ```text
-docs/v2_requirements.md
-docs/v2_wbs.md
+docs/history/v2_requirements.md
+docs/history/v2_wbs.md
 ```
 
 #### 1-3. v1状態確認
@@ -704,7 +704,7 @@ uv run ruff format .
 実装途中で仕様変更があった場合のみ、
 
 ```text
-v2_requirements.md
+docs/history/v2_requirements.md
 ```
 
 を実態に合わせて更新する。
