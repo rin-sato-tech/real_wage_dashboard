@@ -207,7 +207,7 @@ Streamlitページを変更した場合：
 4. `docs/analysis/`へ個別分析文書を追加
 5. `docs/analysis/00_overview.md`へ主要結果を反映
 6. `docs/README.md`と本書へ導線を追加
-7. `wage_analysis_roadmap.md`の実施状況を更新
+7. `docs/planning/wage_analysis_roadmap.md`の実施状況を更新
 
 ---
 
