@@ -29,9 +29,7 @@ def load_effective_job_openings_excel(
     path = Path(file_path)
 
     if not path.exists():
-        raise FileNotFoundError(
-            f"有効求人倍率データが見つかりません: {path}"
-        )
+        raise FileNotFoundError(f"有効求人倍率データが見つかりません: {path}")
 
     return pd.read_excel(
         path,
@@ -60,12 +58,7 @@ def create_effective_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFram
     df = df.rename(columns={0: "year"})
 
     # 「1963年」→ 1963
-    df["year"] = (
-        df["year"]
-        .astype(str)
-        .str.replace("年", "", regex=False)
-        .str.strip()
-    )
+    df["year"] = df["year"].astype(str).str.replace("年", "", regex=False).str.strip()
 
     df["year"] = pd.to_numeric(
         df["year"],
@@ -87,19 +80,12 @@ def create_effective_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFram
     # 横持ち → 縦持ち
     df = df.melt(
         id_vars="year",
-        value_vars=[
-            f"month_{month}"
-            for month in range(1, 13)
-        ],
+        value_vars=[f"month_{month}" for month in range(1, 13)],
         var_name="month",
         value_name="effective_job_openings_ratio",
     )
 
-    df["month"] = (
-        df["month"]
-        .str.replace("month_", "", regex=False)
-        .astype(int)
-    )
+    df["month"] = df["month"].str.replace("month_", "", regex=False).astype(int)
 
     df["effective_job_openings_ratio"] = pd.to_numeric(
         df["effective_job_openings_ratio"],
@@ -116,9 +102,7 @@ def create_effective_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFram
 
     # 最新年は年途中なので、未公表月のNaNを除外
     df = (
-        df.dropna(
-            subset=["effective_job_openings_ratio"]
-        )
+        df.dropna(subset=["effective_job_openings_ratio"])
         .drop_duplicates(
             subset=["date"],
             keep="last",
@@ -143,9 +127,7 @@ def load_unemployment_rate_excel(
     path = Path(file_path)
 
     if not path.exists():
-        raise FileNotFoundError(
-            f"完全失業率データが見つかりません: {path}"
-        )
+        raise FileNotFoundError(f"完全失業率データが見つかりません: {path}")
 
     return pd.read_excel(
         path,
@@ -162,9 +144,7 @@ def create_unemployment_rate_dataframe(
     required_columns = {0, 1, 19}
 
     if not required_columns.issubset(raw_df.columns):
-        raise ValueError(
-            "完全失業率データに必要な列がありません。"
-        )
+        raise ValueError("完全失業率データに必要な列がありません。")
 
     df = raw_df.loc[:, [0, 1, 19]].copy()
 
@@ -177,10 +157,7 @@ def create_unemployment_rate_dataframe(
     )
 
     df["month"] = (
-        df["month_raw"]
-        .astype(str)
-        .str.replace("月", "", regex=False)
-        .str.strip()
+        df["month_raw"].astype(str).str.replace("月", "", regex=False).str.strip()
     )
 
     df["month"] = pd.to_numeric(
@@ -247,6 +224,7 @@ def create_unemployment_rate_dataframe(
         ]
     ]
 
+
 NEW_JOB_OPENINGS_SHEET = "第２表ー１（パート含む）"
 
 
@@ -258,9 +236,7 @@ def load_new_job_openings_excel(
     path = Path(file_path)
 
     if not path.exists():
-        raise FileNotFoundError(
-            f"新規求人倍率データが見つかりません: {path}"
-        )
+        raise FileNotFoundError(f"新規求人倍率データが見つかりません: {path}")
 
     return pd.read_excel(
         path,
@@ -287,12 +263,7 @@ def create_new_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.rename(columns={0: "year"})
 
-    df["year"] = (
-        df["year"]
-        .astype(str)
-        .str.replace("年", "", regex=False)
-        .str.strip()
-    )
+    df["year"] = df["year"].astype(str).str.replace("年", "", regex=False).str.strip()
 
     df["year"] = pd.to_numeric(
         df["year"],
@@ -310,19 +281,12 @@ def create_new_job_openings_dataframe(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.melt(
         id_vars="year",
-        value_vars=[
-            f"month_{month}"
-            for month in range(1, 13)
-        ],
+        value_vars=[f"month_{month}" for month in range(1, 13)],
         var_name="month",
         value_name="new_job_openings_ratio",
     )
 
-    df["month"] = (
-        df["month"]
-        .str.replace("month_", "", regex=False)
-        .astype(int)
-    )
+    df["month"] = df["month"].str.replace("month_", "", regex=False).astype(int)
 
     df["new_job_openings_ratio"] = pd.to_numeric(
         df["new_job_openings_ratio"],
@@ -363,8 +327,7 @@ def create_labor_market_dataframe(
     """労働需給の月次指標を日付で結合する。"""
 
     df = (
-        effective_job_openings_df
-        .merge(
+        effective_job_openings_df.merge(
             unemployment_rate_df,
             on="date",
             how="inner",
@@ -391,9 +354,7 @@ def load_tankan_employment_di_csv(
     path = Path(file_path)
 
     if not path.exists():
-        raise FileNotFoundError(
-            f"短観CSVが見つかりません: {path}"
-        )
+        raise FileNotFoundError(f"短観CSVが見つかりません: {path}")
 
     return pd.read_csv(
         path,
@@ -464,14 +425,8 @@ def add_tankan_tightness_columns(
 
     result = df.copy()
 
-    result["large_enterprise_tightness"] = (
-        -result["large_enterprise_employment_di"]
-    )
-    result["medium_enterprise_tightness"] = (
-        -result["medium_enterprise_employment_di"]
-    )
-    result["small_enterprise_tightness"] = (
-        -result["small_enterprise_employment_di"]
-    )
+    result["large_enterprise_tightness"] = -result["large_enterprise_employment_di"]
+    result["medium_enterprise_tightness"] = -result["medium_enterprise_employment_di"]
+    result["small_enterprise_tightness"] = -result["small_enterprise_employment_di"]
 
     return result

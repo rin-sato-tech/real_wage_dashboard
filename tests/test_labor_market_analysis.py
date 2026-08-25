@@ -67,8 +67,7 @@ def test_regime_lag_uses_data_before_analysis_start():
     )
 
     target = result[
-        (result["regime"] == "2000年代～震災後")
-        & (result["lag_months"] == 12)
+        (result["regime"] == "2000年代～震災後") & (result["lag_months"] == 12)
     ].iloc[0]
 
     assert target["observation_count"] == 12

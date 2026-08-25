@@ -6,29 +6,10 @@ from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.labor_market_analysis import (
     add_labor_market_regime,
     calculate_lag_correlations,
-    calculate_regime_correlations,
-)
-from real_wage_dashboard.labor_market_service import (
-    create_effective_job_openings_dataframe,
-    create_labor_market_dataframe,
-    create_new_job_openings_dataframe,
-    create_unemployment_rate_dataframe,
-    load_effective_job_openings_excel,
-    load_new_job_openings_excel,
-    load_unemployment_rate_excel,
-)
-from real_wage_dashboard.wage_service import (
-    create_wage_dataframe,
-    load_wage_csv,
-)
-from real_wage_dashboard.labor_market_analysis import (
-    add_labor_market_regime,
-    calculate_lag_correlations,
     calculate_quarterly_lag_correlations,
     calculate_regime_correlations,
     create_quarterly_wage_dataframe,
 )
-
 from real_wage_dashboard.labor_market_service import (
     add_tankan_tightness_columns,
     create_effective_job_openings_dataframe,
@@ -40,6 +21,10 @@ from real_wage_dashboard.labor_market_service import (
     load_new_job_openings_excel,
     load_tankan_employment_di_csv,
     load_unemployment_rate_excel,
+)
+from real_wage_dashboard.wage_service import (
+    create_wage_dataframe,
+    load_wage_csv,
 )
 
 st.set_page_config(
@@ -175,23 +160,17 @@ with st.expander("用語・グラフの見方"):
 effective_raw_df = load_effective_job_openings_excel(
     "data/raw/labor_market/effective_job_openings_ratio.xlsx"
 )
-effective_df = create_effective_job_openings_dataframe(
-    effective_raw_df
-)
+effective_df = create_effective_job_openings_dataframe(effective_raw_df)
 
 unemployment_raw_df = load_unemployment_rate_excel(
     "data/raw/labor_market/unemployment_rate.xlsx"
 )
-unemployment_df = create_unemployment_rate_dataframe(
-    unemployment_raw_df
-)
+unemployment_df = create_unemployment_rate_dataframe(unemployment_raw_df)
 
 new_jobs_raw_df = load_new_job_openings_excel(
     "data/raw/labor_market/new_job_openings_ratio.xlsx"
 )
-new_jobs_df = create_new_job_openings_dataframe(
-    new_jobs_raw_df
-)
+new_jobs_df = create_new_job_openings_dataframe(new_jobs_raw_df)
 
 labor_market_df = create_labor_market_dataframe(
     effective_df,
@@ -204,9 +183,7 @@ labor_market_df = create_labor_market_dataframe(
 # 所定内給与前年比
 # ----------------------------
 
-raw_wage_df = load_wage_csv(
-    WAGE_DATA_PATH
-)
+raw_wage_df = load_wage_csv(WAGE_DATA_PATH)
 
 wage_df = create_wage_dataframe(
     raw_wage_df,
@@ -223,8 +200,7 @@ wage_df = wage_df.rename(
 )
 
 wage_df["scheduled_cash_earnings_yoy"] = (
-    wage_df["scheduled_cash_earnings"]
-    / wage_df["scheduled_cash_earnings"].shift(12)
+    wage_df["scheduled_cash_earnings"] / wage_df["scheduled_cash_earnings"].shift(12)
     - 1
 ) * 100
 
@@ -234,8 +210,7 @@ wage_df["scheduled_cash_earnings_yoy"] = (
 # ----------------------------
 
 full_analysis_df = (
-    labor_market_df
-    .merge(
+    labor_market_df.merge(
         wage_df[
             [
                 "date",
@@ -251,21 +226,19 @@ full_analysis_df = (
     .reset_index(drop=True)
 )
 
-full_analysis_df["labor_market_tightness_effective_jobs"] = (
-    full_analysis_df["effective_job_openings_ratio"]
-)
+full_analysis_df["labor_market_tightness_effective_jobs"] = full_analysis_df[
+    "effective_job_openings_ratio"
+]
 
-full_analysis_df["labor_market_tightness_unemployment"] = (
-    -full_analysis_df["unemployment_rate"]
-)
+full_analysis_df["labor_market_tightness_unemployment"] = -full_analysis_df[
+    "unemployment_rate"
+]
 
-full_analysis_df["labor_market_tightness_new_jobs"] = (
-    full_analysis_df["new_job_openings_ratio"]
-)
+full_analysis_df["labor_market_tightness_new_jobs"] = full_analysis_df[
+    "new_job_openings_ratio"
+]
 
-full_analysis_df = add_labor_market_regime(
-    full_analysis_df
-)
+full_analysis_df = add_labor_market_regime(full_analysis_df)
 
 analysis_df = full_analysis_df.loc[
     full_analysis_df["date"].between(
@@ -297,9 +270,7 @@ for indicator_name, column_name in labor_market_columns.items():
         }
     )
 
-correlation_df = pd.DataFrame(
-    correlation_rows
-)
+correlation_df = pd.DataFrame(correlation_rows)
 
 regime_correlation_df = calculate_regime_correlations(
     analysis_df,
@@ -437,13 +408,17 @@ wage_chart = (
     )
 )
 
-combined_chart = alt.layer(
-    labor_market_chart,
-    wage_chart,
-).resolve_scale(
-    y="independent",
-).properties(
-    height=420,
+combined_chart = (
+    alt.layer(
+        labor_market_chart,
+        wage_chart,
+    )
+    .resolve_scale(
+        y="independent",
+    )
+    .properties(
+        height=420,
+    )
 )
 
 st.caption(f"青：{selected_indicator}　／　赤：所定内給与前年比")
@@ -492,9 +467,7 @@ scatter_df = analysis_df[
     ]
 ].dropna()
 
-selected_correlation = scatter_df[
-    selected_column
-].corr(
+selected_correlation = scatter_df[selected_column].corr(
     scatter_df["scheduled_cash_earnings_yoy"]
 )
 
@@ -531,14 +504,10 @@ scatter_chart = (
     )
 )
 
-regression_line = (
-    scatter_chart
-    .transform_regression(
-        selected_column,
-        "scheduled_cash_earnings_yoy",
-    )
-    .mark_line()
-)
+regression_line = scatter_chart.transform_regression(
+    selected_column,
+    "scheduled_cash_earnings_yoy",
+).mark_line()
 
 st.altair_chart(
     scatter_chart + regression_line,
@@ -560,10 +529,7 @@ st.divider()
 st.subheader("同時点相関")
 
 display_correlation_df = correlation_df.copy()
-display_correlation_df["correlation"] = (
-    display_correlation_df["correlation"]
-    .round(3)
-)
+display_correlation_df["correlation"] = display_correlation_df["correlation"].round(3)
 
 st.dataframe(
     display_correlation_df,
@@ -577,15 +543,9 @@ st.subheader("労働需給指標のラグ相関")
 
 lag_comparison_df = pd.concat(
     [
-        effective_lag_df.assign(
-            indicator="有効求人倍率"
-        ),
-        unemployment_lag_df.assign(
-            indicator="完全失業率"
-        ),
-        new_jobs_lag_df.assign(
-            indicator="新規求人倍率"
-        ),
+        effective_lag_df.assign(indicator="有効求人倍率"),
+        unemployment_lag_df.assign(indicator="完全失業率"),
+        new_jobs_lag_df.assign(indicator="新規求人倍率"),
     ],
     ignore_index=True,
 )
@@ -664,19 +624,13 @@ for indicator_name, lag_df in [
         new_jobs_lag_df,
     ),
 ]:
-    max_row = lag_df.loc[
-        lag_df["correlation"].idxmax()
-    ]
+    max_row = lag_df.loc[lag_df["correlation"].idxmax()]
 
     max_lag_rows.append(
         {
             "indicator": indicator_name,
-            "max_correlation": max_row[
-                "correlation"
-            ],
-            "lag_months": int(
-                max_row["lag_months"]
-            ),
+            "max_correlation": max_row["correlation"],
+            "lag_months": int(max_row["lag_months"]),
         }
     )
 
@@ -684,10 +638,7 @@ max_lag_df = pd.DataFrame(max_lag_rows)
 
 display_max_lag_df = max_lag_df.copy()
 
-display_max_lag_df["max_correlation"] = (
-    display_max_lag_df["max_correlation"]
-    .round(3)
-)
+display_max_lag_df["max_correlation"] = display_max_lag_df["max_correlation"].round(3)
 
 display_max_lag_df = display_max_lag_df.rename(
     columns={
@@ -725,10 +676,7 @@ st.subheader("局面別にみた労働需給と賃金の関係")
 
 regime_display_df = regime_correlation_df.copy()
 
-regime_display_df["correlation"] = (
-    regime_display_df["correlation"]
-    .round(3)
-)
+regime_display_df["correlation"] = regime_display_df["correlation"].round(3)
 
 regime_order = [
     "2000年代～震災後",
@@ -819,23 +767,20 @@ st.altair_chart(
     regime_chart + zero_line,
     width="stretch",
 )
-regime_table_df = (
-    regime_display_df[
-        [
-            "regime",
-            "indicator",
-            "correlation",
-            "observation_count",
-        ]
+regime_table_df = regime_display_df[
+    [
+        "regime",
+        "indicator",
+        "correlation",
+        "observation_count",
     ]
-    .rename(
-        columns={
-            "regime": "局面",
-            "indicator": "指標",
-            "correlation": "相関係数",
-            "observation_count": "観測数",
-        }
-    )
+].rename(
+    columns={
+        "regime": "局面",
+        "indicator": "指標",
+        "correlation": "相関係数",
+        "observation_count": "観測数",
+    }
 )
 
 with st.expander("局面別の相関係数を表で確認"):
@@ -869,17 +814,11 @@ raw_tankan_df = load_tankan_employment_di_csv(
     "data/raw/labor_market/tankan_employment_di.csv"
 )
 
-tankan_df = create_tankan_employment_di_dataframe(
-    raw_tankan_df
-)
+tankan_df = create_tankan_employment_di_dataframe(raw_tankan_df)
 
-tankan_df = add_tankan_tightness_columns(
-    tankan_df
-)
+tankan_df = add_tankan_tightness_columns(tankan_df)
 
-quarterly_wage_df = create_quarterly_wage_dataframe(
-    analysis_df
-)
+quarterly_wage_df = create_quarterly_wage_dataframe(analysis_df)
 
 tankan_analysis_df = tankan_df.loc[
     tankan_df["date"].between(
@@ -889,8 +828,7 @@ tankan_analysis_df = tankan_df.loc[
 ].copy()
 
 tankan_wage_df = (
-    tankan_analysis_df
-    .merge(
+    tankan_analysis_df.merge(
         quarterly_wage_df,
         on="date",
         how="inner",
@@ -916,9 +854,7 @@ for enterprise_size, column_name in tankan_columns.items():
 
     lag_df["enterprise_size"] = enterprise_size
 
-    tankan_lag_frames.append(
-        lag_df
-    )
+    tankan_lag_frames.append(lag_df)
 
 tankan_lag_df = pd.concat(
     tankan_lag_frames,
@@ -943,12 +879,8 @@ st.markdown(
 tankan_correlation_rows = []
 
 for enterprise_size, column_name in tankan_columns.items():
-    correlation = tankan_wage_df[
-        column_name
-    ].corr(
-        tankan_wage_df[
-            "scheduled_cash_earnings_yoy"
-        ]
+    correlation = tankan_wage_df[column_name].corr(
+        tankan_wage_df["scheduled_cash_earnings_yoy"]
     )
 
     tankan_correlation_rows.append(
@@ -958,14 +890,9 @@ for enterprise_size, column_name in tankan_columns.items():
         }
     )
 
-tankan_correlation_df = pd.DataFrame(
-    tankan_correlation_rows
-)
+tankan_correlation_df = pd.DataFrame(tankan_correlation_rows)
 
-tankan_correlation_df["同時点相関"] = (
-    tankan_correlation_df["同時点相関"]
-    .round(3)
-)
+tankan_correlation_df["同時点相関"] = tankan_correlation_df["同時点相関"].round(3)
 
 st.dataframe(
     tankan_correlation_df,
@@ -1029,36 +956,22 @@ st.altair_chart(
 tankan_max_rows = []
 
 for enterprise_size in tankan_columns:
-    target_df = tankan_lag_df[
-        tankan_lag_df["enterprise_size"]
-        == enterprise_size
-    ]
+    target_df = tankan_lag_df[tankan_lag_df["enterprise_size"] == enterprise_size]
 
-    max_row = target_df.loc[
-        target_df["correlation"].idxmax()
-    ]
+    max_row = target_df.loc[target_df["correlation"].idxmax()]
 
     tankan_max_rows.append(
         {
             "企業規模": enterprise_size,
             "最大相関": max_row["correlation"],
-            "最大ラグ（四半期）": int(
-                max_row["lag_quarters"]
-            ),
-            "最大ラグ（月）": int(
-                max_row["lag_months"]
-            ),
+            "最大ラグ（四半期）": int(max_row["lag_quarters"]),
+            "最大ラグ（月）": int(max_row["lag_months"]),
         }
     )
 
-tankan_max_df = pd.DataFrame(
-    tankan_max_rows
-)
+tankan_max_df = pd.DataFrame(tankan_max_rows)
 
-tankan_max_df["最大相関"] = (
-    tankan_max_df["最大相関"]
-    .round(3)
-)
+tankan_max_df["最大相関"] = tankan_max_df["最大相関"].round(3)
 
 st.dataframe(
     tankan_max_df,
@@ -1114,13 +1027,96 @@ st.dataframe(
     hide_index=True,
 )
 
-csv_data = display_df.to_csv(
+st.divider()
+
+st.subheader("分析データのダウンロード")
+
+st.markdown(
+    """
+    分析に使用したデータをCSVでダウンロードできます。
+
+    - **月次データ**：有効求人倍率、完全失業率、新規求人倍率、所定内給与前年比
+    - **短観データ**：企業規模別の雇用人員判断DIと四半期の所定内給与前年比
+    """
+)
+
+monthly_export_df = analysis_df[
+    [
+        "date",
+        "scheduled_cash_earnings",
+        "scheduled_cash_earnings_yoy",
+        "effective_job_openings_ratio",
+        "unemployment_rate",
+        "new_job_openings_ratio",
+        "labor_market_tightness_effective_jobs",
+        "labor_market_tightness_unemployment",
+        "labor_market_tightness_new_jobs",
+        "regime",
+    ]
+].copy()
+
+monthly_export_df = monthly_export_df.rename(
+    columns={
+        "date": "date",
+        "scheduled_cash_earnings": "scheduled_cash_earnings",
+        "scheduled_cash_earnings_yoy": "scheduled_cash_earnings_yoy",
+        "effective_job_openings_ratio": "effective_job_openings_ratio",
+        "unemployment_rate": "unemployment_rate",
+        "new_job_openings_ratio": "new_job_openings_ratio",
+        "labor_market_tightness_effective_jobs": (
+            "effective_job_openings_ratio_tightness"
+        ),
+        "labor_market_tightness_unemployment": ("unemployment_rate_tightness"),
+        "labor_market_tightness_new_jobs": ("new_job_openings_ratio_tightness"),
+        "regime": "regime",
+    }
+)
+
+monthly_csv = monthly_export_df.to_csv(
     index=False,
 ).encode("utf-8-sig")
 
 st.download_button(
-    label="分析データをCSVでダウンロード",
-    data=csv_data,
-    file_name="labor_market_analysis.csv",
+    label="月次分析データをCSVでダウンロード",
+    data=monthly_csv,
+    file_name="labor_market_monthly_analysis.csv",
     mime="text/csv",
 )
+
+tankan_export_df = tankan_wage_df[
+    [
+        "date",
+        "large_enterprise_employment_di",
+        "medium_enterprise_employment_di",
+        "small_enterprise_employment_di",
+        "large_enterprise_tightness",
+        "medium_enterprise_tightness",
+        "small_enterprise_tightness",
+        "scheduled_cash_earnings_yoy",
+    ]
+].copy()
+
+tankan_csv = tankan_export_df.to_csv(
+    index=False,
+).encode("utf-8-sig")
+
+st.download_button(
+    label="短観分析データをCSVでダウンロード",
+    data=tankan_csv,
+    file_name="tankan_employment_wage_analysis.csv",
+    mime="text/csv",
+)
+
+with st.expander("月次分析データを確認"):
+    st.dataframe(
+        monthly_export_df,
+        width="stretch",
+        hide_index=True,
+    )
+
+with st.expander("短観分析データを確認"):
+    st.dataframe(
+        tankan_export_df,
+        width="stretch",
+        hide_index=True,
+    )
