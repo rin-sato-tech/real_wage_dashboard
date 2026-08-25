@@ -131,9 +131,9 @@ uv run ruff format --check .
 
 ```bash
 uv run python scripts/check_wage_csv.py
-uv run python scripts/check_wage_data.py
-uv run python scripts/check_wage_v2_combinations.py
 uv run python scripts/check_wage_v2_conditions.py
+uv run python scripts/check_wage_v2_combinations.py
+uv run python scripts/check_wage_data.py
 uv run python scripts/check_working_hours_conditions.py
 ```
 
