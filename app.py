@@ -40,7 +40,15 @@ def load_cpi_data(app_id: str, series_code: str) -> tuple[pd.DataFrame, datetime
 def main() -> None:
     st.title("消費者物価指数分析")
 
-    st.caption("e-Stat APIから取得した全国・総合の消費者物価指数を表示します。")
+    st.caption(
+        "賃金の実質化に用いる消費者物価指数について、水準と前年比の推移を確認します。"
+    )
+
+    # -------------------------
+    # 分析条件
+    # -------------------------
+
+    st.subheader("分析条件")
 
     selected_series = st.selectbox(
         "表示する系列",
@@ -48,6 +56,10 @@ def main() -> None:
     )
 
     selected_series_code = CPI_SERIES[selected_series]
+
+    # -------------------------
+    # データ取得
+    # -------------------------
 
     try:
         app_id = st.secrets["ESTAT_APP_ID"]
@@ -79,9 +91,13 @@ def main() -> None:
 
     latest = df.iloc[-1]
 
-    st.subheader("最新データ")
+    # -------------------------
+    # 主要結果
+    # -------------------------
 
-    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    st.subheader("主要結果")
+
+    metric_col1, metric_col2 = st.columns(2)
 
     metric_col1.metric(
         label=selected_series,
@@ -89,13 +105,6 @@ def main() -> None:
     )
 
     metric_col2.metric(
-        label="前月比",
-        value=(
-            f"{latest['mom_pct']:+.1f}%" if pd.notna(latest["mom_pct"]) else "算出不可"
-        ),
-    )
-
-    metric_col3.metric(
         label="前年同月比",
         value=(
             f"{latest['yoy_pct']:+.1f}%" if pd.notna(latest["yoy_pct"]) else "算出不可"
@@ -106,6 +115,10 @@ def main() -> None:
         f"最新データ：{latest['date'].strftime('%Y年%m月')}　"
         f"API取得日時：{fetched_at.strftime('%Y年%m月%d日 %H:%M')}"
     )
+
+    # -------------------------
+    # 時系列推移
+    # -------------------------
 
     st.subheader("時系列推移")
 
@@ -140,6 +153,10 @@ def main() -> None:
         x_label="年月",
         y_label="前年同月比（%）",
     )
+
+    # -------------------------
+    # データ一覧
+    # -------------------------
 
     st.subheader("取得データ")
 
@@ -180,6 +197,10 @@ def main() -> None:
             ),
         },
     )
+
+    # -------------------------
+    # CSV出力
+    # -------------------------
 
     csv_df = df[
         [
@@ -235,6 +256,10 @@ def main() -> None:
         ):
             load_cpi_data.clear()
             st.rerun()
+
+    # -------------------------
+    # 出典・算出方法
+    # -------------------------
 
     with st.expander("データ出典・算出方法"):
         st.markdown(
