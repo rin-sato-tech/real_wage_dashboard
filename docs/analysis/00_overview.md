@@ -230,7 +230,7 @@ flowchart TD
 - [産業別賃金・労働時間分析](04_industry_wage.md)
 - [産業構成効果分析](05_industry_composition.md)
 - [労働需給と賃金分析](06_labor_market.md)
-- [賃金変動要因の分析ロードマップ](../wage_analysis_roadmap.md)
+- [賃金変動要因の分析ロードマップ](../planning/wage_analysis_roadmap.md)
 
 ---
 
