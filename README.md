@@ -96,9 +96,14 @@ real_wage_dashboard/
 │   ├── *_service.py               # データ読み込み・抽出・整形
 │   └── *_analysis.py              # 指標計算・要因分解・集計
 ├── docs/
-│   ├── analysis/00_overview.md     # 分析全体の結論
-│   ├── analyzing/                  # 個別分析の詳細
-│   ├── employment_comparison_analysis.md
+│   ├── analysis/
+│   │   ├── 00_overview.md
+│   │   ├── 01_employment_comparison.md
+│   │   ├── 02_wage_composition.md
+│   │   ├── 03_labor_input.md
+│   │   ├── 04_industry_wage.md
+│   │   ├── 05_industry_composition.md
+│   │   └── 06_labor_market.md
 │   └── wage_analysis_roadmap.md
 ├── data/raw/                       # 入力データ
 ├── scripts/                        # データ確認用スクリプト
@@ -182,10 +187,10 @@ CSVには分析条件列を含め、Tableau等での二次分析にも利用で�
 ## 関連文書
 
 - [分析全体の概要と結論](docs/analysis/00_overview.md)
-- [雇用形態比較](docs/employment_comparison_analysis.md)
-- [給与構成の要因分解](docs/analyzing/wage_composition_analysis.md)
-- [労働投入の要因分解](docs/analyzing/labor_input_analysis.md)
-- [産業別賃金・労働時間分析](docs/analyzing/industry_wage_analysis.md)
-- [産業構成効果分析](docs/analyzing/industry_composition_analysis.md)
-- [労働需給と賃金分析](docs/analyzing/labor_market_analysis.md)
+- [雇用形態比較](docs/analysis/01_employment_comparison.md)
+- [給与構成の要因分解](docs/analysis/02_wage_composition.md)
+- [労働投入の要因分解](docs/analysis/03_labor_input.md)
+- [産業別賃金・労働時間分析](docs/analysis/04_industry_wage.md)
+- [産業構成効果分析](docs/analysis/05_industry_composition.md)
+- [労働需給と賃金分析](docs/analysis/06_labor_market.md)
 - [分析ロードマップ](docs/wage_analysis_roadmap.md)

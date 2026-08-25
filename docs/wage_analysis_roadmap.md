@@ -194,7 +194,7 @@
 - 所定外給与の寄与：+0.04pt
 - 2020年と2022年以降で寄与構造が異なる
 
-詳細：`docs/analyzing/wage_composition_analysis.md`
+詳細：`docs/analysis/02_wage_composition.md`
 
 ---
 
@@ -249,7 +249,7 @@
 
 UIでは2015→2025年を主分析期間とし、完全な年について任意期間比較も可能としている。
 
-詳細：`docs/analyzing/labor_input_analysis.md`
+詳細：`docs/analysis/03_labor_input.md`
 
 ---
 
@@ -338,8 +338,8 @@ UIでは2015→2025年を主分析期間とし、完全な年について任意�
 
 詳細：
 
-- `docs/analyzing/industry_wage_analysis.md`
-- `docs/analyzing/industry_composition_analysis.md`
+- `docs/analysis/04_industry_wage.md`
+- `docs/analysis/05_industry_composition.md`
 
 ---
 
@@ -448,13 +448,7 @@ UIでは2015→2025年を主分析期間とし、完全な年について任意�
 
 詳細：
 
-`docs/analyzing/labor_market_analysis.md`
-
-#### 優先度
-
-**S**
-
-外部データを追加する最初のテーマとして有力。
+`docs/analysis/06_labor_market.md`
 
 ---
 

@@ -224,12 +224,12 @@ flowchart TD
 
 ## 11. 個別分析文書
 
-- [一般労働者・パートタイム労働者比較分析](../employment_comparison_analysis.md)
-- [給与構成の要因分解](../analyzing/wage_composition_analysis.md)
-- [労働投入の要因分解](../analyzing/labor_input_analysis.md)
-- [産業別賃金・労働時間分析](../analyzing/industry_wage_analysis.md)
-- [産業構成効果分析](../analyzing/industry_composition_analysis.md)
-- [労働需給と賃金分析](../analyzing/labor_market_analysis.md)
+- [一般労働者・パートタイム労働者比較分析](01_employment_comparison.md)
+- [給与構成の要因分解](02_wage_composition.md)
+- [労働投入の要因分解](03_labor_input.md)
+- [産業別賃金・労働時間分析](04_industry_wage.md)
+- [産業構成効果分析](05_industry_composition.md)
+- [労働需給と賃金分析](06_labor_market.md)
 - [賃金変動要因の分析ロードマップ](../wage_analysis_roadmap.md)
 
 ---
