@@ -117,6 +117,8 @@ git log -1 --oneline -- data/
 
 ## 7. 更新後の検証
 
+各確認スクリプトの用途と推奨実行順序は、[`scripts/README.md`](../scripts/README.md)を参照する。
+
 最低限、次を実行する。
 
 ```bash

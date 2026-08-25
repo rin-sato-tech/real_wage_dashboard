@@ -114,7 +114,9 @@ real_wage_dashboard/
 ├── data/
 │   ├── README.md                   # 入力データの運用方法
 │   └── raw/                        # 公表元から取得した入力データ
-├── scripts/                        # データ確認用スクリプト
+├── scripts/
+│   ├── README.md                   # 確認スクリプトの用途と実行方法
+│   └── check_*.py                  # 実データ・API確認用スクリプト
 └── tests/                          # 自動テスト
 ```
 
@@ -204,3 +206,4 @@ CSVには分析条件列を含め、Tableau等での二次分析にも利用で�
 - [労働需給と賃金分析](docs/analysis/06_labor_market.md)
 - [分析ロードマップ](docs/planning/wage_analysis_roadmap.md)
 - [データディレクトリ運用ガイド](data/README.md)
+- [確認スクリプト運用ガイド](scripts/README.md)
