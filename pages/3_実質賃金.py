@@ -27,6 +27,10 @@ from real_wage_dashboard.real_wage_analysis import (
     add_real_wage_changes,
     create_real_wage_dataframe,
 )
+from real_wage_dashboard.ui import (
+    PERIOD_OPTIONS,
+    filter_display_period,
+)
 from real_wage_dashboard.wage_analysis import add_wage_moving_average
 from real_wage_dashboard.wage_service import (
     create_wage_dataframe,
@@ -225,15 +229,7 @@ def main() -> None:
 
     st.subheader("時系列推移")
 
-    period_options = [
-        "直近1年",
-        "直近3年",
-        "直近5年",
-        "直近10年",
-        "直近20年",
-        "直近30年",
-        "全期間",
-    ]
+    period_options = list(PERIOD_OPTIONS.keys())
 
     period = st.selectbox(
         "表示期間",
@@ -241,21 +237,7 @@ def main() -> None:
         index=period_options.index("直近10年"),
     )
 
-    period_months = {
-        "直近1年": 12,
-        "直近3年": 36,
-        "直近5年": 60,
-        "直近10年": 120,
-        "直近20年": 240,
-        "直近30年": 360,
-        "全期間": None,
-    }[period]
-
-    if period_months is None:
-        display_df = df.copy()
-
-    else:
-        display_df = df.tail(period_months).copy()
+    display_period_df = filter_display_period(df, period)
 
     # -------------------------
     # 名目賃金指数とCPI
@@ -263,7 +245,7 @@ def main() -> None:
 
     st.markdown("#### 名目賃金と物価の比較")
 
-    comparison_df = display_df[
+    comparison_df = display_period_df[
         [
             "date",
             "nominal_wage_index",
@@ -295,7 +277,7 @@ def main() -> None:
 
     st.markdown("#### 実質賃金指数")
 
-    real_wage_index_chart_df = display_df[
+    real_wage_index_chart_df = display_period_df[
         [
             "date",
             "real_wage_index",
@@ -329,7 +311,7 @@ def main() -> None:
 
     st.markdown("#### 実質賃金 前年同月比")
 
-    yoy_df = display_df.dropna(subset=["real_wage_yoy_pct"])
+    yoy_df = display_period_df.dropna(subset=["real_wage_yoy_pct"])
 
     st.line_chart(
         yoy_df,
@@ -345,7 +327,7 @@ def main() -> None:
 
     st.subheader("分析データ")
 
-    table_df = display_df[
+    table_df = display_period_df[
         [
             "date",
             "nominal_wage_amount",

@@ -12,6 +12,10 @@ from real_wage_dashboard.config import (
     WAGE_ITEMS,
     WAGE_METADATA,
 )
+from real_wage_dashboard.ui import (
+    PERIOD_OPTIONS,
+    filter_display_period,
+)
 from real_wage_dashboard.wage_analysis import (
     add_wage_changes,
     add_wage_moving_average,
@@ -153,15 +157,7 @@ def main() -> None:
 
     st.subheader("時系列推移")
 
-    period_options = [
-        "直近1年",
-        "直近3年",
-        "直近5年",
-        "直近10年",
-        "直近20年",
-        "直近30年",
-        "全期間",
-    ]
+    period_options = list(PERIOD_OPTIONS.keys())
 
     period = st.selectbox(
         "表示期間",
@@ -169,20 +165,7 @@ def main() -> None:
         index=period_options.index("直近10年"),
     )
 
-    period_months = {
-        "直近1年": 12,
-        "直近3年": 36,
-        "直近5年": 60,
-        "直近10年": 120,
-        "直近20年": 240,
-        "直近30年": 360,
-        "全期間": None,
-    }[period]
-
-    if period_months is None:
-        display_period_df = df.copy()
-    else:
-        display_period_df = df.tail(period_months).copy()
+    display_period_df = filter_display_period(df, period)
 
     # -------------------------
     # 名目賃金
