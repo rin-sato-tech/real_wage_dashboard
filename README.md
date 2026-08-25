@@ -96,6 +96,7 @@ real_wage_dashboard/
 │   ├── *_service.py               # データ読み込み・抽出・整形
 │   └── *_analysis.py              # 指標計算・要因分解・集計
 ├── docs/
+│   ├── README.md
 │   ├── analysis/
 │   │   ├── 00_overview.md
 │   │   ├── 01_employment_comparison.md
@@ -104,7 +105,12 @@ real_wage_dashboard/
 │   │   ├── 04_industry_wage.md
 │   │   ├── 05_industry_composition.md
 │   │   └── 06_labor_market.md
-│   └── wage_analysis_roadmap.md
+│   ├── planning/
+│   │   └── wage_analysis_roadmap.md
+│   └── history/
+│       ├── v2_requirements.md
+│       ├── v2_wbs.md
+│       └── v2_release_notes.md
 ├── data/raw/                       # 入力データ
 ├── scripts/                        # データ確認用スクリプト
 └── tests/                          # 自動テスト
