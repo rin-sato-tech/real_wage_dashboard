@@ -86,20 +86,30 @@ def test_add_labor_market_tightness_columns():
 
     result = add_labor_market_tightness_columns(df)
 
-    assert result.loc[
-        0,
-        "labor_market_tightness_effective_jobs",
-    ] == 1.2
+    assert (
+        result.loc[
+            0,
+            "labor_market_tightness_effective_jobs",
+        ]
+        == 1.2
+    )
 
-    assert result.loc[
-        0,
-        "labor_market_tightness_unemployment",
-    ] == -2.5
+    assert (
+        result.loc[
+            0,
+            "labor_market_tightness_unemployment",
+        ]
+        == -2.5
+    )
 
-    assert result.loc[
-        0,
-        "labor_market_tightness_new_jobs",
-    ] == 2.0
+    assert (
+        result.loc[
+            0,
+            "labor_market_tightness_new_jobs",
+        ]
+        == 2.0
+    )
+
 
 def test_calculate_correlations():
     df = pd.DataFrame(

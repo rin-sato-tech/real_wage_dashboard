@@ -214,6 +214,7 @@ def calculate_quarterly_lag_correlations(
 
     return pd.DataFrame(results)
 
+
 def add_labor_market_tightness_columns(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -225,13 +226,9 @@ def add_labor_market_tightness_columns(
         "effective_job_openings_ratio"
     ]
 
-    result["labor_market_tightness_unemployment"] = -result[
-        "unemployment_rate"
-    ]
+    result["labor_market_tightness_unemployment"] = -result["unemployment_rate"]
 
-    result["labor_market_tightness_new_jobs"] = result[
-        "new_job_openings_ratio"
-    ]
+    result["labor_market_tightness_new_jobs"] = result["new_job_openings_ratio"]
 
     return result
 
@@ -253,11 +250,7 @@ def calculate_correlations(
             ]
         ].dropna()
 
-        correlation = valid_df[
-            column_name
-        ].corr(
-            valid_df[wage_column]
-        )
+        correlation = valid_df[column_name].corr(valid_df[wage_column])
 
         results.append(
             {
