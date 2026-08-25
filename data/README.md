@@ -117,6 +117,8 @@ git log -1 --oneline -- data/
 
 ## 7. 更新後の検証
 
+各確認スクリプトの用途と推奨実行順序は、[`scripts/README.md`](../scripts/README.md)を参照する。
+
 最低限、次を実行する。
 
 ```bash
@@ -129,9 +131,9 @@ uv run ruff format --check .
 
 ```bash
 uv run python scripts/check_wage_csv.py
-uv run python scripts/check_wage_data.py
-uv run python scripts/check_wage_v2_combinations.py
 uv run python scripts/check_wage_v2_conditions.py
+uv run python scripts/check_wage_v2_combinations.py
+uv run python scripts/check_wage_data.py
 uv run python scripts/check_working_hours_conditions.py
 ```
 
