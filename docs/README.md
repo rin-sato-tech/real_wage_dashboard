@@ -57,6 +57,8 @@
 | [methodology.md](reference/methodology.md)               | 共通分析条件、比較期間、検証・解釈方針       |
 | [implementation_map.md](reference/implementation_map.md) | 画面、処理モジュール、テスト、分析文書の対応 |
 
+データファイルの配置と更新作業は、[データディレクトリ運用ガイド](../data/README.md)を参照してください。
+
 ---
 
 ## 分析計画
