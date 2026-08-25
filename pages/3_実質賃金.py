@@ -2,11 +2,9 @@ import pandas as pd
 import streamlit as st
 
 from real_wage_dashboard.config import (
-    CPI_BASE_FILTERS,
     CPI_DEFAULT_SERIES,
     CPI_METADATA,
     CPI_SERIES,
-    CPI_STATS_DATA_ID,
     WAGE_BASE_YEAR,
     WAGE_DATA_PATH,
     WAGE_DEFAULT_EMPLOYMENT_TYPE,
@@ -18,11 +16,8 @@ from real_wage_dashboard.config import (
     WAGE_ITEMS,
     WAGE_METADATA,
 )
-from real_wage_dashboard.cpi_service import create_cpi_dataframe
-from real_wage_dashboard.estat_client import (
-    EStatAPIError,
-    get_stats_data,
-)
+from real_wage_dashboard.cpi_service import load_cpi_dataframe
+from real_wage_dashboard.estat_client import EStatAPIError
 from real_wage_dashboard.real_wage_analysis import (
     add_real_wage_changes,
     create_real_wage_dataframe,
@@ -52,24 +47,10 @@ def load_raw_wage_data() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60 * 60 * 6)
-def load_cpi_data(
-    app_id: str,
-    series_code: str,
-) -> pd.DataFrame:
+def load_cpi_data(app_id: str, series_code: str) -> pd.DataFrame:
     """指定系列のCPIデータを取得する。"""
 
-    filters = {
-        **CPI_BASE_FILTERS,
-        "cdCat01": series_code,
-    }
-
-    response = get_stats_data(
-        app_id=app_id,
-        stats_data_id=CPI_STATS_DATA_ID,
-        filters=filters,
-    )
-
-    return create_cpi_dataframe(response)
+    return load_cpi_dataframe(app_id, series_code)
 
 
 def main() -> None:

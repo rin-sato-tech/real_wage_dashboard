@@ -11,11 +11,8 @@ from real_wage_dashboard.config import (
     CPI_STATS_DATA_ID,
 )
 from real_wage_dashboard.cpi_analysis import add_cpi_changes
-from real_wage_dashboard.cpi_service import create_cpi_dataframe
-from real_wage_dashboard.estat_client import (
-    EStatAPIError,
-    get_stats_data,
-)
+from real_wage_dashboard.cpi_service import load_cpi_dataframe
+from real_wage_dashboard.estat_client import EStatAPIError
 from real_wage_dashboard.ui import (
     PERIOD_OPTIONS,
     filter_display_period,
@@ -32,18 +29,7 @@ st.set_page_config(
 def load_cpi_data(app_id: str, series_code: str) -> tuple[pd.DataFrame, datetime]:
     """選択されたCPIをe-Stat APIから取得し、分析用DataFrameを返す。"""
 
-    filters = {
-        **CPI_BASE_FILTERS,
-        "cdCat01": series_code,
-    }
-
-    response = get_stats_data(
-        app_id=app_id,
-        stats_data_id=CPI_STATS_DATA_ID,
-        filters=filters,
-    )
-
-    df = create_cpi_dataframe(response)
+    df = load_cpi_dataframe(app_id, series_code)
     df = add_cpi_changes(df)
 
     fetched_at = datetime.now().astimezone()
