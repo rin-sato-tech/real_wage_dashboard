@@ -2,6 +2,7 @@ from pathlib import Path
 
 CPI_STATS_DATA_ID = "0003427113"
 LABOR_FORCE_STATS_DATA_ID = "0003005865"
+CORPORATE_STATS_DATA_ID = "0003060791"
 
 CPI_BASE_FILTERS = {
     "cdTab": "1",
@@ -63,3 +64,34 @@ WAGE_METADATA = {
     "industry": "調査産業計",
     "unit": "円",
 }
+
+CORPORATE_ITEMS = {
+    "sales": "045",
+    "operating_profit": "048",
+    "ordinary_profit": "051",
+    "executive_salary": "065",
+    "executive_bonus": "057",
+    "employee_salary": "066",
+    "employee_bonus": "235",
+    "welfare_expenses": "067",
+    "average_employees": "072",
+    "value_added": "073",
+    "operating_profit_margin": "126",
+    "ordinary_profit_margin": "127",
+    "value_added_ratio": "140",
+    "labor_productivity": "141",
+}
+
+CORPORATE_INDUSTRIES = {
+    "全産業（除く金融保険業）": "104",
+}
+
+CORPORATE_CAPITAL_CLASSES = {
+    "全規模": "26",
+    "大企業": "25",
+    "中堅企業": "24",
+    "中小企業": "22",
+}
+
+CORPORATE_ANALYSIS_START_YEAR = 2015
+CORPORATE_ANALYSIS_END_YEAR = 2024
