@@ -1,12 +1,11 @@
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 from real_wage_dashboard.config import (
-    CPI_BASE_FILTERS,
     CPI_DEFAULT_SERIES,
     CPI_METADATA,
     CPI_SERIES,
-    CPI_STATS_DATA_ID,
     WAGE_BASE_YEAR,
     WAGE_DATA_PATH,
     WAGE_DEFAULT_EMPLOYMENT_TYPE,
@@ -18,14 +17,23 @@ from real_wage_dashboard.config import (
     WAGE_ITEMS,
     WAGE_METADATA,
 )
-from real_wage_dashboard.cpi_service import create_cpi_dataframe
-from real_wage_dashboard.estat_client import (
-    EStatAPIError,
-    get_stats_data,
-)
+from real_wage_dashboard.cpi_service import load_cpi_dataframe
+from real_wage_dashboard.estat_client import EStatAPIError
 from real_wage_dashboard.real_wage_analysis import (
     add_real_wage_changes,
     create_real_wage_dataframe,
+)
+from real_wage_dashboard.ui import (
+    MONTHLY_OPACITY,
+    MONTHLY_STROKE_WIDTH,
+    MOVING_AVERAGE_OPACITY,
+    MOVING_AVERAGE_STROKE_WIDTH,
+    PERIOD_OPTIONS,
+    REAL_WAGE_COLOR,
+    REFERENCE_LINE_COLOR,
+    YOY_STROKE_WIDTH,
+    create_time_axis,
+    filter_display_period,
 )
 from real_wage_dashboard.wage_analysis import add_wage_moving_average
 from real_wage_dashboard.wage_service import (
@@ -48,32 +56,18 @@ def load_raw_wage_data() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60 * 60 * 6)
-def load_cpi_data(
-    app_id: str,
-    series_code: str,
-) -> pd.DataFrame:
+def load_cpi_data(app_id: str, series_code: str) -> pd.DataFrame:
     """指定系列のCPIデータを取得する。"""
 
-    filters = {
-        **CPI_BASE_FILTERS,
-        "cdCat01": series_code,
-    }
-
-    response = get_stats_data(
-        app_id=app_id,
-        stats_data_id=CPI_STATS_DATA_ID,
-        filters=filters,
-    )
-
-    return create_cpi_dataframe(response)
+    return load_cpi_dataframe(app_id, series_code)
 
 
 def main() -> None:
     st.title("実質賃金分析")
 
     st.caption(
-        "毎月勤労統計調査の賃金データを消費者物価指数で実質化し、"
-        "名目賃金と購買力の変化を比較します。"
+        "名目賃金と消費者物価指数を組み合わせ、"
+        "物価変動を考慮した賃金の購買力の変化を確認します。"
     )
 
     # -------------------------
@@ -139,19 +133,15 @@ def main() -> None:
     try:
         raw_wage_df = load_raw_wage_data()
 
-        cpi_df = load_cpi_data(
-            app_id,
-            selected_series_code,
-        )
+        cpi_df = load_cpi_data(app_id, selected_series_code)
 
         wage_df = create_wage_dataframe(
             raw_wage_df,
             wage_item=WAGE_ITEMS[wage_item],
-            establishment_size=(WAGE_ESTABLISHMENT_SIZES[establishment_size]),
-            employment_type=(WAGE_EMPLOYMENT_TYPES[employment_type]),
+            establishment_size=WAGE_ESTABLISHMENT_SIZES[establishment_size],
+            employment_type=WAGE_EMPLOYMENT_TYPES[employment_type],
         )
 
-        # CSV出力用に名目賃金MAも作っておく
         wage_df = add_wage_moving_average(wage_df)
 
         df = create_real_wage_dataframe(
@@ -186,10 +176,10 @@ def main() -> None:
     latest = df.iloc[-1]
 
     # -------------------------
-    # 最新データ
+    # 主要結果
     # -------------------------
 
-    st.subheader("最新データ")
+    st.subheader("主要結果")
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -205,7 +195,7 @@ def main() -> None:
 
     col3.metric(
         label="実質賃金",
-        value=(f"{latest['real_wage_amount']:,.0f}円"),
+        value=f"{latest['real_wage_amount']:,.0f}円",
     )
 
     col4.metric(
@@ -220,20 +210,12 @@ def main() -> None:
     st.caption(f"最新データ：{latest['date'].strftime('%Y年%m月')}")
 
     # -------------------------
-    # 表示期間
+    # 時系列推移
     # -------------------------
 
     st.subheader("時系列推移")
 
-    period_options = [
-        "直近1年",
-        "直近3年",
-        "直近5年",
-        "直近10年",
-        "直近20年",
-        "直近30年",
-        "全期間",
-    ]
+    period_options = list(PERIOD_OPTIONS.keys())
 
     period = st.selectbox(
         "表示期間",
@@ -241,53 +223,7 @@ def main() -> None:
         index=period_options.index("直近10年"),
     )
 
-    period_months = {
-        "直近1年": 12,
-        "直近3年": 36,
-        "直近5年": 60,
-        "直近10年": 120,
-        "直近20年": 240,
-        "直近30年": 360,
-        "全期間": None,
-    }[period]
-
-    if period_months is None:
-        display_df = df.copy()
-
-    else:
-        display_df = df.tail(period_months).copy()
-
-    # -------------------------
-    # 名目賃金指数とCPI
-    # -------------------------
-
-    st.markdown("#### 名目賃金と物価の比較")
-
-    comparison_df = display_df[
-        [
-            "date",
-            "nominal_wage_index",
-            "index_value",
-        ]
-    ].rename(
-        columns={
-            "nominal_wage_index": ("名目賃金指数"),
-            "index_value": ("消費者物価指数"),
-        }
-    )
-
-    st.line_chart(
-        comparison_df,
-        x="date",
-        y=[
-            "名目賃金指数",
-            "消費者物価指数",
-        ],
-        x_label="年月",
-        y_label="指数",
-    )
-
-    st.caption("2020年平均=100として、名目賃金の伸びと物価の伸びを比較しています。")
+    display_df = filter_display_period(df, period)
 
     # -------------------------
     # 実質賃金指数
@@ -295,48 +231,171 @@ def main() -> None:
 
     st.markdown("#### 実質賃金指数")
 
+    st.caption("月次：薄い線　／　12か月移動平均：濃い線")
+
     real_wage_index_chart_df = display_df[
         [
             "date",
             "real_wage_index",
             "real_wage_index_ma_12",
         ]
-    ].copy()
-
-    real_wage_index_chart_df = real_wage_index_chart_df.rename(
+    ].rename(
         columns={
             "real_wage_index": "月次",
             "real_wage_index_ma_12": "12か月移動平均",
         }
     )
 
-    real_wage_index_chart_columns = ["月次"]
+    real_wage_index_columns = ["月次"]
 
     if show_moving_average:
-        real_wage_index_chart_columns.append("12か月移動平均")
+        real_wage_index_columns.append("12か月移動平均")
 
-    st.line_chart(
-        real_wage_index_chart_df,
-        x="date",
-        y=real_wage_index_chart_columns,
-        x_label="年月",
-        y_label="実質賃金指数（2020年平均=100）",
+    real_wage_index_long_df = real_wage_index_chart_df.melt(
+        id_vars="date",
+        value_vars=real_wage_index_columns,
+        var_name="系列",
+        value_name="実質賃金指数",
+    )
+
+    real_index_min = real_wage_index_long_df["実質賃金指数"].min()
+    real_index_max = real_wage_index_long_df["実質賃金指数"].max()
+
+    real_index_padding = max(
+        (real_index_max - real_index_min) * 0.1,
+        1.0,
+    )
+
+    monthly_chart = (
+        alt.Chart(display_df)
+        .mark_line(
+            color=REAL_WAGE_COLOR,
+            strokeWidth=MONTHLY_STROKE_WIDTH,
+            opacity=MONTHLY_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_df, period),
+            y=alt.Y(
+                "real_wage_index:Q",
+                title=selected_series,
+                scale=alt.Scale(
+                    domain=[
+                        real_index_min - real_index_padding,
+                        real_index_max + real_index_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip("real_wage_index:Q", title="月次", format=".1f"),
+            ],
+        )
+    )
+
+    moving_average_chart = (
+        alt.Chart(display_df)
+        .mark_line(
+            color=REAL_WAGE_COLOR,
+            strokeWidth=MOVING_AVERAGE_STROKE_WIDTH,
+            opacity=MOVING_AVERAGE_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_df, period),
+            y=alt.Y(
+                "real_wage_index_ma_12",
+                scale=alt.Scale(
+                    domain=[
+                        real_index_min - real_index_padding,
+                        real_index_max + real_index_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip(
+                    "real_wage_index_ma_12:Q",
+                    title="12か月移動平均",
+                    format=".1f",
+                ),
+            ],
+        )
+    )
+
+    if show_moving_average:
+        chart = monthly_chart + moving_average_chart
+    else:
+        chart = monthly_chart
+
+    st.altair_chart(
+        chart,
+        width="stretch",
     )
 
     # -------------------------
-    # 実質賃金前年同月比
+    # 実質賃金 前年同月比
     # -------------------------
 
     st.markdown("#### 実質賃金 前年同月比")
 
     yoy_df = display_df.dropna(subset=["real_wage_yoy_pct"])
 
-    st.line_chart(
-        yoy_df,
-        x="date",
-        y="real_wage_yoy_pct",
-        x_label="年月",
-        y_label="前年同月比（%）",
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(
+            color=REFERENCE_LINE_COLOR,
+            strokeDash=[5, 5],
+            strokeWidth=1,
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    yoy_chart = (
+        alt.Chart(yoy_df)
+        .mark_line(
+            color=REAL_WAGE_COLOR,
+            strokeWidth=YOY_STROKE_WIDTH,
+        )
+        .encode(
+            x=create_time_axis(display_df, period),
+            y=alt.Y(
+                "real_wage_yoy_pct:Q",
+                title="前年同月比（%）",
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "real_wage_yoy_pct:Q",
+                    title="前年同月比",
+                    format="+.1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        zero_line + yoy_chart,
+        width="stretch",
     )
 
     # -------------------------
@@ -360,10 +419,7 @@ def main() -> None:
         ]
     ].copy()
 
-    table_df = table_df.sort_values(
-        "date",
-        ascending=False,
-    )
+    table_df = table_df.sort_values("date", ascending=False)
 
     st.dataframe(
         table_df,
@@ -374,59 +430,41 @@ def main() -> None:
                 "年月",
                 format="YYYY年MM月",
             ),
-            "nominal_wage_amount": (
-                st.column_config.NumberColumn(
-                    "名目賃金",
-                    format="%,.0f円",
-                )
+            "nominal_wage_amount": st.column_config.NumberColumn(
+                "名目賃金",
+                format="%,.0f円",
             ),
-            "nominal_wage_ma_12": (
-                st.column_config.NumberColumn(
-                    "名目賃金 12か月移動平均",
-                    format="%,.0f円",
-                )
+            "nominal_wage_ma_12": st.column_config.NumberColumn(
+                "名目賃金 12か月移動平均",
+                format="%,.0f円",
             ),
-            "index_value": (
-                st.column_config.NumberColumn(
-                    selected_series,
-                    format="%.1f",
-                )
+            "index_value": st.column_config.NumberColumn(
+                selected_series,
+                format="%.1f",
             ),
-            "real_wage_amount": (
-                st.column_config.NumberColumn(
-                    "実質賃金",
-                    format="%,.0f円",
-                )
+            "real_wage_amount": st.column_config.NumberColumn(
+                "実質賃金",
+                format="%,.0f円",
             ),
-            "real_wage_ma_12": (
-                st.column_config.NumberColumn(
-                    "実質賃金 12か月移動平均",
-                    format="%,.0f円",
-                )
+            "real_wage_ma_12": st.column_config.NumberColumn(
+                "実質賃金 12か月移動平均",
+                format="%,.0f円",
             ),
-            "nominal_wage_index": (
-                st.column_config.NumberColumn(
-                    "名目賃金指数",
-                    format="%.1f",
-                )
+            "nominal_wage_index": st.column_config.NumberColumn(
+                "名目賃金指数",
+                format="%.1f",
             ),
-            "real_wage_index": (
-                st.column_config.NumberColumn(
-                    "実質賃金指数",
-                    format="%.1f",
-                )
+            "real_wage_index": st.column_config.NumberColumn(
+                "実質賃金指数",
+                format="%.1f",
             ),
-            "real_wage_index_ma_12": (
-                st.column_config.NumberColumn(
-                    "実質賃金指数 12か月移動平均",
-                    format="%.1f",
-                )
+            "real_wage_index_ma_12": st.column_config.NumberColumn(
+                "実質賃金指数 12か月移動平均",
+                format="%.1f",
             ),
-            "real_wage_yoy_pct": (
-                st.column_config.NumberColumn(
-                    "実質賃金 前年同月比",
-                    format="%.1f%%",
-                )
+            "real_wage_yoy_pct": st.column_config.NumberColumn(
+                "実質賃金 前年同月比",
+                format="%.1f%%",
             ),
         },
     )
@@ -477,24 +515,12 @@ def main() -> None:
 
     csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
 
-    download_col, refresh_col = st.columns([2, 1])
-
-    with download_col:
-        st.download_button(
-            label=("全期間データをCSVでダウンロード"),
-            data=csv_data,
-            file_name="real_wage.csv",
-            mime="text/csv",
-        )
-
-    with refresh_col:
-        if st.button(
-            "データを再取得",
-            width="stretch",
-        ):
-            load_raw_wage_data.clear()
-            load_cpi_data.clear()
-            st.rerun()
+    st.download_button(
+        label="全期間データをCSVでダウンロード",
+        data=csv_data,
+        file_name="real_wage.csv",
+        mime="text/csv",
+    )
 
     # -------------------------
     # 出典・計算方法
@@ -522,21 +548,13 @@ def main() -> None:
 
             ### 算出方法
 
-            **実質賃金額 = 名目賃金 ÷ CPI × 100**
+            **実質賃金額 = 名目賃金額 ÷ 消費者物価指数 × 100**
 
-            名目賃金指数および実質賃金指数は、
-            **2020年平均=100**としてアプリ内で指数化しています。
+            名目賃金指数と実質賃金指数は、{WAGE_BASE_YEAR}年平均=100として指数化しています。
 
-            実質賃金の12か月移動平均は、
-            各月の実質賃金を算出した後、その連続12か月平均を計算しています。
+            12か月移動平均と前年同月比は、月次データからアプリ内で算出しています。
             """
         )
-
-    st.info(
-        "このページの実質賃金は、選択した毎月勤労統計の賃金データを、"
-        "選択した消費者物価指数で調整してアプリ内で算出したものです。"
-        "公表されている実質賃金指数とは、算出条件などにより一致しない場合があります。"
-    )
 
 
 if __name__ == "__main__":

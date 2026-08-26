@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -10,11 +11,23 @@ from real_wage_dashboard.config import (
     CPI_SERIES,
     CPI_STATS_DATA_ID,
 )
-from real_wage_dashboard.cpi_analysis import add_cpi_changes
-from real_wage_dashboard.cpi_service import create_cpi_dataframe
-from real_wage_dashboard.estat_client import (
-    EStatAPIError,
-    get_stats_data,
+from real_wage_dashboard.cpi_analysis import (
+    add_cpi_changes,
+    add_cpi_moving_average,
+)
+from real_wage_dashboard.cpi_service import load_cpi_dataframe
+from real_wage_dashboard.estat_client import EStatAPIError
+from real_wage_dashboard.ui import (
+    CPI_COLOR,
+    MONTHLY_OPACITY,
+    MONTHLY_STROKE_WIDTH,
+    MOVING_AVERAGE_OPACITY,
+    MOVING_AVERAGE_STROKE_WIDTH,
+    PERIOD_OPTIONS,
+    REFERENCE_LINE_COLOR,
+    YOY_STROKE_WIDTH,
+    create_time_axis,
+    filter_display_period,
 )
 
 st.set_page_config(
@@ -28,19 +41,9 @@ st.set_page_config(
 def load_cpi_data(app_id: str, series_code: str) -> tuple[pd.DataFrame, datetime]:
     """選択されたCPIをe-Stat APIから取得し、分析用DataFrameを返す。"""
 
-    filters = {
-        **CPI_BASE_FILTERS,
-        "cdCat01": series_code,
-    }
-
-    response = get_stats_data(
-        app_id=app_id,
-        stats_data_id=CPI_STATS_DATA_ID,
-        filters=filters,
-    )
-
-    df = create_cpi_dataframe(response)
+    df = load_cpi_dataframe(app_id, series_code)
     df = add_cpi_changes(df)
+    df = add_cpi_moving_average(df)
 
     fetched_at = datetime.now().astimezone()
 
@@ -50,7 +53,16 @@ def load_cpi_data(app_id: str, series_code: str) -> tuple[pd.DataFrame, datetime
 def main() -> None:
     st.title("消費者物価指数分析")
 
-    st.caption("e-Stat APIから取得した全国・総合の消費者物価指数を表示します。")
+    st.caption(
+        "消費者物価指数の推移を確認します。"
+        "物価上昇が賃金の購買力に与える影響を見るための基礎となるページです。"
+    )
+
+    # -------------------------
+    # 分析条件
+    # -------------------------
+
+    st.subheader("分析条件")
 
     selected_series = st.selectbox(
         "表示する系列",
@@ -58,6 +70,15 @@ def main() -> None:
     )
 
     selected_series_code = CPI_SERIES[selected_series]
+
+    show_moving_average = st.toggle(
+        "12か月移動平均を表示",
+        value=True,
+    )
+
+    # -------------------------
+    # データ取得
+    # -------------------------
 
     try:
         app_id = st.secrets["ESTAT_APP_ID"]
@@ -89,9 +110,13 @@ def main() -> None:
 
     latest = df.iloc[-1]
 
-    st.subheader("最新データ")
+    # -------------------------
+    # 主要結果
+    # -------------------------
 
-    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    st.subheader("主要結果")
+
+    metric_col1, metric_col2 = st.columns(2)
 
     metric_col1.metric(
         label=selected_series,
@@ -99,13 +124,6 @@ def main() -> None:
     )
 
     metric_col2.metric(
-        label="前月比",
-        value=(
-            f"{latest['mom_pct']:+.1f}%" if pd.notna(latest["mom_pct"]) else "算出不可"
-        ),
-    )
-
-    metric_col3.metric(
         label="前年同月比",
         value=(
             f"{latest['yoy_pct']:+.1f}%" if pd.notna(latest["yoy_pct"]) else "算出不可"
@@ -117,57 +135,191 @@ def main() -> None:
         f"API取得日時：{fetched_at.strftime('%Y年%m月%d日 %H:%M')}"
     )
 
+    # -------------------------
+    # 時系列推移
+    # -------------------------
+
     st.subheader("時系列推移")
+
+    period_options = list(PERIOD_OPTIONS.keys())
 
     period = st.selectbox(
         "表示期間",
-        {
-            "直近1年": 12,
-            "直近3年": 36,
-            "直近5年": 60,
-            "直近10年": 120,
-            "直近20年": 240,
-            "直近30年": 360,
-            "全期間": None,
-        },
+        period_options,
+        index=period_options.index("直近10年"),
     )
 
-    period_months = {
-        "直近1年": 12,
-        "直近3年": 36,
-        "直近5年": 60,
-        "直近10年": 120,
-        "直近20年": 240,
-        "直近30年": 360,
-        "全期間": None,
-    }[period]
-
-    if period_months is None:
-        display_period_df = df.copy()
-    else:
-        display_period_df = df.tail(period_months).copy()
+    display_period_df = filter_display_period(df, period)
 
     st.markdown(f"#### {selected_series}")
 
-    st.line_chart(
-        display_period_df,
-        x="date",
-        y="index_value",
-        x_label="年月",
-        y_label=selected_series,
+    st.caption("月次：薄い線　／　12か月移動平均：濃い線")
+
+    index_chart_df = display_period_df[
+        [
+            "date",
+            "index_value",
+            "index_value_ma_12",
+        ]
+    ].rename(
+        columns={
+            "index_value": "月次",
+            "index_value_ma_12": "12か月移動平均",
+        }
+    )
+
+    index_columns = ["月次"]
+
+    if show_moving_average:
+        index_columns.append("12か月移動平均")
+
+    index_long_df = index_chart_df.melt(
+        id_vars="date",
+        value_vars=index_columns,
+        var_name="系列",
+        value_name="指数",
+    )
+
+    index_min = index_long_df["指数"].min()
+    index_max = index_long_df["指数"].max()
+
+    index_padding = max(
+        (index_max - index_min) * 0.1,
+        1.0,
+    )
+
+    monthly_chart = (
+        alt.Chart(display_period_df)
+        .mark_line(
+            color=CPI_COLOR,
+            strokeWidth=MONTHLY_STROKE_WIDTH,
+            opacity=MONTHLY_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "index_value:Q",
+                title=selected_series,
+                scale=alt.Scale(
+                    domain=[
+                        index_min - index_padding,
+                        index_max + index_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip("index_value:Q", title="月次", format=".1f"),
+            ],
+        )
+    )
+
+    moving_average_chart = (
+        alt.Chart(display_period_df)
+        .mark_line(
+            color=CPI_COLOR,
+            strokeWidth=MOVING_AVERAGE_STROKE_WIDTH,
+            opacity=MOVING_AVERAGE_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "index_value_ma_12:Q",
+                title=selected_series,
+                scale=alt.Scale(
+                    domain=[
+                        index_min - index_padding,
+                        index_max + index_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip(
+                    "index_value_ma_12:Q",
+                    title="12か月移動平均",
+                    format=".1f",
+                ),
+            ],
+        )
+    )
+
+    if show_moving_average:
+        chart = monthly_chart + moving_average_chart
+    else:
+        chart = monthly_chart
+
+    st.altair_chart(
+        chart,
+        width="stretch",
     )
 
     st.markdown("#### 前年同月比")
 
     yoy_df = display_period_df.dropna(subset=["yoy_pct"])
 
-    st.line_chart(
-        yoy_df,
-        x="date",
-        y="yoy_pct",
-        x_label="年月",
-        y_label="前年同月比（%）",
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(
+            color=REFERENCE_LINE_COLOR,
+            strokeDash=[5, 5],
+            strokeWidth=1,
+        )
+        .encode(
+            y="y:Q",
+        )
     )
+
+    yoy_chart = (
+        alt.Chart(yoy_df)
+        .mark_line(
+            color=CPI_COLOR,
+            strokeWidth=YOY_STROKE_WIDTH,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "yoy_pct:Q",
+                title="前年同月比（%）",
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "yoy_pct:Q",
+                    title="前年同月比",
+                    format="+.1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        zero_line + yoy_chart,
+        width="stretch",
+    )
+
+    # -------------------------
+    # データ一覧
+    # -------------------------
 
     st.subheader("取得データ")
 
@@ -180,10 +332,7 @@ def main() -> None:
         ]
     ].copy()
 
-    display_df = display_df.sort_values(
-        "date",
-        ascending=False,
-    )
+    display_df = display_df.sort_values("date", ascending=False)
 
     st.dataframe(
         display_df,
@@ -208,6 +357,10 @@ def main() -> None:
             ),
         },
     )
+
+    # -------------------------
+    # CSV出力
+    # -------------------------
 
     csv_df = df[
         [
@@ -242,27 +395,18 @@ def main() -> None:
         }
     )
 
-    csv_data = csv_df.to_csv(
-        index=False,
-    ).encode("utf-8-sig")
+    csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
 
-    download_col, refresh_col = st.columns([2, 1])
+    st.download_button(
+        label="全期間データをCSVでダウンロード",
+        data=csv_data,
+        file_name=CPI_FILE_NAMES[selected_series],
+        mime="text/csv",
+    )
 
-    with download_col:
-        st.download_button(
-            label="全期間データをCSVでダウンロード",
-            data=csv_data,
-            file_name=CPI_FILE_NAMES[selected_series],
-            mime="text/csv",
-        )
-
-    with refresh_col:
-        if st.button(
-            "データを再取得",
-            width="stretch",
-        ):
-            load_cpi_data.clear()
-            st.rerun()
+    # -------------------------
+    # 出典・算出方法
+    # -------------------------
 
     with st.expander("データ出典・算出方法"):
         st.markdown(

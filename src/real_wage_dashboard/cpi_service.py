@@ -2,6 +2,12 @@ from typing import Any
 
 import pandas as pd
 
+from real_wage_dashboard.config import (
+    CPI_BASE_FILTERS,
+    CPI_STATS_DATA_ID,
+)
+from real_wage_dashboard.estat_client import get_stats_data
+
 
 def ensure_list(value: Any) -> list[Any]:
     """値を必ずリストとして返す。"""
@@ -76,3 +82,23 @@ def create_cpi_dataframe(response: dict[str, Any]) -> pd.DataFrame:
     )
 
     return df
+
+
+def load_cpi_dataframe(
+    app_id: str,
+    series_code: str,
+) -> pd.DataFrame:
+    """指定系列のCPIをe-Stat APIから取得してDataFrame化する。"""
+
+    filters = {
+        **CPI_BASE_FILTERS,
+        "cdCat01": series_code,
+    }
+
+    response = get_stats_data(
+        app_id=app_id,
+        stats_data_id=CPI_STATS_DATA_ID,
+        filters=filters,
+    )
+
+    return create_cpi_dataframe(response)

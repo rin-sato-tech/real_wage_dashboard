@@ -1,3 +1,4 @@
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -11,6 +12,18 @@ from real_wage_dashboard.config import (
     WAGE_ESTABLISHMENT_SIZES,
     WAGE_ITEMS,
     WAGE_METADATA,
+)
+from real_wage_dashboard.ui import (
+    MONTHLY_OPACITY,
+    MONTHLY_STROKE_WIDTH,
+    MOVING_AVERAGE_OPACITY,
+    MOVING_AVERAGE_STROKE_WIDTH,
+    NOMINAL_WAGE_COLOR,
+    PERIOD_OPTIONS,
+    REFERENCE_LINE_COLOR,
+    YOY_STROKE_WIDTH,
+    create_time_axis,
+    filter_display_period,
 )
 from real_wage_dashboard.wage_analysis import (
     add_wage_changes,
@@ -38,7 +51,10 @@ def load_raw_wage_data() -> pd.DataFrame:
 def main() -> None:
     st.title("名目賃金分析")
 
-    st.caption("毎月勤労統計調査から、選択した条件の名目賃金推移を表示します。")
+    st.caption(
+        "毎月勤労統計から名目賃金の推移を確認します。"
+        "物価変動を考慮する前の、実際に支払われた賃金額の変化を見ます。"
+    )
 
     # -------------------------
     # 元データ読み込み
@@ -101,8 +117,8 @@ def main() -> None:
         df = create_wage_dataframe(
             raw_df,
             wage_item=WAGE_ITEMS[wage_item],
-            establishment_size=(WAGE_ESTABLISHMENT_SIZES[establishment_size]),
-            employment_type=(WAGE_EMPLOYMENT_TYPES[employment_type]),
+            establishment_size=WAGE_ESTABLISHMENT_SIZES[establishment_size],
+            employment_type=WAGE_EMPLOYMENT_TYPES[employment_type],
         )
 
         df = add_wage_changes(df)
@@ -119,12 +135,12 @@ def main() -> None:
     latest = df.iloc[-1]
 
     # -------------------------
-    # 最新データ
+    # 主要結果
     # -------------------------
 
-    st.subheader("最新データ")
+    st.subheader("主要結果")
 
-    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    metric_col1, metric_col2 = st.columns(2)
 
     metric_col1.metric(
         label=wage_item,
@@ -132,13 +148,6 @@ def main() -> None:
     )
 
     metric_col2.metric(
-        label="前月比",
-        value=(
-            f"{latest['mom_pct']:+.1f}%" if pd.notna(latest["mom_pct"]) else "算出不可"
-        ),
-    )
-
-    metric_col3.metric(
         label="前年同月比",
         value=(
             f"{latest['yoy_pct']:+.1f}%" if pd.notna(latest["yoy_pct"]) else "算出不可"
@@ -148,20 +157,12 @@ def main() -> None:
     st.caption(f"最新データ：{latest['date'].strftime('%Y年%m月')}")
 
     # -------------------------
-    # 表示期間
+    # 時系列推移
     # -------------------------
 
     st.subheader("時系列推移")
 
-    period_options = [
-        "直近1年",
-        "直近3年",
-        "直近5年",
-        "直近10年",
-        "直近20年",
-        "直近30年",
-        "全期間",
-    ]
+    period_options = list(PERIOD_OPTIONS.keys())
 
     period = st.selectbox(
         "表示期間",
@@ -169,26 +170,37 @@ def main() -> None:
         index=period_options.index("直近10年"),
     )
 
-    period_months = {
-        "直近1年": 12,
-        "直近3年": 36,
-        "直近5年": 60,
-        "直近10年": 120,
-        "直近20年": 240,
-        "直近30年": 360,
-        "全期間": None,
-    }[period]
-
-    if period_months is None:
-        display_period_df = df.copy()
-    else:
-        display_period_df = df.tail(period_months).copy()
+    display_period_df = filter_display_period(df, period)
 
     # -------------------------
     # 名目賃金
     # -------------------------
 
     st.markdown(f"#### {wage_item}")
+
+    st.caption("月次：薄い線　／　12か月移動平均：濃い線")
+
+    wage_min = (
+        display_period_df[
+            [
+                "nominal_wage_amount",
+                "nominal_wage_ma_12",
+            ]
+        ]
+        .min()
+        .min()
+    )
+
+    wage_max = (
+        display_period_df[
+            [
+                "nominal_wage_amount",
+                "nominal_wage_ma_12",
+            ]
+        ]
+        .max()
+        .max()
+    )
 
     wage_chart_df = display_period_df[
         [
@@ -205,17 +217,102 @@ def main() -> None:
         }
     )
 
-    chart_columns = ["月次"]
+    wage_chart_columns = ["月次"]
 
     if show_moving_average:
-        chart_columns.append("12か月移動平均")
+        wage_chart_columns.append("12か月移動平均")
 
-    st.line_chart(
-        wage_chart_df,
-        x="date",
-        y=chart_columns,
-        x_label="年月",
-        y_label=f"{wage_item}（円）",
+    wage_chart_long_df = wage_chart_df.melt(
+        id_vars="date",
+        value_vars=wage_chart_columns,
+        var_name="系列",
+        value_name="賃金額",
+    )
+
+    wage_min = wage_chart_long_df["賃金額"].min()
+    wage_max = wage_chart_long_df["賃金額"].max()
+
+    wage_padding = max(
+        (wage_max - wage_min) * 0.1,
+        1000,
+    )
+
+    monthly_chart = (
+        alt.Chart(display_period_df)
+        .mark_line(
+            color=NOMINAL_WAGE_COLOR,
+            strokeWidth=MONTHLY_STROKE_WIDTH,
+            opacity=MONTHLY_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "nominal_wage_amount:Q",
+                title=f"{wage_item}（円）",
+                scale=alt.Scale(
+                    domain=[
+                        wage_min - wage_padding,
+                        wage_max + wage_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip("nominal_wage_amount:Q", title="月次", format=".1f"),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    moving_average_chart = (
+        alt.Chart(display_period_df)
+        .mark_line(
+            color=NOMINAL_WAGE_COLOR,
+            strokeWidth=MOVING_AVERAGE_STROKE_WIDTH,
+            opacity=MOVING_AVERAGE_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "nominal_wage_ma_12:Q",
+                title=f"{wage_item}（円）",
+                scale=alt.Scale(
+                    domain=[
+                        wage_min - wage_padding,
+                        wage_max + wage_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip(
+                    "nominal_wage_ma_12:Q",
+                    title="12か月移動平均",
+                    format=".1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    if show_moving_average:
+        chart = monthly_chart + moving_average_chart
+    else:
+        chart = monthly_chart
+
+    st.altair_chart(
+        chart,
+        width="stretch",
     )
 
     # -------------------------
@@ -226,12 +323,53 @@ def main() -> None:
 
     yoy_df = display_period_df.dropna(subset=["yoy_pct"])
 
-    st.line_chart(
-        yoy_df,
-        x="date",
-        y="yoy_pct",
-        x_label="年月",
-        y_label="前年同月比（%）",
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(
+            color=REFERENCE_LINE_COLOR,
+            strokeDash=[5, 5],
+            strokeWidth=1,
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    yoy_chart = (
+        alt.Chart(yoy_df)
+        .mark_line(
+            color=NOMINAL_WAGE_COLOR,
+            strokeWidth=YOY_STROKE_WIDTH,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "yoy_pct:Q",
+                title="前年同月比（%）",
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "yoy_pct:Q",
+                    title="前年同月比",
+                    format="+.1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        zero_line + yoy_chart,
+        width="stretch",
     )
 
     # -------------------------
@@ -250,10 +388,7 @@ def main() -> None:
         ]
     ].copy()
 
-    display_df = display_df.sort_values(
-        "date",
-        ascending=False,
-    )
+    display_df = display_df.sort_values("date", ascending=False)
 
     st.dataframe(
         display_df,
@@ -264,29 +399,21 @@ def main() -> None:
                 "年月",
                 format="YYYY年MM月",
             ),
-            "nominal_wage_amount": (
-                st.column_config.NumberColumn(
-                    "月次",
-                    format="%,.0f円",
-                )
+            "nominal_wage_amount": st.column_config.NumberColumn(
+                "月次",
+                format="%,.0f円",
             ),
-            "nominal_wage_ma_12": (
-                st.column_config.NumberColumn(
-                    "12か月移動平均",
-                    format="%,.0f円",
-                )
+            "nominal_wage_ma_12": st.column_config.NumberColumn(
+                "12か月移動平均",
+                format="%,.0f円",
             ),
-            "mom_pct": (
-                st.column_config.NumberColumn(
-                    "前月比",
-                    format="%.1f%%",
-                )
+            "mom_pct": st.column_config.NumberColumn(
+                "前月比",
+                format="%.1f%%",
             ),
-            "yoy_pct": (
-                st.column_config.NumberColumn(
-                    "前年同月比",
-                    format="%.1f%%",
-                )
+            "yoy_pct": st.column_config.NumberColumn(
+                "前年同月比",
+                format="%.1f%%",
             ),
         },
     )
@@ -327,29 +454,16 @@ def main() -> None:
         establishment_size,
     )
 
-    csv_df = csv_df.drop(
-        columns="date",
-    )
+    csv_df = csv_df.drop(columns="date")
 
     csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
 
-    download_col, refresh_col = st.columns([2, 1])
-
-    with download_col:
-        st.download_button(
-            label="選択条件の全期間データをCSVでダウンロード",
-            data=csv_data,
-            file_name="nominal_wage.csv",
-            mime="text/csv",
-        )
-
-    with refresh_col:
-        if st.button(
-            "データを再読み込み",
-            width="stretch",
-        ):
-            load_raw_wage_data.clear()
-            st.rerun()
+    st.download_button(
+        label="選択条件の全期間データをCSVでダウンロード",
+        data=csv_data,
+        file_name="nominal_wage.csv",
+        mime="text/csv",
+    )
 
     # -------------------------
     # 出典
@@ -370,8 +484,7 @@ def main() -> None:
         )
 
     st.info(
-        "前月比・前年同月比・12か月移動平均は、"
-        "選択した月次賃金データからアプリ内で算出しています。"
+        "前月比・前年同月比・12か月移動平均は、選択した月次賃金データからアプリ内で算出しています。"
         "12か月移動平均は12か月連続したデータがある場合のみ算出します。"
     )
 
