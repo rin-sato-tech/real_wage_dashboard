@@ -225,96 +225,6 @@ def main() -> None:
 
     display_df = filter_display_period(df, period)
 
-    # # -------------------------
-    # # 名目賃金指数とCPI
-    # # -------------------------
-
-    # st.markdown("#### 名目賃金と物価の比較")
-
-    # comparison_df = display_df[
-    #     [
-    #         "date",
-    #         "nominal_wage_index",
-    #         "index_value",
-    #     ]
-    # ].rename(
-    #     columns={
-    #         "nominal_wage_index": "名目賃金指数",
-    #         "index_value": "消費者物価指数",
-    #     }
-    # )
-
-    # comparison_long_df = comparison_df.melt(
-    #     id_vars="date",
-    #     value_vars=[
-    #         "名目賃金指数",
-    #         "消費者物価指数",
-    #     ],
-    #     var_name="系列",
-    #     value_name="指数",
-    # )
-
-    # comparison_min = comparison_long_df["指数"].min()
-    # comparison_max = comparison_long_df["指数"].max()
-
-    # comparison_padding = max(
-    #     (comparison_max - comparison_min) * 0.1,
-    #     1.0,
-    # )
-
-    # comparison_chart = (
-    #     alt.Chart(comparison_long_df)
-    #     .mark_line()
-    #     .encode(
-    #         x=create_time_axis(period),
-    #         y=alt.Y(
-    #             "指数:Q",
-    #             title="指数",
-    #             axis=alt.Axis(
-    #                 grid=True,
-    #                 gridOpacity=0.15,
-    #             ),
-    #             scale=alt.Scale(
-    #                 domain=[
-    #                     comparison_min - comparison_padding,
-    #                     comparison_max + comparison_padding,
-    #                 ],
-    #                 zero=False,
-    #             ),
-    #         ),
-    #         strokeDash=alt.StrokeDash(
-    #             "系列:N",
-    #             title=None,
-    #         ),
-    #         tooltip=[
-    #             alt.Tooltip(
-    #                 "date:T",
-    #                 title="年月",
-    #                 format="%Y年%m月",
-    #             ),
-    #             alt.Tooltip(
-    #                 "系列:N",
-    #                 title="系列",
-    #             ),
-    #             alt.Tooltip(
-    #                 "指数:Q",
-    #                 title="指数",
-    #                 format=".1f",
-    #             ),
-    #         ],
-    #     )
-    #     .properties(height=400)
-    # )
-
-    # st.altair_chart(
-    #     comparison_chart,
-    #     width="stretch",
-    # )
-
-    # st.caption(
-    #     f"{WAGE_BASE_YEAR}年平均=100として、名目賃金の伸びと物価の伸びを比較しています。"
-    # )
-
     # -------------------------
     # 実質賃金指数
     # -------------------------
@@ -381,16 +291,8 @@ def main() -> None:
                 ),
             ),
             tooltip=[
-                alt.Tooltip(
-                    "date:T",
-                    title="年月",
-                    format="%Y年%m月"
-                ),
-                alt.Tooltip(
-                    "real_wage_index:Q",
-                    title="月次",
-                    format=".1f"
-                ),
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip("real_wage_index:Q", title="月次", format=".1f"),
             ],
         )
     )
@@ -416,7 +318,8 @@ def main() -> None:
                 axis=alt.Axis(
                     grid=True,
                     gridOpacity=0.6,
-                ),),
+                ),
+            ),
             tooltip=[
                 alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
                 alt.Tooltip(

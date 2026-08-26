@@ -180,19 +180,27 @@ def main() -> None:
 
     st.caption("月次：薄い線　／　12か月移動平均：濃い線")
 
-    wage_min = display_period_df[
-        [
-            "nominal_wage_amount",
-            "nominal_wage_ma_12",
+    wage_min = (
+        display_period_df[
+            [
+                "nominal_wage_amount",
+                "nominal_wage_ma_12",
+            ]
         ]
-    ].min().min()
+        .min()
+        .min()
+    )
 
-    wage_max = display_period_df[
-        [
-            "nominal_wage_amount",
-            "nominal_wage_ma_12",
+    wage_max = (
+        display_period_df[
+            [
+                "nominal_wage_amount",
+                "nominal_wage_ma_12",
+            ]
         ]
-    ].max().max()
+        .max()
+        .max()
+    )
 
     wage_chart_df = display_period_df[
         [
@@ -254,16 +262,8 @@ def main() -> None:
                 ),
             ),
             tooltip=[
-                alt.Tooltip(
-                    "date:T",
-                    title="年月",
-                    format="%Y年%m月"
-                ),
-                alt.Tooltip(
-                    "nominal_wage_amount:Q",
-                    title="月次",
-                    format=".1f"
-                ),
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip("nominal_wage_amount:Q", title="月次", format=".1f"),
             ],
         )
         .properties(height=400)
@@ -294,11 +294,7 @@ def main() -> None:
                 ),
             ),
             tooltip=[
-                alt.Tooltip(
-                    "date:T",
-                    title="年月",
-                    format="%Y年%m月"
-                ),
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
                 alt.Tooltip(
                     "nominal_wage_ma_12:Q",
                     title="12か月移動平均",

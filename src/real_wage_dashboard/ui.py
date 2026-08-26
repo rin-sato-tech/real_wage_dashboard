@@ -52,12 +52,7 @@ def create_time_axis(df: pd.DataFrame, period: str) -> alt.X:
         "全期間": 60,
     }[period]
 
-    tick_values = (
-        df["date"]
-        .iloc[::tick_step]
-        .dt.to_pydatetime()
-        .tolist()
-    )
+    tick_values = df["date"].iloc[::tick_step].dt.to_pydatetime().tolist()
 
     return alt.X(
         "date:T",

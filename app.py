@@ -213,16 +213,8 @@ def main() -> None:
                 ),
             ),
             tooltip=[
-                alt.Tooltip(
-                    "date:T",
-                    title="年月",
-                    format="%Y年%m月"
-                ),
-                alt.Tooltip(
-                    "index_value:Q",
-                    title="月次",
-                    format=".1f"
-                ),
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
+                alt.Tooltip("index_value:Q", title="月次", format=".1f"),
             ],
         )
     )
@@ -252,11 +244,7 @@ def main() -> None:
                 ),
             ),
             tooltip=[
-                alt.Tooltip(
-                    "date:T",
-                    title="年月",
-                    format="%Y年%m月"
-                ),
+                alt.Tooltip("date:T", title="年月", format="%Y年%m月"),
                 alt.Tooltip(
                     "index_value_ma_12:Q",
                     title="12か月移動平均",
