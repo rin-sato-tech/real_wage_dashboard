@@ -14,7 +14,15 @@ from real_wage_dashboard.config import (
     WAGE_METADATA,
 )
 from real_wage_dashboard.ui import (
+    MONTHLY_OPACITY,
+    MONTHLY_STROKE_WIDTH,
+    MOVING_AVERAGE_OPACITY,
+    MOVING_AVERAGE_STROKE_WIDTH,
+    NOMINAL_WAGE_COLOR,
     PERIOD_OPTIONS,
+    REFERENCE_LINE_COLOR,
+    YOY_STROKE_WIDTH,
+    create_time_axis,
     filter_display_period,
 )
 from real_wage_dashboard.wage_analysis import (
@@ -44,7 +52,8 @@ def main() -> None:
     st.title("名目賃金分析")
 
     st.caption(
-        "毎月勤労統計調査から、選択した条件における名目賃金の水準と前年比の推移を確認します。物価変動は考慮していません。"
+        "毎月勤労統計から名目賃金の推移を確認します。"
+        "物価変動を考慮する前の、実際に支払われた賃金額の変化を見ます。"
     )
 
     # -------------------------
@@ -169,6 +178,22 @@ def main() -> None:
 
     st.markdown(f"#### {wage_item}")
 
+    st.caption("月次：薄い線　／　12か月移動平均：濃い線")
+
+    wage_min = display_period_df[
+        [
+            "nominal_wage_amount",
+            "nominal_wage_ma_12",
+        ]
+    ].min().min()
+
+    wage_max = display_period_df[
+        [
+            "nominal_wage_amount",
+            "nominal_wage_ma_12",
+        ]
+    ].max().max()
+
     wage_chart_df = display_period_df[
         [
             "date",
@@ -204,16 +229,17 @@ def main() -> None:
         1000,
     )
 
-    wage_chart = (
-        alt.Chart(wage_chart_long_df)
-        .mark_line()
+    monthly_chart = (
+        alt.Chart(display_period_df)
+        .mark_line(
+            color=NOMINAL_WAGE_COLOR,
+            strokeWidth=MONTHLY_STROKE_WIDTH,
+            opacity=MONTHLY_OPACITY,
+        )
         .encode(
-            x=alt.X(
-                "date:T",
-                title="年月",
-            ),
+            x=create_time_axis(display_period_df, period),
             y=alt.Y(
-                "賃金額:Q",
+                "nominal_wage_amount:Q",
                 title=f"{wage_item}（円）",
                 scale=alt.Scale(
                     domain=[
@@ -222,33 +248,74 @@ def main() -> None:
                     ],
                     zero=False,
                 ),
-            ),
-            strokeDash=alt.StrokeDash(
-                "系列:N",
-                title=None,
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
             ),
             tooltip=[
                 alt.Tooltip(
                     "date:T",
                     title="年月",
-                    format="%Y年%m月",
+                    format="%Y年%m月"
                 ),
                 alt.Tooltip(
-                    "系列:N",
-                    title="系列",
-                ),
-                alt.Tooltip(
-                    "賃金額:Q",
-                    title="賃金額",
-                    format=",.0f",
+                    "nominal_wage_amount:Q",
+                    title="月次",
+                    format=".1f"
                 ),
             ],
         )
         .properties(height=400)
     )
 
+    moving_average_chart = (
+        alt.Chart(display_period_df)
+        .mark_line(
+            color=NOMINAL_WAGE_COLOR,
+            strokeWidth=MOVING_AVERAGE_STROKE_WIDTH,
+            opacity=MOVING_AVERAGE_OPACITY,
+        )
+        .encode(
+            x=create_time_axis(display_period_df, period),
+            y=alt.Y(
+                "nominal_wage_ma_12:Q",
+                title=f"{wage_item}（円）",
+                scale=alt.Scale(
+                    domain=[
+                        wage_min - wage_padding,
+                        wage_max + wage_padding,
+                    ],
+                    zero=False,
+                ),
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月"
+                ),
+                alt.Tooltip(
+                    "nominal_wage_ma_12:Q",
+                    title="12か月移動平均",
+                    format=".1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    if show_moving_average:
+        chart = monthly_chart + moving_average_chart
+    else:
+        chart = monthly_chart
+
     st.altair_chart(
-        wage_chart,
+        chart,
         width="stretch",
     )
 
@@ -262,7 +329,11 @@ def main() -> None:
 
     zero_line = (
         alt.Chart(pd.DataFrame({"y": [0]}))
-        .mark_rule(strokeDash=[4, 4])
+        .mark_rule(
+            color=REFERENCE_LINE_COLOR,
+            strokeDash=[5, 5],
+            strokeWidth=1,
+        )
         .encode(
             y="y:Q",
         )
@@ -270,15 +341,19 @@ def main() -> None:
 
     yoy_chart = (
         alt.Chart(yoy_df)
-        .mark_line()
+        .mark_line(
+            color=NOMINAL_WAGE_COLOR,
+            strokeWidth=YOY_STROKE_WIDTH,
+        )
         .encode(
-            x=alt.X(
-                "date:T",
-                title="年月",
-            ),
+            x=create_time_axis(display_period_df, period),
             y=alt.Y(
                 "yoy_pct:Q",
                 title="前年同月比（%）",
+                axis=alt.Axis(
+                    grid=True,
+                    gridOpacity=0.6,
+                ),
             ),
             tooltip=[
                 alt.Tooltip(
@@ -387,23 +462,12 @@ def main() -> None:
 
     csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
 
-    download_col, refresh_col = st.columns([2, 1])
-
-    with download_col:
-        st.download_button(
-            label="選択条件の全期間データをCSVでダウンロード",
-            data=csv_data,
-            file_name="nominal_wage.csv",
-            mime="text/csv",
-        )
-
-    with refresh_col:
-        if st.button(
-            "データを再読み込み",
-            width="stretch",
-        ):
-            load_raw_wage_data.clear()
-            st.rerun()
+    st.download_button(
+        label="選択条件の全期間データをCSVでダウンロード",
+        data=csv_data,
+        file_name="nominal_wage.csv",
+        mime="text/csv",
+    )
 
     # -------------------------
     # 出典

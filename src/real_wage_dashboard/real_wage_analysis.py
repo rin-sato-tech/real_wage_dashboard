@@ -4,7 +4,7 @@ from real_wage_dashboard.config import (
     WAGE_BASE_YEAR,
     WAGE_MOVING_AVERAGE_WINDOW,
 )
-from real_wage_dashboard.wage_analysis import add_moving_average
+from real_wage_dashboard.time_series import add_moving_average
 
 
 def merge_wage_and_cpi(
