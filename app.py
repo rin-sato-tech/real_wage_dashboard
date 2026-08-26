@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -134,24 +135,97 @@ def main() -> None:
 
     st.markdown(f"#### {selected_series}")
 
-    st.line_chart(
-        display_period_df,
-        x="date",
-        y="index_value",
-        x_label="年月",
-        y_label=selected_series,
+    index_min = display_period_df["index_value"].min()
+    index_max = display_period_df["index_value"].max()
+
+    index_padding = max(
+        (index_max - index_min) * 0.1,
+        1.0,
+    )
+
+    index_chart = (
+        alt.Chart(display_period_df)
+        .mark_line()
+        .encode(
+            x=alt.X(
+                "date:T",
+                title="年月",
+            ),
+            y=alt.Y(
+                "index_value:Q",
+                title=selected_series,
+                scale=alt.Scale(
+                    domain=[
+                        index_min - index_padding,
+                        index_max + index_padding,
+                    ],
+                    zero=False,
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "index_value:Q",
+                    title=selected_series,
+                    format=".1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        index_chart,
+        width="stretch",
     )
 
     st.markdown("#### 前年同月比")
 
     yoy_df = display_period_df.dropna(subset=["yoy_pct"])
 
-    st.line_chart(
-        yoy_df,
-        x="date",
-        y="yoy_pct",
-        x_label="年月",
-        y_label="前年同月比（%）",
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(strokeDash=[4, 4])
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    yoy_chart = (
+        alt.Chart(yoy_df)
+        .mark_line()
+        .encode(
+            x=alt.X(
+                "date:T",
+                title="年月",
+            ),
+            y=alt.Y(
+                "yoy_pct:Q",
+                title="前年同月比（%）",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "date:T",
+                    title="年月",
+                    format="%Y年%m月",
+                ),
+                alt.Tooltip(
+                    "yoy_pct:Q",
+                    title="前年同月比",
+                    format="+.1f",
+                ),
+            ],
+        )
+        .properties(height=400)
+    )
+
+    st.altair_chart(
+        zero_line + yoy_chart,
+        width="stretch",
     )
 
     # -------------------------
@@ -169,10 +243,7 @@ def main() -> None:
         ]
     ].copy()
 
-    display_df = display_df.sort_values(
-        "date",
-        ascending=False,
-    )
+    display_df = display_df.sort_values("date", ascending=False)
 
     st.dataframe(
         display_df,
@@ -235,9 +306,7 @@ def main() -> None:
         }
     )
 
-    csv_data = csv_df.to_csv(
-        index=False,
-    ).encode("utf-8-sig")
+    csv_data = csv_df.to_csv(index=False).encode("utf-8-sig")
 
     download_col, refresh_col = st.columns([2, 1])
 
