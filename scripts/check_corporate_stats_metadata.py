@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 
 from real_wage_dashboard.config import CORPORATE_STATS_DATA_ID

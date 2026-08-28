@@ -37,10 +37,7 @@ def create_corporate_time_codes(
 
 def create_item_code_mapping() -> dict[str, str]:
     """e-Statの調査項目コードから分析用列名への対応表を作成する。"""
-    return {
-        code: column_name
-        for column_name, code in CORPORATE_ITEMS.items()
-    }
+    return {code: column_name for column_name, code in CORPORATE_ITEMS.items()}
 
 
 def create_corporate_performance_dataframe(response: dict[str, Any]) -> pd.DataFrame:
@@ -64,11 +61,7 @@ def create_corporate_performance_dataframe(response: dict[str, Any]) -> pd.DataF
         rows.append(
             {
                 "time_code": time_code,
-                "fiscal_year": (
-                    int(time_code[:4])
-                    if time_code
-                    else None
-                ),
+                "fiscal_year": (int(time_code[:4]) if time_code else None),
                 "item": column_name,
                 "value": item.get("$"),
             }
@@ -126,8 +119,7 @@ def add_corporate_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
     if missing_columns:
         raise ValueError(
-            f"派生指標の計算に必要な列がありません: "
-            f"{sorted(missing_columns)}"
+            f"派生指標の計算に必要な列がありません: {sorted(missing_columns)}"
         )
 
     result = df.copy()
@@ -140,27 +132,18 @@ def add_corporate_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
         + result["welfare_expenses"]
     )
 
-    result["labor_share"] = (
-        result["personnel_expenses"]
-        / result["value_added"]
-        * 100
-    )
+    result["labor_share"] = result["personnel_expenses"] / result["value_added"] * 100
 
     result["personnel_expenses_per_employee"] = (
-        result["personnel_expenses"]
-        / result["average_employees"]
-        * 100
+        result["personnel_expenses"] / result["average_employees"] * 100
     )
 
     result["calculated_labor_productivity"] = (
-        result["value_added"]
-        / result["average_employees"]
-        * 100
+        result["value_added"] / result["average_employees"] * 100
     )
 
     result["labor_productivity_diff"] = (
-        result["calculated_labor_productivity"]
-        - result["labor_productivity"]
+        result["calculated_labor_productivity"] - result["labor_productivity"]
     )
 
     return result
