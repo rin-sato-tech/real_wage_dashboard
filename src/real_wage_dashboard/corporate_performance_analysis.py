@@ -781,3 +781,53 @@ def calculate_leave_one_year_out_correlations(
         )
 
     return pd.DataFrame(rows)
+
+
+def calculate_period_corporate_wage_correlations(
+    df: pd.DataFrame,
+    periods: list[tuple[int, int]],
+) -> pd.DataFrame:
+    """期間別に企業指標と賃金の同時点相関を算出する。"""
+
+    corporate_metrics = [
+        "labor_productivity_yoy_pct",
+        "personnel_expenses_per_employee_yoy_pct",
+        "ordinary_profit_margin_change_pct_point",
+    ]
+
+    wage_metrics = [
+        "monthly_wage_yoy_pct",
+        "hourly_wage_yoy_pct",
+    ]
+
+    rows = []
+
+    for start_year, end_year in periods:
+        period_df = df.loc[
+            df["fiscal_year"].between(
+                start_year,
+                end_year,
+            )
+        ]
+
+        for corporate_metric in corporate_metrics:
+            for wage_metric in wage_metrics:
+                valid = period_df[
+                    [
+                        corporate_metric,
+                        wage_metric,
+                    ]
+                ].dropna()
+
+                rows.append(
+                    {
+                        "start_year": start_year,
+                        "end_year": end_year,
+                        "corporate_metric": corporate_metric,
+                        "wage_metric": wage_metric,
+                        "correlation": valid[corporate_metric].corr(valid[wage_metric]),
+                        "observation_count": len(valid),
+                    }
+                )
+
+    return pd.DataFrame(rows)
