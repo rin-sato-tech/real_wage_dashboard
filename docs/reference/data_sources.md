@@ -4,7 +4,7 @@
 
 Real Wage Dashboardで現在使用している入力データについて、出典、取得方法、保存場所、読み込み条件、更新時の注意点を整理する。
 
-指標の計算式と定義は`metric_definitions.md`、分析方法の共通方針は`methodology.md`で管理する予定である。
+指標の計算式と定義は`metric_definitions.md`、分析方法の共通方針は`methodology.md`で管理する。
 
 ---
 
