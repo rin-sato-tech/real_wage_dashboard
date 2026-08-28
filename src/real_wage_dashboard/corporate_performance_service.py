@@ -7,6 +7,7 @@ from real_wage_dashboard.config import (
     CORPORATE_ANALYSIS_START_YEAR,
     CORPORATE_CAPITAL_CLASSES,
     CORPORATE_INDUSTRIES,
+    CORPORATE_INDUSTRY_MAPPING,
     CORPORATE_ITEMS,
     CORPORATE_STATS_DATA_ID,
 )
@@ -182,3 +183,26 @@ def load_corporate_performance_dataframe(
     df = create_corporate_performance_dataframe(response)
 
     return add_corporate_derived_metrics(df)
+
+
+def load_corporate_performance_by_industry(
+    app_id: str,
+    industry_mapping: dict[str, str] = CORPORATE_INDUSTRY_MAPPING,
+    capital_class_code: str = CORPORATE_CAPITAL_CLASSES["全規模"],
+    start_year: int = CORPORATE_ANALYSIS_START_YEAR,
+    end_year: int = CORPORATE_ANALYSIS_END_YEAR,
+) -> dict[str, pd.DataFrame]:
+    """産業別の法人企業統計データを取得する。"""
+
+    results = {}
+
+    for industry_code, corporate_industry_code in industry_mapping.items():
+        results[industry_code] = load_corporate_performance_dataframe(
+            app_id=app_id,
+            industry_code=corporate_industry_code,
+            capital_class_code=capital_class_code,
+            start_year=start_year,
+            end_year=end_year,
+        )
+
+    return results

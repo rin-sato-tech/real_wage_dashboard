@@ -20,6 +20,21 @@ TARGET_ITEMS = [
     "売上高経常利益率",
 ]
 
+TARGET_INDUSTRIES = [
+    "鉱業、採石業、砂利採取業",
+    "建設業",
+    "製造業",
+    "情報通信業",
+    "運輸業、郵便業(集約)",
+    "卸売業・小売業(集約)",
+    "不動産業、物品賃貸業(集約)",
+    "学術研究、専門・技術サービス業(集約)",
+    "宿泊業、飲食サービス業(集約)",
+    "生活関連サービス業、娯楽業(集約)",
+    "教育、学習支援業",
+    "医療、福祉業",
+]
+
 TARGET_YEARS = {
     "2015年度",
     "2024年度",
@@ -62,10 +77,12 @@ def main() -> None:
 
         elif class_id == "cat02":
             for item in classes:
-                if item.get("@code") == "104":
+                name = item.get("@name", "")
+
+                if name in TARGET_INDUSTRIES:
                     print(
                         item.get("@code"),
-                        item.get("@name"),
+                        name,
                     )
 
         elif class_id == "cat03":
