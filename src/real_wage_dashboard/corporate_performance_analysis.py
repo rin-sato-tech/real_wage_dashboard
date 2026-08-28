@@ -553,3 +553,231 @@ def calculate_leave_one_out_correlations(
         )
 
     return pd.DataFrame(rows)
+
+
+def create_wage_fiscal_year_dataframe(
+    monthly_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """毎勤の月次賃金データを4月始まりの年度平均へ変換する。"""
+
+    required_columns = {
+        "date",
+        "monthly_wage",
+        "approx_hourly_wage",
+        "total_hours",
+    }
+
+    missing_columns = required_columns - set(monthly_df.columns)
+
+    if missing_columns:
+        raise ValueError(f"年度集計に必要な列がありません: {sorted(missing_columns)}")
+
+    result = monthly_df.copy()
+
+    result["fiscal_year"] = result["date"].dt.year
+
+    result.loc[
+        result["date"].dt.month <= 3,
+        "fiscal_year",
+    ] -= 1
+
+    yearly = result.groupby(
+        "fiscal_year",
+        as_index=False,
+    ).agg(
+        monthly_wage=("monthly_wage", "mean"),
+        total_hours=("total_hours", "mean"),
+        annual_wage_sum=("monthly_wage", "sum"),
+        annual_hours_sum=("total_hours", "sum"),
+        month_count=("date", "count"),
+    )
+
+    yearly = yearly.loc[yearly["month_count"] == 12].copy()
+
+    yearly["approx_hourly_wage"] = (
+        yearly["annual_wage_sum"] / yearly["annual_hours_sum"]
+    )
+
+    yearly["monthly_wage_yoy_pct"] = (
+        yearly["monthly_wage"].pct_change(fill_method=None) * 100
+    )
+
+    yearly["hourly_wage_yoy_pct"] = (
+        yearly["approx_hourly_wage"].pct_change(fill_method=None) * 100
+    )
+
+    return yearly[
+        [
+            "fiscal_year",
+            "monthly_wage",
+            "approx_hourly_wage",
+            "total_hours",
+            "monthly_wage_yoy_pct",
+            "hourly_wage_yoy_pct",
+            "month_count",
+        ]
+    ]
+
+
+def merge_corporate_and_wage_time_series(
+    corporate_df: pd.DataFrame,
+    wage_fiscal_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """法人企業統計と毎勤の年度系列を結合する。"""
+
+    required_corporate_columns = {
+        "fiscal_year",
+        "labor_productivity",
+        "personnel_expenses_per_employee",
+        "ordinary_profit_margin",
+    }
+
+    required_wage_columns = {
+        "fiscal_year",
+        "monthly_wage",
+        "approx_hourly_wage",
+        "monthly_wage_yoy_pct",
+        "hourly_wage_yoy_pct",
+    }
+
+    missing_corporate = required_corporate_columns - set(corporate_df.columns)
+
+    if missing_corporate:
+        raise ValueError(
+            f"法人企業統計側に必要な列がありません: {sorted(missing_corporate)}"
+        )
+
+    missing_wage = required_wage_columns - set(wage_fiscal_df.columns)
+
+    if missing_wage:
+        raise ValueError(f"毎勤側に必要な列がありません: {sorted(missing_wage)}")
+
+    corporate = corporate_df.sort_values("fiscal_year").copy()
+
+    corporate["labor_productivity_yoy_pct"] = (
+        corporate["labor_productivity"].pct_change(fill_method=None) * 100
+    )
+
+    corporate["personnel_expenses_per_employee_yoy_pct"] = (
+        corporate["personnel_expenses_per_employee"].pct_change(fill_method=None) * 100
+    )
+
+    corporate["ordinary_profit_margin_change_pct_point"] = corporate[
+        "ordinary_profit_margin"
+    ].diff()
+
+    return corporate.merge(
+        wage_fiscal_df,
+        on="fiscal_year",
+        how="inner",
+        validate="one_to_one",
+    )
+
+
+def calculate_corporate_wage_lag_correlations(
+    df: pd.DataFrame,
+    max_lag: int = 2,
+) -> pd.DataFrame:
+    """企業指標と賃金前年比のラグ相関を算出する。"""
+
+    corporate_metrics = [
+        "labor_productivity_yoy_pct",
+        "personnel_expenses_per_employee_yoy_pct",
+        "ordinary_profit_margin_change_pct_point",
+    ]
+
+    wage_metrics = [
+        "monthly_wage_yoy_pct",
+        "hourly_wage_yoy_pct",
+    ]
+
+    required_columns = {
+        "fiscal_year",
+        *corporate_metrics,
+        *wage_metrics,
+    }
+
+    missing_columns = required_columns - set(df.columns)
+
+    if missing_columns:
+        raise ValueError(f"ラグ相関に必要な列がありません: {sorted(missing_columns)}")
+
+    rows = []
+
+    for corporate_metric in corporate_metrics:
+        for wage_metric in wage_metrics:
+            for lag in range(max_lag + 1):
+                shifted_wage = df[wage_metric].shift(-lag)
+
+                valid = pd.DataFrame(
+                    {
+                        "corporate": df[corporate_metric],
+                        "wage": shifted_wage,
+                    }
+                ).dropna()
+
+                rows.append(
+                    {
+                        "corporate_metric": corporate_metric,
+                        "wage_metric": wage_metric,
+                        "lag_years": lag,
+                        "correlation": valid["corporate"].corr(valid["wage"]),
+                        "observation_count": len(valid),
+                    }
+                )
+
+    return pd.DataFrame(rows)
+
+
+def calculate_leave_one_year_out_correlations(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """1年度ずつ除外した同時点相関を算出する。"""
+
+    required_columns = {
+        "fiscal_year",
+        "labor_productivity_yoy_pct",
+        "personnel_expenses_per_employee_yoy_pct",
+        "ordinary_profit_margin_change_pct_point",
+        "monthly_wage_yoy_pct",
+        "hourly_wage_yoy_pct",
+    }
+
+    missing_columns = required_columns - set(df.columns)
+
+    if missing_columns:
+        raise ValueError(f"感応度分析に必要な列がありません: {sorted(missing_columns)}")
+
+    analysis_df = df.dropna(
+        subset=[
+            "labor_productivity_yoy_pct",
+            "personnel_expenses_per_employee_yoy_pct",
+            "ordinary_profit_margin_change_pct_point",
+        ]
+    ).copy()
+
+    rows = []
+
+    for fiscal_year in analysis_df["fiscal_year"]:
+        subset = analysis_df.loc[analysis_df["fiscal_year"] != fiscal_year]
+
+        rows.append(
+            {
+                "excluded_fiscal_year": fiscal_year,
+                "observation_count": len(subset),
+                "productivity_vs_monthly_wage": subset[
+                    "labor_productivity_yoy_pct"
+                ].corr(subset["monthly_wage_yoy_pct"]),
+                "productivity_vs_hourly_wage": subset[
+                    "labor_productivity_yoy_pct"
+                ].corr(subset["hourly_wage_yoy_pct"]),
+                "personnel_expenses_vs_monthly_wage": subset[
+                    "personnel_expenses_per_employee_yoy_pct"
+                ].corr(subset["monthly_wage_yoy_pct"]),
+                "personnel_expenses_vs_hourly_wage": subset[
+                    "personnel_expenses_per_employee_yoy_pct"
+                ].corr(subset["hourly_wage_yoy_pct"]),
+            }
+        )
+
+    return pd.DataFrame(rows)
