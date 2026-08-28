@@ -755,10 +755,9 @@ src/real_wage_dashboard/wage_revision_service.py
 
 主な役割：
 
-- e-Stat等からのデータ取得
-- APIレスポンス変換
-- 分類コードの名称変換
-- 年・企業規模・産業等の整形
+- e-Statから取得した公式Excelの読み込み
+- 表・行・列構造の正規化
+- 年、企業規模、賃金改定区分、重視要因等の整形
 - 欠損・特殊値処理
 - 分析用DataFrame生成
 
@@ -971,3 +970,668 @@ analysis
 とする。
 
 この段階では分析コードを先に実装せず、使用する統計表・分類・取得方法を確定してから `wage_revision_service.py` の設計へ進む。
+
+---
+
+## 23. `wage_revision_service.py` 詳細設計
+
+### 23.1 目的
+
+`wage_revision_service.py` は、「賃金引上げ等の実態に関する調査」の時系列Excelを読み込み、分析層で扱いやすい正規化済みDataFrameへ変換する。
+
+このモジュールでは、
+
+- Excel固有の表構造
+- 和暦表記
+- 企業規模ブロック
+- 特殊欠損値
+- 2025年の定義変更・選択肢追加
+
+を吸収する。
+
+分析ロジックや結果解釈は `wage_revision_analysis.py` に置き、service層では行わない。
+
+---
+
+### 23.2 入力ファイル
+
+```text
+data/raw/wage_revision/
+├── wage_revision_amount_rate.xlsx
+├── wage_revision_status.xlsx
+└── wage_revision_factors.xlsx
+```
+
+対応表：
+
+| ファイル                         | 元表        | 用途                 |
+| -------------------------------- | ----------- | -------------------- |
+| `wage_revision_amount_rate.xlsx` | 時系列第1表 | 改定額・改定率       |
+| `wage_revision_status.xlsx`      | 時系列第4表 | 賃金改定実施状況     |
+| `wage_revision_factors.xlsx`     | 時系列第6表 | 賃金改定時の重視要因 |
+
+---
+
+### 23.3 出力DataFrame
+
+#### 23.3.1 賃金改定額・改定率
+
+```text
+year
+company_size
+revision_amount_yen
+revision_rate_pct
+```
+
+例：
+
+```text
+2015 | total     | 5282 | 1.9
+2024 | total     | 11961 | 4.1
+2025 | total     | 13601 | 4.4
+```
+
+`company_size` は内部コードに統一する。
+
+例：
+
+```text
+total
+5000_plus
+1000_4999
+300_999
+100_299
+```
+
+---
+
+#### 23.3.2 賃金改定実施状況
+
+```text
+year
+company_size
+status
+company_share_pct
+comparison_note
+```
+
+`status` は次を基本とする。
+
+```text
+raised
+lowered
+unchanged
+no_revision
+undecided
+```
+
+`comparison_note` は、定義変更等によって時系列比較上の注意がある場合に設定する。
+
+例：
+
+```text
+2024 | total | lowered   | ... | "includes unchanged through 2024"
+2025 | total | lowered   | ... | null
+2025 | total | unchanged | ... | "separate category from 2025"
+```
+
+分析上の主指標は `raised` とする。
+
+---
+
+#### 23.3.3 賃金改定時の重視要因
+
+```text
+year
+company_size
+response_type
+factor
+company_share_pct
+comparison_note
+```
+
+`response_type`：
+
+```text
+most_important
+multiple
+```
+
+`factor`：
+
+```text
+business_performance
+market_rate
+employment_maintenance
+labor_retention
+consumer_prices
+labor_relations
+group_company_revision
+previous_revision
+minimum_wage
+government_support
+expert_advice
+other
+no_factor
+unknown
+```
+
+2025年に新規追加された要因については、
+
+```text
+minimum_wage
+government_support
+expert_advice
+```
+
+に `comparison_note` を付与する。
+
+例：
+
+```text
+"new response category from 2025"
+```
+
+---
+
+### 23.4 公開関数
+
+```python
+load_wage_revision_amount_rate() -> pd.DataFrame
+load_wage_revision_status() -> pd.DataFrame
+load_wage_revision_factors() -> pd.DataFrame
+```
+
+必要に応じて、後から統合関数を追加する。
+
+```python
+load_wage_revision_data()
+```
+
+は、現時点では作らない。
+
+3表は用途・構造が異なるため、個別ローダーを優先する。
+
+---
+
+### 23.5 private関数
+
+#### `_read_excel_without_header()`
+
+役割：
+
+- `header=None` でExcelを読み込む
+- シート名を明示する
+- 元データを加工せず返す
+
+---
+
+#### `_parse_japanese_year()`
+
+役割：
+
+和暦表記を西暦へ変換する。
+
+対応例：
+
+```text
+平成27年 → 2015
+　　28   → 2016
+平成30年 → 2018
+令和元年 → 2019
+　　２   → 2020
+　　７   → 2025
+```
+
+元号状態を保持しながら連続行を解釈する。
+
+脚注番号付き表記にも対応する。
+
+例：
+
+```text
+平成20９）
+平成10２）
+```
+
+年部分だけを抽出する。
+
+---
+
+#### `_clean_numeric_value()`
+
+役割：
+
+数値列の特殊値を整理する。
+
+次を欠損値として扱う。
+
+```text
+…
+・
+･
+-
+－
+空文字
+```
+
+`0` とは区別する。
+
+括弧付き表示や余分な空白も除去する。
+
+---
+
+#### `_normalize_company_size()`
+
+役割：
+
+Excel表示名を内部コードへ変換する。
+
+例：
+
+```text
+企業規模計   → total
+5,000人以上 → 5000_plus
+1,000～4,999人 → 1000_4999
+300～999人 → 300_999
+100～299人 → 100_299
+```
+
+規模区分が古い年代で異なる場合は、そのまま別コードにする。
+
+異なる区分を無理に統合しない。
+
+---
+
+#### `_normalize_factor_name()`
+
+役割：
+
+表6の日本語列名を内部コードへ変換する。
+
+例：
+
+```text
+企業の業績
+→ business_performance
+
+労働力の確保・定着
+→ labor_retention
+
+消費者物価の動向
+→ consumer_prices
+```
+
+---
+
+### 23.6 表1の読み込みルール
+
+#### 対象
+
+時系列第1表。
+
+#### 処理
+
+1. 年列を識別する。
+2. 企業規模区分のヘッダを識別する。
+3. 改定額と改定率を分離する。
+4. wide形式からlong形式へ変換する。
+5. 和暦を西暦へ変換する。
+6. 特殊値を欠損へ変換する。
+7. 年・企業規模で重複がないことを確認する。
+
+#### 注意
+
+今回の主分析では2015～2025年を使用する。
+
+古い年代の規模区分は現在と異なるため、全期間を単一規模系列として無理に接続しない。
+
+---
+
+### 23.7 表4の読み込みルール
+
+#### 処理
+
+1. 企業規模見出し行を検出する。
+2. 見出しを年次行へforward fillする。
+3. 年を西暦へ変換する。
+4. 主な改定状況列を抽出する。
+5. long形式へ変換する。
+
+#### 定義変更
+
+2024年以前は、
+
+```text
+「変わらない」
+→ 「引き下げた・引き下げる」に含まれる
+```
+
+2025年から、
+
+```text
+lowered
+unchanged
+```
+
+が分離される。
+
+そのため、
+
+```text
+lowered
+unchanged
+```
+
+は2015～2025年の連続比較指標として使用しない。
+
+主な時系列比較には、
+
+```text
+raised
+no_revision
+undecided
+```
+
+を使用する。
+
+---
+
+### 23.8 表6の読み込みルール
+
+#### 構造
+
+表6には、
+
+```text
+最も重視した要素
+```
+
+と、
+
+```text
+複数回答計
+```
+
+が存在する。
+
+両者を同一系列にしない。
+
+`response_type` で区別する。
+
+---
+
+#### `most_important`
+
+企業が賃金改定時に最も重視した要素。
+
+原則として構成比合計は約100%。
+
+本分析の主指標とする。
+
+---
+
+#### `multiple`
+
+最も重視した要素1つに加え、その他に重視した要素を最大2つまで回答した結果。
+
+各要因の割合合計は100%を超え得る。
+
+企業が判断時にどの要因を広く考慮したかを見る補助指標とする。
+
+---
+
+### 23.9 2025年の表6変更
+
+2025年には新たに、
+
+```text
+最低賃金
+行政からの支援
+専門家からの助言
+```
+
+が数値として表章される。
+
+そのため、2024年以前との単純な構成比差には注意する。
+
+分析上は、
+
+```text
+2015～2024
+→ 厳密な長期比較
+
+2025
+→ 新規選択肢追加を伴う参考比較
+```
+
+と扱う。
+
+ただし、2025年を除外するのではなく、変更内容を明示した上で表示する。
+
+---
+
+### 23.10 欠損値の扱い
+
+元Excelには、
+
+```text
+…
+・
+･
+-
+```
+
+等が存在する。
+
+これらはすべて、
+
+```python
+pd.NA
+```
+
+として扱う。
+
+特に、
+
+```text
+・
+```
+
+を `0` と解釈しない。
+
+「当該選択肢が存在しなかった」と、
+
+```text
+回答割合が0%
+```
+
+は異なる。
+
+---
+
+### 23.11 比較可能性情報
+
+データそのものとは別に、分析時に比較可能性を判定できるよう補助列を持つ。
+
+候補：
+
+```text
+comparison_note
+```
+
+例：
+
+```text
+null
+"new response category from 2025"
+"definition changed in 2025"
+```
+
+現時点ではbooleanフラグを大量に増やさず、まずは説明用文字列1列で管理する。
+
+---
+
+### 23.12 データ型
+
+#### amount/rate
+
+```text
+year                  int
+company_size          string
+revision_amount_yen   float
+revision_rate_pct     float
+```
+
+#### status
+
+```text
+year               int
+company_size       string
+status             string
+company_share_pct  float
+comparison_note    string / null
+```
+
+#### factors
+
+```text
+year               int
+company_size       string
+response_type      string
+factor             string
+company_share_pct  float
+comparison_note    string / null
+```
+
+---
+
+### 23.13 service層で行わないこと
+
+次は `wage_revision_service.py` では行わない。
+
+- 2015年と2025年の差の計算
+- 要因ランキング
+- 「企業業績重視が低下した」等の解釈
+- 企業規模差の評価
+- グラフ生成
+- 労働需給・法人企業統計との結合
+- 因果解釈
+
+これらは `wage_revision_analysis.py` または分析文書で扱う。
+
+---
+
+### 23.14 検証条件
+
+各ローダーで最低限次を確認する。
+
+#### 共通
+
+- `year` が整数へ変換できる。
+- `company_size` が欠損していない。
+- 年・規模・指標で重複がない。
+- 割合が0～100の範囲にある。
+- 特殊値が0へ誤変換されていない。
+
+#### 表1
+
+2015～2025年について、
+
+```text
+revision_amount_yen
+revision_rate_pct
+```
+
+が取得できること。
+
+#### 表4
+
+2015～2025年について、
+
+```text
+raised
+no_revision
+undecided
+```
+
+が取得できること。
+
+#### 表6
+
+2015～2025年について主な要因、
+
+```text
+business_performance
+market_rate
+employment_maintenance
+labor_retention
+consumer_prices
+labor_relations
+```
+
+が取得できること。
+
+また、
+
+```text
+minimum_wage
+government_support
+expert_advice
+```
+
+は2025年以前に数値が存在しないことを確認する。
+
+---
+
+### 23.15 テスト設計
+
+`tests/test_wage_revision_service.py` では最低限次をテストする。
+
+1. 和暦から西暦への変換
+2. 令和元年の変換
+3. 脚注番号付き年の変換
+4. 特殊値を欠損へ変換
+5. `0` を欠損扱いしない
+6. 企業規模コード変換
+7. 表1の正規化結果
+8. 表4のstatus変換
+9. 表4の2025年定義変更注記
+10. 表6のfactor変換
+11. `most_important` と `multiple` の区別
+12. 2025年新規要因への注記
+13. 重複行がないこと
+14. 割合が0～100内であること
+
+---
+
+### 23.16 実装順序
+
+```text
+1. 定数・ファイルパス
+2. 共通private関数
+3. 表1ローダー
+4. 表1テスト
+5. 表4ローダー
+6. 表4テスト
+7. 表6ローダー
+8. 表6テスト
+9. 実データ確認スクリプト
+10. analysis層へ進む
+```
+
+3表を一度に実装せず、表ごとに読み込みとテストを完成させる。
+
+---
+
+### 23.17 完了条件
+
+`wage_revision_service.py` は次を満たした時点で完成とする。
+
+- 3つの公式Excelを再現可能に読み込める。
+- 分析層がExcelの行・列位置を意識する必要がない。
+- 和暦・企業規模・特殊値が正規化されている。
+- 2025年の定義変更・選択肢追加を失わない。
+- `most_important` と `multiple` を区別できる。
+- 2015～2025年の主分析に必要な系列が取得できる。
+- 自動テストで主要な変換ルールを検証できる。
