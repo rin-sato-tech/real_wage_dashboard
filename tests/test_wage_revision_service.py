@@ -5,6 +5,7 @@ from real_wage_dashboard.wage_revision_service import (
     _normalize_company_size,
     _parse_japanese_year,
     load_wage_revision_amount_rate,
+    load_wage_revision_status,
 )
 
 
@@ -80,3 +81,82 @@ def test_load_wage_revision_amount_rate_has_no_future_years() -> None:
     df = load_wage_revision_amount_rate()
 
     assert df["year"].max() <= 2025
+
+
+def test_load_wage_revision_status_shape() -> None:
+    df = load_wage_revision_status()
+
+    assert len(df) == 275
+    assert df["year"].nunique() == 11
+    assert df["company_size"].nunique() == 5
+    assert df["status"].nunique() == 5
+
+
+def test_load_wage_revision_status_has_no_duplicates() -> None:
+    df = load_wage_revision_status()
+
+    assert not df.duplicated(
+        subset=[
+            "year",
+            "company_size",
+            "status",
+        ]
+    ).any()
+
+
+def test_load_wage_revision_status_2015_1000_4999() -> None:
+    df = load_wage_revision_status()
+
+    row = df[
+        (df["year"] == 2015)
+        & (df["company_size"] == "1000_4999")
+        & (df["status"] == "raised")
+    ].iloc[0]
+
+    assert row["company_share_pct"] == 93.9
+
+
+def test_load_wage_revision_status_2025_total() -> None:
+    df = load_wage_revision_status()
+
+    total_2025 = df[
+        (df["year"] == 2025)
+        & (df["company_size"] == "total")
+    ].set_index("status")
+
+    assert total_2025.loc["raised", "company_share_pct"] == 91.5
+    assert total_2025.loc["lowered", "company_share_pct"] == 1.1
+    assert total_2025.loc["unchanged", "company_share_pct"] == 1.0
+    assert total_2025.loc["no_revision", "company_share_pct"] == 2.4
+    assert total_2025.loc["undecided", "company_share_pct"] == 3.9
+
+
+def test_load_wage_revision_status_unchanged_definition() -> None:
+    df = load_wage_revision_status()
+
+    before_2025 = df[
+        (df["year"] <= 2024)
+        & (df["status"] == "unchanged")
+    ]
+
+    assert before_2025["company_share_pct"].isna().all()
+
+    after_change = df[
+        (df["year"] == 2025)
+        & (df["status"] == "unchanged")
+    ]
+
+    assert (
+        after_change["comparison_note"]
+        == "separate category from 2025"
+    ).all()
+
+
+def test_load_wage_revision_status_each_group_has_five_statuses() -> None:
+    df = load_wage_revision_status()
+
+    counts = df.groupby(
+        ["year", "company_size"]
+    ).size()
+
+    assert (counts == 5).all()
