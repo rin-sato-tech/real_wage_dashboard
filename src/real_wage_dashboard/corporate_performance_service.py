@@ -114,6 +114,8 @@ def add_corporate_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
         "employee_bonus",
         "welfare_expenses",
         "value_added",
+        "average_employees",
+        "labor_productivity",
     }
 
     missing_columns = required_columns - set(df.columns)
