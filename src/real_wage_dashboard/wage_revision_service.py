@@ -13,8 +13,14 @@ WAGE_REVISION_STATUS_PATH = (
     WAGE_REVISION_DATA_DIR / "wage_revision_status.xlsx"
 )
 
+WAGE_REVISION_FACTORS_PATH = (
+    WAGE_REVISION_DATA_DIR / "wage_revision_factors.xlsx"
+)
+
+
 WAGE_REVISION_AMOUNT_RATE_SHEET = "時系列第1表"
 WAGE_REVISION_STATUS_SHEET = "時系列第4表"
+WAGE_REVISION_FACTORS_SHEET = "時系列第６表"
 
 COMPANY_SIZE_LABELS = {
     "計": "total",
@@ -32,6 +38,23 @@ STATUS_LABELS = {
     "１人平均賃金は変わらなかった・変わらない": "unchanged",
     "賃金の改定を実施しない": "no_revision",
     "未定": "undecided",
+}
+
+FACTOR_COLUMNS = {
+    3: "business_performance",
+    4: "market_rate",
+    5: "employment_maintenance",
+    6: "labor_retention",
+    7: "consumer_prices",
+    8: "labor_relations",
+    9: "group_company_revision",
+    10: "previous_revision",
+    11: "minimum_wage",
+    12: "government_support",
+    13: "expert_advice",
+    14: "other",
+    15: "no_factor",
+    16: "unknown",
 }
 
 
@@ -425,3 +448,132 @@ def _parse_wage_revision_recent_year(
         year = 2018 + era_year
 
     return year, current_era
+
+
+def load_wage_revision_factors(
+    path: Path = WAGE_REVISION_FACTORS_PATH,
+) -> pd.DataFrame:
+    raw_df = pd.read_excel(
+        path,
+        sheet_name=WAGE_REVISION_FACTORS_SHEET,
+        header=None,
+    )
+
+    records: list[dict[str, object]] = []
+
+    current_company_size: str | None = None
+    current_response_type: str | None = None
+    current_era = "平成"
+
+    for row_index in range(len(raw_df)):
+        first_column = _clean_text(
+            raw_df.iloc[row_index, 0]
+        )
+
+        # 企業規模ブロック開始
+        company_size = _normalize_company_size(
+            raw_df.iloc[row_index, 0]
+        )
+
+        if company_size is not None:
+            current_company_size = company_size
+            current_response_type = "most_important"
+            current_era = "平成"
+            continue
+
+        # 同じ企業規模ブロック内で複数回答に切り替わる
+        if "複数回答計" in first_column:
+            current_company_size = "100_299"
+            current_response_type = "multiple"
+            current_era = "平成"
+            continue
+
+        if (
+            current_company_size is None
+            or current_response_type is None
+        ):
+            continue
+
+        # 要素列を先に読む。
+        # すべて欠損なら注記・空行なので除外する。
+        factor_values = {
+            factor: _clean_numeric_value(
+                raw_df.iloc[row_index, column_index]
+            )
+            for column_index, factor in FACTOR_COLUMNS.items()
+        }
+
+        if all(
+            pd.isna(value)
+            for value in factor_values.values()
+        ):
+            continue
+
+        year_value = raw_df.iloc[row_index, 1]
+
+        year, current_era = _parse_wage_revision_recent_year(
+            year_value,
+            current_era,
+        )
+
+        if year is None:
+            continue
+
+        if not 2015 <= year <= 2025:
+            continue
+
+        for factor, value in factor_values.items():
+            comparison_note: str | None = None
+
+            if factor in {
+                "minimum_wage",
+                "government_support",
+                "expert_advice",
+            }:
+                comparison_note = (
+                    "new response category from 2025"
+                )
+
+            records.append(
+                {
+                    "year": year,
+                    "company_size": current_company_size,
+                    "response_type": current_response_type,
+                    "factor": factor,
+                    "company_share_pct": value,
+                    "comparison_note": comparison_note,
+                }
+            )
+
+    df = pd.DataFrame(records)
+
+    duplicate_columns = [
+        "year",
+        "company_size",
+        "response_type",
+        "factor",
+    ]
+
+    if df.duplicated(subset=duplicate_columns).any():
+        duplicates = df[
+            df.duplicated(
+                subset=duplicate_columns,
+                keep=False,
+            )
+        ]
+
+        raise ValueError(
+            "賃金改定要因データに重複があります。\n"
+            f"{duplicates.to_string(index=False)}"
+        )
+
+    df = df.sort_values(
+        [
+            "year",
+            "company_size",
+            "response_type",
+            "factor",
+        ]
+    ).reset_index(drop=True)
+
+    return df
