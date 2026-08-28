@@ -61,10 +61,7 @@ def test_load_wage_revision_amount_rate_recent_period() -> None:
 def test_load_wage_revision_amount_rate_2025_total() -> None:
     df = load_wage_revision_amount_rate()
 
-    row = df[
-        (df["year"] == 2025)
-        & (df["company_size"] == "total")
-    ].iloc[0]
+    row = df[(df["year"] == 2025) & (df["company_size"] == "total")].iloc[0]
 
     assert row["revision_amount_yen"] == 13601.0
     assert row["revision_rate_pct"] == 4.4
@@ -73,9 +70,7 @@ def test_load_wage_revision_amount_rate_2025_total() -> None:
 def test_load_wage_revision_amount_rate_has_no_duplicates() -> None:
     df = load_wage_revision_amount_rate()
 
-    assert not df.duplicated(
-        subset=["year", "company_size"]
-    ).any()
+    assert not df.duplicated(subset=["year", "company_size"]).any()
 
 
 def test_load_wage_revision_amount_rate_has_no_future_years() -> None:
@@ -120,10 +115,9 @@ def test_load_wage_revision_status_2015_1000_4999() -> None:
 def test_load_wage_revision_status_2025_total() -> None:
     df = load_wage_revision_status()
 
-    total_2025 = df[
-        (df["year"] == 2025)
-        & (df["company_size"] == "total")
-    ].set_index("status")
+    total_2025 = df[(df["year"] == 2025) & (df["company_size"] == "total")].set_index(
+        "status"
+    )
 
     assert total_2025.loc["raised", "company_share_pct"] == 91.5
     assert total_2025.loc["lowered", "company_share_pct"] == 1.1
@@ -135,30 +129,19 @@ def test_load_wage_revision_status_2025_total() -> None:
 def test_load_wage_revision_status_unchanged_definition() -> None:
     df = load_wage_revision_status()
 
-    before_2025 = df[
-        (df["year"] <= 2024)
-        & (df["status"] == "unchanged")
-    ]
+    before_2025 = df[(df["year"] <= 2024) & (df["status"] == "unchanged")]
 
     assert before_2025["company_share_pct"].isna().all()
 
-    after_change = df[
-        (df["year"] == 2025)
-        & (df["status"] == "unchanged")
-    ]
+    after_change = df[(df["year"] == 2025) & (df["status"] == "unchanged")]
 
-    assert (
-        after_change["comparison_note"]
-        == "separate category from 2025"
-    ).all()
+    assert (after_change["comparison_note"] == "separate category from 2025").all()
 
 
 def test_load_wage_revision_status_each_group_has_five_statuses() -> None:
     df = load_wage_revision_status()
 
-    counts = df.groupby(
-        ["year", "company_size"]
-    ).size()
+    counts = df.groupby(["year", "company_size"]).size()
 
     assert (counts == 5).all()
 
@@ -185,9 +168,7 @@ def test_load_wage_revision_factors_has_no_duplicates() -> None:
 def test_load_wage_revision_factors_most_important_structure() -> None:
     df = load_wage_revision_factors()
 
-    most_important = df[
-        df["response_type"] == "most_important"
-    ]
+    most_important = df[df["response_type"] == "most_important"]
 
     assert len(most_important) == 770
     assert most_important["year"].nunique() == 11
@@ -198,9 +179,7 @@ def test_load_wage_revision_factors_most_important_structure() -> None:
 def test_load_wage_revision_factors_multiple_structure() -> None:
     df = load_wage_revision_factors()
 
-    multiple = df[
-        df["response_type"] == "multiple"
-    ]
+    multiple = df[df["response_type"] == "multiple"]
 
     assert len(multiple) == 154
     assert multiple["year"].nunique() == 11
@@ -217,20 +196,29 @@ def test_load_wage_revision_factors_2025_total() -> None:
         & (df["response_type"] == "most_important")
     ].set_index("factor")
 
-    assert rows.loc[
-        "business_performance",
-        "company_share_pct",
-    ] == 41.7
+    assert (
+        rows.loc[
+            "business_performance",
+            "company_share_pct",
+        ]
+        == 41.7
+    )
 
-    assert rows.loc[
-        "labor_retention",
-        "company_share_pct",
-    ] == 17.0
+    assert (
+        rows.loc[
+            "labor_retention",
+            "company_share_pct",
+        ]
+        == 17.0
+    )
 
-    assert rows.loc[
-        "minimum_wage",
-        "company_share_pct",
-    ] == 3.2
+    assert (
+        rows.loc[
+            "minimum_wage",
+            "company_share_pct",
+        ]
+        == 3.2
+    )
 
 
 def test_load_wage_revision_factors_new_2025_categories() -> None:
@@ -242,19 +230,10 @@ def test_load_wage_revision_factors_new_2025_categories() -> None:
         "expert_advice",
     }
 
-    before_2025 = df[
-        (df["year"] <= 2024)
-        & (df["factor"].isin(new_factors))
-    ]
+    before_2025 = df[(df["year"] <= 2024) & (df["factor"].isin(new_factors))]
 
     assert before_2025["company_share_pct"].isna().all()
 
-    rows_2025 = df[
-        (df["year"] == 2025)
-        & (df["factor"].isin(new_factors))
-    ]
+    rows_2025 = df[(df["year"] == 2025) & (df["factor"].isin(new_factors))]
 
-    assert (
-        rows_2025["comparison_note"]
-        == "new response category from 2025"
-    ).all()
+    assert (rows_2025["comparison_note"] == "new response category from 2025").all()

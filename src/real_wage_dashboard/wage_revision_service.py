@@ -1,5 +1,5 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pandas as pd
 
@@ -9,13 +9,9 @@ WAGE_REVISION_AMOUNT_RATE_PATH = (
     WAGE_REVISION_DATA_DIR / "wage_revision_amount_rate.xlsx"
 )
 
-WAGE_REVISION_STATUS_PATH = (
-    WAGE_REVISION_DATA_DIR / "wage_revision_status.xlsx"
-)
+WAGE_REVISION_STATUS_PATH = WAGE_REVISION_DATA_DIR / "wage_revision_status.xlsx"
 
-WAGE_REVISION_FACTORS_PATH = (
-    WAGE_REVISION_DATA_DIR / "wage_revision_factors.xlsx"
-)
+WAGE_REVISION_FACTORS_PATH = WAGE_REVISION_DATA_DIR / "wage_revision_factors.xlsx"
 
 
 WAGE_REVISION_AMOUNT_RATE_SHEET = "時系列第1表"
@@ -132,11 +128,7 @@ def _normalize_company_size(value: object) -> str | None:
     if not text:
         return None
 
-    text = (
-        text.replace("，", ",")
-        .replace("〜", "～")
-        .replace("~", "～")
-    )
+    text = text.replace("，", ",").replace("〜", "～").replace("~", "～")
 
     if text in {"計", "企業規模計"}:
         return "total"
@@ -188,22 +180,14 @@ def load_wage_revision_amount_rate(
     company_size_columns: list[tuple[int, str, str]] = []
 
     for column_index in range(2, raw_df.shape[1]):
-        company_size = _normalize_company_size(
-            raw_df.iloc[header_row, column_index]
-        )
+        company_size = _normalize_company_size(raw_df.iloc[header_row, column_index])
 
         if company_size is None:
             continue
 
-        metric = (
-            "revision_amount_yen"
-            if column_index < 7
-            else "revision_rate_pct"
-        )
+        metric = "revision_amount_yen" if column_index < 7 else "revision_rate_pct"
 
-        company_size_columns.append(
-            (column_index, company_size, metric)
-        )
+        company_size_columns.append((column_index, company_size, metric))
 
     records: dict[tuple[int, str], dict[str, object]] = {}
 
@@ -219,9 +203,7 @@ def load_wage_revision_amount_rate(
 
         # 数値データが存在しない行は無視する
         data_values = [
-            _clean_numeric_value(
-                raw_df.iloc[row_index, column_index]
-            )
+            _clean_numeric_value(raw_df.iloc[row_index, column_index])
             for column_index, _, _ in company_size_columns
         ]
 
@@ -260,9 +242,7 @@ def load_wage_revision_amount_rate(
     df = pd.DataFrame(records.values())
 
     # 今回必要な範囲外の異常な年を除外
-    df = df[
-        df["year"].between(1975, 2025)
-    ].copy()
+    df = df[df["year"].between(1975, 2025)].copy()
 
     df = df.sort_values(
         ["year", "company_size"],
@@ -310,9 +290,7 @@ def load_wage_revision_status(
         company_size_value = raw_df.iloc[row_index, 0]
         company_size_text = _clean_text(company_size_value)
 
-        company_size = _normalize_company_size(
-            company_size_value
-        )
+        company_size = _normalize_company_size(company_size_value)
 
         if company_size is not None:
             current_company_size = company_size
@@ -329,9 +307,7 @@ def load_wage_revision_status(
 
         # status列を先に取得する
         status_values = {
-            status: _clean_numeric_value(
-                raw_df.iloc[row_index, column_index]
-            )
+            status: _clean_numeric_value(raw_df.iloc[row_index, column_index])
             for column_index, status in status_columns.items()
         }
 
@@ -358,19 +334,13 @@ def load_wage_revision_status(
 
             if status == "lowered":
                 if year <= 2024:
-                    comparison_note = (
-                        "includes unchanged through 2024"
-                    )
+                    comparison_note = "includes unchanged through 2024"
 
             elif status == "unchanged":
                 if year <= 2024:
-                    comparison_note = (
-                        "not separately reported through 2024"
-                    )
+                    comparison_note = "not separately reported through 2024"
                 else:
-                    comparison_note = (
-                        "separate category from 2025"
-                    )
+                    comparison_note = "separate category from 2025"
 
             records.append(
                 {
@@ -399,13 +369,10 @@ def load_wage_revision_status(
         ]
 
         raise ValueError(
-            "賃金改定実施状況に重複があります。\n"
-            f"{duplicates.to_string(index=False)}"
+            f"賃金改定実施状況に重複があります。\n{duplicates.to_string(index=False)}"
         )
 
-    df = df.sort_values(
-        ["year", "company_size", "status"]
-    ).reset_index(drop=True)
+    df = df.sort_values(["year", "company_size", "status"]).reset_index(drop=True)
 
     return df
 
@@ -466,14 +433,10 @@ def load_wage_revision_factors(
     current_era = "平成"
 
     for row_index in range(len(raw_df)):
-        first_column = _clean_text(
-            raw_df.iloc[row_index, 0]
-        )
+        first_column = _clean_text(raw_df.iloc[row_index, 0])
 
         # 企業規模ブロック開始
-        company_size = _normalize_company_size(
-            raw_df.iloc[row_index, 0]
-        )
+        company_size = _normalize_company_size(raw_df.iloc[row_index, 0])
 
         if company_size is not None:
             current_company_size = company_size
@@ -488,25 +451,17 @@ def load_wage_revision_factors(
             current_era = "平成"
             continue
 
-        if (
-            current_company_size is None
-            or current_response_type is None
-        ):
+        if current_company_size is None or current_response_type is None:
             continue
 
         # 要素列を先に読む。
         # すべて欠損なら注記・空行なので除外する。
         factor_values = {
-            factor: _clean_numeric_value(
-                raw_df.iloc[row_index, column_index]
-            )
+            factor: _clean_numeric_value(raw_df.iloc[row_index, column_index])
             for column_index, factor in FACTOR_COLUMNS.items()
         }
 
-        if all(
-            pd.isna(value)
-            for value in factor_values.values()
-        ):
+        if all(pd.isna(value) for value in factor_values.values()):
             continue
 
         year_value = raw_df.iloc[row_index, 1]
@@ -530,9 +485,7 @@ def load_wage_revision_factors(
                 "government_support",
                 "expert_advice",
             }:
-                comparison_note = (
-                    "new response category from 2025"
-                )
+                comparison_note = "new response category from 2025"
 
             records.append(
                 {
@@ -563,8 +516,7 @@ def load_wage_revision_factors(
         ]
 
         raise ValueError(
-            "賃金改定要因データに重複があります。\n"
-            f"{duplicates.to_string(index=False)}"
+            f"賃金改定要因データに重複があります。\n{duplicates.to_string(index=False)}"
         )
 
     df = df.sort_values(

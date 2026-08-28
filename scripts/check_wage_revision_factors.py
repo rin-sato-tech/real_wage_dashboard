@@ -2,7 +2,6 @@ from real_wage_dashboard.wage_revision_service import (
     load_wage_revision_factors,
 )
 
-
 df = load_wage_revision_factors()
 
 print("件数")
@@ -40,5 +39,7 @@ print(
             "company_size",
             "response_type",
         ]
-    ).size().to_string()
+    )
+    .size()
+    .to_string()
 )

@@ -5,7 +5,6 @@ from real_wage_dashboard.wage_revision_analysis import (
     summarize_revision_trend,
 )
 
-
 df = summarize_revision_trend()
 
 # print(df.to_string(index=False))
@@ -18,9 +17,7 @@ factor_change_df = summarize_factor_changes()
 
 print("\n2015 -> 2025 factor change / total")
 print(
-    factor_change_df[
-        factor_change_df["company_size"] == "total"
-    ].to_string(index=False)
+    factor_change_df[factor_change_df["company_size"] == "total"].to_string(index=False)
 )
 
 print("\n2015 -> 2025 factor change / major factors")

@@ -10,9 +10,7 @@ from real_wage_dashboard.wage_revision_service import (
 def summarize_revision_trend() -> pd.DataFrame:
     amount_rate = load_wage_revision_amount_rate()
 
-    amount_rate = amount_rate[
-        amount_rate["company_size"] == "total"
-    ][
+    amount_rate = amount_rate[amount_rate["company_size"] == "total"][
         [
             "year",
             "revision_amount_yen",
@@ -23,8 +21,7 @@ def summarize_revision_trend() -> pd.DataFrame:
     status = load_wage_revision_status()
 
     raised = status[
-        (status["company_size"] == "total")
-        & (status["status"] == "raised")
+        (status["company_size"] == "total") & (status["status"] == "raised")
     ][
         [
             "year",
@@ -51,9 +48,7 @@ def summarize_company_size_revision() -> pd.DataFrame:
 
     status = load_wage_revision_status()
 
-    raised = status[
-        status["status"] == "raised"
-    ][
+    raised = status[status["status"] == "raised"][
         [
             "year",
             "company_size",
@@ -75,28 +70,30 @@ def summarize_company_size_revision() -> pd.DataFrame:
         validate="one_to_one",
     )
 
-    return result[
-        [
-            "year",
-            "company_size",
-            "revision_amount_yen",
-            "revision_rate_pct",
-            "raised_share_pct",
+    return (
+        result[
+            [
+                "year",
+                "company_size",
+                "revision_amount_yen",
+                "revision_rate_pct",
+                "raised_share_pct",
+            ]
         ]
-    ].sort_values(
-        [
-            "year",
-            "company_size",
-        ]
-    ).reset_index(drop=True)
+        .sort_values(
+            [
+                "year",
+                "company_size",
+            ]
+        )
+        .reset_index(drop=True)
+    )
 
 
 def summarize_revision_factors() -> pd.DataFrame:
     factors = load_wage_revision_factors()
 
-    result = factors[
-        factors["response_type"] == "most_important"
-    ][
+    result = factors[factors["response_type"] == "most_important"][
         [
             "year",
             "company_size",
@@ -120,9 +117,7 @@ def summarize_factor_changes(
 ) -> pd.DataFrame:
     factors = summarize_revision_factors()
 
-    start = factors[
-        factors["year"] == start_year
-    ][
+    start = factors[factors["year"] == start_year][
         [
             "company_size",
             "factor",
@@ -134,9 +129,7 @@ def summarize_factor_changes(
         }
     )
 
-    end = factors[
-        factors["year"] == end_year
-    ][
+    end = factors[factors["year"] == end_year][
         [
             "company_size",
             "factor",
@@ -158,10 +151,7 @@ def summarize_factor_changes(
         validate="one_to_one",
     )
 
-    result["change_pt"] = (
-        result["end_share_pct"]
-        - result["start_share_pct"]
-    )
+    result["change_pt"] = result["end_share_pct"] - result["start_share_pct"]
 
     return result.sort_values(
         [

@@ -40,9 +40,7 @@ def test_summarize_company_size_revision_shape() -> None:
 
     assert len(df) == 55
 
-    counts = df.groupby(
-        ["year", "company_size"]
-    ).size()
+    counts = df.groupby(["year", "company_size"]).size()
 
     assert (counts == 1).all()
 
@@ -50,29 +48,39 @@ def test_summarize_company_size_revision_shape() -> None:
 def test_summarize_company_size_revision_2025() -> None:
     df = summarize_company_size_revision()
 
-    rows = df[
-        df["year"] == 2025
-    ].set_index("company_size")
+    rows = df[df["year"] == 2025].set_index("company_size")
 
-    assert rows.loc[
-        "5000_plus",
-        "revision_rate_pct",
-    ] == 5.1
+    assert (
+        rows.loc[
+            "5000_plus",
+            "revision_rate_pct",
+        ]
+        == 5.1
+    )
 
-    assert rows.loc[
-        "100_299",
-        "revision_rate_pct",
-    ] == 3.6
+    assert (
+        rows.loc[
+            "100_299",
+            "revision_rate_pct",
+        ]
+        == 3.6
+    )
 
-    assert rows.loc[
-        "5000_plus",
-        "raised_share_pct",
-    ] == 98.9
+    assert (
+        rows.loc[
+            "5000_plus",
+            "raised_share_pct",
+        ]
+        == 98.9
+    )
 
-    assert rows.loc[
-        "100_299",
-        "raised_share_pct",
-    ] == 89.7
+    assert (
+        rows.loc[
+            "100_299",
+            "raised_share_pct",
+        ]
+        == 89.7
+    )
 
 
 def test_summarize_revision_factors_structure() -> None:
@@ -94,33 +102,39 @@ def test_summarize_revision_factors_structure() -> None:
 def test_summarize_revision_factors_2025_total() -> None:
     df = summarize_revision_factors()
 
-    rows = df[
-        (df["year"] == 2025)
-        & (df["company_size"] == "total")
-    ].set_index("factor")
+    rows = df[(df["year"] == 2025) & (df["company_size"] == "total")].set_index(
+        "factor"
+    )
 
-    assert rows.loc[
-        "business_performance",
-        "company_share_pct",
-    ] == 41.7
+    assert (
+        rows.loc[
+            "business_performance",
+            "company_share_pct",
+        ]
+        == 41.7
+    )
 
-    assert rows.loc[
-        "labor_retention",
-        "company_share_pct",
-    ] == 17.0
+    assert (
+        rows.loc[
+            "labor_retention",
+            "company_share_pct",
+        ]
+        == 17.0
+    )
 
-    assert rows.loc[
-        "market_rate",
-        "company_share_pct",
-    ] == 7.7
+    assert (
+        rows.loc[
+            "market_rate",
+            "company_share_pct",
+        ]
+        == 7.7
+    )
 
 
 def test_summarize_factor_changes_total() -> None:
     df = summarize_factor_changes()
 
-    rows = df[
-        df["company_size"] == "total"
-    ].set_index("factor")
+    rows = df[df["company_size"] == "total"].set_index("factor")
 
     assert rows.loc[
         "business_performance",
@@ -165,9 +179,7 @@ def test_summarize_factor_changes_new_categories_are_missing() -> None:
 def test_summarize_factor_changes_company_size_difference() -> None:
     df = summarize_factor_changes()
 
-    business = df[
-        df["factor"] == "business_performance"
-    ].set_index("company_size")
+    business = df[df["factor"] == "business_performance"].set_index("company_size")
 
     assert business.loc[
         "5000_plus",
@@ -179,9 +191,7 @@ def test_summarize_factor_changes_company_size_difference() -> None:
         "change_pt",
     ] == pytest.approx(-8.7)
 
-    retention = df[
-        df["factor"] == "labor_retention"
-    ].set_index("company_size")
+    retention = df[df["factor"] == "labor_retention"].set_index("company_size")
 
     assert retention.loc[
         "1000_4999",
