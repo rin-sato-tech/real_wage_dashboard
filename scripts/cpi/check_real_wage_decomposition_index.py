@@ -15,13 +15,10 @@ from real_wage_dashboard.real_wage_decomposition_analysis import (
     validate_analysis_results,
 )
 
-
 DATA_DIR = Path("data/raw/real_wage_decomposition")
 
 WAGE_INDEX_PATH = DATA_DIR / "wage_index_total_5plus.xls"
-OFFICIAL_REAL_WAGE_INDEX_PATH = (
-    DATA_DIR / "official_real_wage_index_5plus.xls"
-)
+OFFICIAL_REAL_WAGE_INDEX_PATH = DATA_DIR / "official_real_wage_index_5plus.xls"
 
 MAIN_CPI_SERIES = "持家の帰属家賃を除く総合"
 SENSITIVITY_CPI_SERIES = "総合"
@@ -114,18 +111,12 @@ def print_chained_summary(summary: pd.Series) -> None:
 
     display = pd.Series(
         {
-            "名目賃金累積変化率 (%)":
-                summary["nominal_change_pct"],
-            "CPI累積変化率 (%)":
-                summary["cpi_change_pct"],
-            "実質賃金機械的累積変化率 (%)":
-                summary["mechanical_real_change_pct"],
-            "名目賃金累積対数寄与":
-                summary["nominal_log_contribution"],
-            "物価累積対数寄与":
-                summary["price_log_contribution"],
-            "実質賃金累積対数変化":
-                summary["real_log_change"],
+            "名目賃金累積変化率 (%)": summary["nominal_change_pct"],
+            "CPI累積変化率 (%)": summary["cpi_change_pct"],
+            "実質賃金機械的累積変化率 (%)": summary["mechanical_real_change_pct"],
+            "名目賃金累積対数寄与": summary["nominal_log_contribution"],
+            "物価累積対数寄与": summary["price_log_contribution"],
+            "実質賃金累積対数変化": summary["real_log_change"],
         }
     )
 
@@ -166,28 +157,20 @@ def main() -> None:
     wage_index_df = extract_annual_index(WAGE_INDEX_PATH)
     wage_yoy_df = extract_annual_published_yoy(WAGE_INDEX_PATH)
 
-    official_real_index_df = extract_annual_index(
-        OFFICIAL_REAL_WAGE_INDEX_PATH
-    )
-    official_real_yoy_df = extract_annual_published_yoy(
-        OFFICIAL_REAL_WAGE_INDEX_PATH
-    )
+    official_real_index_df = extract_annual_index(OFFICIAL_REAL_WAGE_INDEX_PATH)
+    official_real_yoy_df = extract_annual_published_yoy(OFFICIAL_REAL_WAGE_INDEX_PATH)
 
     main_cpi_monthly_df = load_cpi_dataframe(
         app_id=app_id,
         series_code=CPI_SERIES[MAIN_CPI_SERIES],
     )
-    main_cpi_annual_df = create_complete_annual_cpi(
-        main_cpi_monthly_df
-    )
+    main_cpi_annual_df = create_complete_annual_cpi(main_cpi_monthly_df)
 
     sensitivity_cpi_monthly_df = load_cpi_dataframe(
         app_id=app_id,
         series_code=CPI_SERIES[SENSITIVITY_CPI_SERIES],
     )
-    sensitivity_cpi_annual_df = create_complete_annual_cpi(
-        sensitivity_cpi_monthly_df
-    )
+    sensitivity_cpi_annual_df = create_complete_annual_cpi(sensitivity_cpi_monthly_df)
 
     analysis_df = build_real_wage_decomposition_data(
         wage_index_df=wage_index_df,
@@ -197,9 +180,7 @@ def main() -> None:
         cpi_annual_df=main_cpi_annual_df,
     )
 
-    period = analysis_df.loc[
-        analysis_df["year"].between(START_YEAR, END_YEAR)
-    ].copy()
+    period = analysis_df.loc[analysis_df["year"].between(START_YEAR, END_YEAR)].copy()
 
     validate_analysis_results(
         analysis_df=analysis_df,

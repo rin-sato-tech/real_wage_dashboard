@@ -10,7 +10,6 @@ from real_wage_dashboard.establishment_size_wage_analysis import (
 )
 from real_wage_dashboard.wage_service import load_wage_csv
 
-
 START_YEAR = 2015
 END_YEAR = 2025
 
@@ -19,9 +18,7 @@ def print_yearly_comparison(comparison: pd.DataFrame) -> None:
     for employment_name in TARGET_EMPLOYMENT_TYPES:
         print(f"\n=== {employment_name}: 年次比較 ===")
 
-        subset = comparison[
-            comparison["employment_name"] == employment_name
-        ]
+        subset = comparison[comparison["employment_name"] == employment_name]
 
         columns = [
             "year",
@@ -59,9 +56,7 @@ def build_summaries(comparison: pd.DataFrame) -> pd.DataFrame:
 
 
 def print_period_summary(summaries: pd.DataFrame) -> None:
-    print(
-        f"\n=== {START_YEAR}→{END_YEAR}: 変化率・比率変化 ==="
-    )
+    print(f"\n=== {START_YEAR}→{END_YEAR}: 変化率・比率変化 ===")
 
     columns = [
         "employment_name",
@@ -91,10 +86,7 @@ def print_period_summary(summaries: pd.DataFrame) -> None:
 
 
 def print_decomposition(summaries: pd.DataFrame) -> None:
-    print(
-        f"\n=== {START_YEAR}→{END_YEAR}: "
-        "月額賃金比率変化の対数分解 ==="
-    )
+    print(f"\n=== {START_YEAR}→{END_YEAR}: 月額賃金比率変化の対数分解 ===")
 
     columns = [
         "employment_name",
@@ -121,9 +113,7 @@ def main() -> None:
         end_year=END_YEAR,
     )
 
-    comparison_df = build_establishment_size_comparison(
-        annual_df
-    )
+    comparison_df = build_establishment_size_comparison(annual_df)
 
     validate_establishment_size_results(
         annual_df=annual_df,
