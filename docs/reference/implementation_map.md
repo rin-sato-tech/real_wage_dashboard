@@ -212,7 +212,7 @@ UI化の有無は分析の完成度とは別に判断する。
 | UI         | なし                                                          |
 | 中核処理   | `src/real_wage_dashboard/real_wage_decomposition_analysis.py` |
 | 入力       | 毎月勤労統計の指数・増減率、公表実質賃金系列、CPI系列         |
-| 確認       | `scripts/check_real_wage_decomposition_index.py`              |
+| 確認       | `scripts/cpi/check_real_wage_decomposition_index.py`              |
 | 中核テスト | `tests/test_real_wage_decomposition_analysis.py`              |
 
 ### 6.10 事業所規模別賃金分析
@@ -224,7 +224,7 @@ UI化の有無は分析の完成度とは別に判断する。
 | 中核処理     | `src/real_wage_dashboard/establishment_size_wage_analysis.py` |
 | 賃金抽出     | `src/real_wage_dashboard/wage_service.py`                     |
 | 労働時間抽出 | `src/real_wage_dashboard/working_hours_service.py`            |
-| 確認         | `scripts/check_establishment_size_wage.py`                    |
+| 確認         | `scripts/wage/check_establishment_size_wage.py`                    |
 | 中核テスト   | `tests/test_establishment_size_wage_analysis.py`              |
 
 ---

@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 
-
 TARGET_SIZES = {
     "5人以上": "T",
     "30人以上": "0",
@@ -50,35 +49,30 @@ def prepare_establishment_size_annual_data(
 
     work["year"] = pd.to_numeric(work["年"], errors="coerce")
 
-    work = work.loc[
-        work["year"].between(start_year, end_year)
-    ].copy()
+    work = work.loc[work["year"].between(start_year, end_year)].copy()
 
     size_map = {code: name for name, code in TARGET_SIZES.items()}
-    employment_map = {
-        code: name
-        for name, code in TARGET_EMPLOYMENT_TYPES.items()
-    }
+    employment_map = {code: name for name, code in TARGET_EMPLOYMENT_TYPES.items()}
 
     work["size_name"] = work["規模"].map(size_map)
     work["employment_name"] = work["就業形態"].map(employment_map)
 
-    work["hourly_wage"] = (
-        work["現金給与総額"] / work["総実労働時間"]
-    )
+    work["hourly_wage"] = work["現金給与総額"] / work["総実労働時間"]
 
-    result = work[
-        [
-            "year",
-            "size_name",
-            "employment_name",
-            "現金給与総額",
-            "総実労働時間",
-            "hourly_wage",
+    result = (
+        work[
+            [
+                "year",
+                "size_name",
+                "employment_name",
+                "現金給与総額",
+                "総実労働時間",
+                "hourly_wage",
+            ]
         ]
-    ].sort_values(
-        ["employment_name", "year", "size_name"]
-    ).reset_index(drop=True)
+        .sort_values(["employment_name", "year", "size_name"])
+        .reset_index(drop=True)
+    )
 
     return result
 
@@ -90,9 +84,7 @@ def build_establishment_size_comparison(
     rows = []
 
     for employment_name in TARGET_EMPLOYMENT_TYPES:
-        subset = annual_df[
-            annual_df["employment_name"] == employment_name
-        ].copy()
+        subset = annual_df[annual_df["employment_name"] == employment_name].copy()
 
         pivot = subset.pivot(
             index="year",
@@ -113,11 +105,7 @@ def build_establishment_size_comparison(
             ("hourly_wage", "30人以上"),
         ]
 
-        missing = [
-            column
-            for column in required_columns
-            if column not in pivot.columns
-        ]
+        missing = [column for column in required_columns if column not in pivot.columns]
 
         if missing:
             raise ValueError(
@@ -153,9 +141,11 @@ def build_establishment_size_comparison(
                 }
             )
 
-    return pd.DataFrame(rows).sort_values(
-        ["employment_name", "year"]
-    ).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["employment_name", "year"])
+        .reset_index(drop=True)
+    )
 
 
 def summarize_establishment_size_change(
@@ -165,9 +155,7 @@ def summarize_establishment_size_change(
     end_year: int,
 ) -> pd.Series:
     """指定期間の賃金・時間・時給比率変化と対数分解を要約する。"""
-    subset = comparison_df[
-        comparison_df["employment_name"] == employment_name
-    ].copy()
+    subset = comparison_df[comparison_df["employment_name"] == employment_name].copy()
 
     start = subset.loc[subset["year"] == start_year]
     end = subset.loc[subset["year"] == end_year]
@@ -184,18 +172,15 @@ def summarize_establishment_size_change(
         return (end_value / start_value - 1) * 100
 
     wage_ratio_log_change = (
-        np.log(end["wage_ratio_30_to_5"])
-        - np.log(start["wage_ratio_30_to_5"])
+        np.log(end["wage_ratio_30_to_5"]) - np.log(start["wage_ratio_30_to_5"])
     ) * 100
 
     hourly_ratio_log_contribution = (
-        np.log(end["hourly_ratio_30_to_5"])
-        - np.log(start["hourly_ratio_30_to_5"])
+        np.log(end["hourly_ratio_30_to_5"]) - np.log(start["hourly_ratio_30_to_5"])
     ) * 100
 
     hours_ratio_log_contribution = (
-        np.log(end["hours_ratio_30_to_5"])
-        - np.log(start["hours_ratio_30_to_5"])
+        np.log(end["hours_ratio_30_to_5"]) - np.log(start["hours_ratio_30_to_5"])
     ) * 100
 
     decomposition_error = (
@@ -209,9 +194,7 @@ def summarize_establishment_size_change(
             "employment_name": employment_name,
             "start_year": start_year,
             "end_year": end_year,
-            "wage_5plus_change_pct": pct_change(
-                start["wage_5plus"], end["wage_5plus"]
-            ),
+            "wage_5plus_change_pct": pct_change(start["wage_5plus"], end["wage_5plus"]),
             "wage_30plus_change_pct": pct_change(
                 start["wage_30plus"], end["wage_30plus"]
             ),
@@ -248,10 +231,8 @@ def summarize_establishment_size_change(
                 end["hourly_ratio_30_to_5"],
             ),
             "wage_ratio_log_change": wage_ratio_log_change,
-            "hourly_ratio_log_contribution":
-                hourly_ratio_log_contribution,
-            "hours_ratio_log_contribution":
-                hours_ratio_log_contribution,
+            "hourly_ratio_log_contribution": hourly_ratio_log_contribution,
+            "hours_ratio_log_contribution": hours_ratio_log_contribution,
             "decomposition_error": decomposition_error,
         }
     )
@@ -265,15 +246,12 @@ def validate_establishment_size_results(
 ) -> None:
     """分析用データの完全性と恒等関係を検証する。"""
     expected_rows = (
-        len(TARGET_SIZES)
-        * len(TARGET_EMPLOYMENT_TYPES)
-        * (end_year - start_year + 1)
+        len(TARGET_SIZES) * len(TARGET_EMPLOYMENT_TYPES) * (end_year - start_year + 1)
     )
 
     if len(annual_df) != expected_rows:
         raise AssertionError(
-            f"年次データ件数が想定と異なります: "
-            f"{len(annual_df)} != {expected_rows}"
+            f"年次データ件数が想定と異なります: {len(annual_df)} != {expected_rows}"
         )
 
     value_columns = [
@@ -298,10 +276,13 @@ def validate_establishment_size_results(
         raise AssertionError("比率に欠損があります。")
 
     identity_error = (
-        comparison_df["hourly_ratio_30_to_5"]
-        * comparison_df["hours_ratio_30_to_5"]
-        - comparison_df["wage_ratio_30_to_5"]
-    ).abs().max()
+        (
+            comparison_df["hourly_ratio_30_to_5"] * comparison_df["hours_ratio_30_to_5"]
+            - comparison_df["wage_ratio_30_to_5"]
+        )
+        .abs()
+        .max()
+    )
 
     if identity_error > 1e-10:
         raise AssertionError(

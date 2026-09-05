@@ -811,9 +811,9 @@ src/real_wage_dashboard/wage_revision_analysis.py
 候補：
 
 ```text
-scripts/check_wage_revision_status.py
-scripts/check_wage_revision_factors.py
-scripts/check_wage_revision_analysis.py
+scripts/wage_revision/check_wage_revision_status.py
+scripts/wage_revision/check_wage_revision_factors.py
+scripts/wage_revision/check_wage_revision_analysis.py
 ```
 
 を使用して、読み込み結果・件数・主要数値を確認した。

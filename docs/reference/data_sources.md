@@ -163,7 +163,7 @@ vs
 確認には、
 
 ```bash
-uv run python scripts/check_establishment_size_wage.py
+uv run python scripts/wage/check_establishment_size_wage.py
 ```
 
 を使用する。
@@ -470,11 +470,11 @@ API通信は`src/real_wage_dashboard/estat_client.py`、法人企業統計固有
 公表ファイルを更新した場合は、
 
 ```bash
-uv run python scripts/check_wage_revision_excel_structure.py
-uv run python scripts/check_wage_revision_amount_rate.py
-uv run python scripts/check_wage_revision_status.py
-uv run python scripts/check_wage_revision_factors.py
-uv run python scripts/check_wage_revision_analysis.py
+uv run python scripts/wage_revision/check_wage_revision_excel_structure.py
+uv run python scripts/wage_revision/check_wage_revision_amount_rate.py
+uv run python scripts/wage_revision/check_wage_revision_status.py
+uv run python scripts/wage_revision/check_wage_revision_factors.py
+uv run python scripts/wage_revision/check_wage_revision_analysis.py
 ```
 
 を実行する。
@@ -555,7 +555,7 @@ uv run pytest tests/test_wage_revision_analysis.py
 確認には、
 
 ```bash
-uv run python scripts/check_real_wage_decomposition_index.py
+uv run python scripts/cpi/check_real_wage_decomposition_index.py
 ```
 
 を使用する。
@@ -588,15 +588,15 @@ uv run ruff format --check .
 毎月勤労統計・CPI：
 
 ```bash
-uv run python scripts/check_wage_csv.py
-uv run python scripts/check_wage_data.py
-uv run python scripts/check_wage_v2_combinations.py
-uv run python scripts/check_wage_v2_conditions.py
-uv run python scripts/check_working_hours_conditions.py
-uv run python scripts/check_cpi_data.py
-uv run python scripts/check_real_wage_data.py
-uv run python scripts/check_establishment_size_wage.py
-uv run python scripts/check_real_wage_decomposition_index.py
+uv run python scripts/wage/check_wage_csv.py
+uv run python scripts/wage/check_wage_data.py
+uv run python scripts/wage/check_wage_v2_combinations.py
+uv run python scripts/wage/check_wage_v2_conditions.py
+uv run python scripts/wage/check_working_hours_conditions.py
+uv run python scripts/cpi/check_cpi_data.py
+uv run python scripts/cpi/check_real_wage_data.py
+uv run python scripts/wage/check_establishment_size_wage.py
+uv run python scripts/cpi/check_real_wage_decomposition_index.py
 ```
 
 労働需給：
@@ -616,14 +616,14 @@ uv run pytest tests/test_corporate_performance_analysis.py
 必要に応じて、
 
 ```bash
-uv run python scripts/check_corporate_stats_metadata.py
-uv run python scripts/check_corporate_performance_data.py
-uv run python scripts/check_corporate_performance_comparison.py
-uv run python scripts/check_corporate_performance_by_capital_class.py
-uv run python scripts/check_corporate_performance_by_industry.py
-uv run python scripts/check_corporate_wage_industry_relationship.py
-uv run python scripts/check_corporate_wage_time_series.py
-uv run python scripts/check_corporate_long_term_availability.py
+uv run python scripts/corporate/check_corporate_stats_metadata.py
+uv run python scripts/corporate/check_corporate_performance_data.py
+uv run python scripts/corporate/check_corporate_performance_comparison.py
+uv run python scripts/corporate/check_corporate_performance_by_capital_class.py
+uv run python scripts/corporate/check_corporate_performance_by_industry.py
+uv run python scripts/corporate/check_corporate_wage_industry_relationship.py
+uv run python scripts/corporate/check_corporate_wage_time_series.py
+uv run python scripts/corporate/check_corporate_long_term_availability.py
 ```
 
 を実行する。
@@ -631,11 +631,11 @@ uv run python scripts/check_corporate_long_term_availability.py
 賃金改定調査：
 
 ```bash
-uv run python scripts/check_wage_revision_excel_structure.py
-uv run python scripts/check_wage_revision_amount_rate.py
-uv run python scripts/check_wage_revision_status.py
-uv run python scripts/check_wage_revision_factors.py
-uv run python scripts/check_wage_revision_analysis.py
+uv run python scripts/wage_revision/check_wage_revision_excel_structure.py
+uv run python scripts/wage_revision/check_wage_revision_amount_rate.py
+uv run python scripts/wage_revision/check_wage_revision_status.py
+uv run python scripts/wage_revision/check_wage_revision_factors.py
+uv run python scripts/wage_revision/check_wage_revision_analysis.py
 ```
 
 ---

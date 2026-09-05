@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -48,18 +47,11 @@ def test_summarize_chained_period_change():
     expected_cpi = 1.05 * 1.05 - 1
     expected_real = (1.10 * 1.10) / (1.05 * 1.05) - 1
 
-    assert result["nominal_change_pct"] == pytest.approx(
-        expected_nominal * 100
-    )
-    assert result["cpi_change_pct"] == pytest.approx(
-        expected_cpi * 100
-    )
-    assert result["mechanical_real_change_pct"] == pytest.approx(
-        expected_real * 100
-    )
+    assert result["nominal_change_pct"] == pytest.approx(expected_nominal * 100)
+    assert result["cpi_change_pct"] == pytest.approx(expected_cpi * 100)
+    assert result["mechanical_real_change_pct"] == pytest.approx(expected_real * 100)
     assert result["real_log_change"] == pytest.approx(
-        result["nominal_log_contribution"]
-        + result["price_log_contribution"]
+        result["nominal_log_contribution"] + result["price_log_contribution"]
     )
 
 
@@ -126,10 +118,14 @@ def test_build_real_wage_decomposition_identity():
     )
 
     error = (
-        result["nominal_log_contribution"]
-        + result["price_log_contribution"]
-        - result["real_log_change"]
-    ).abs().max()
+        (
+            result["nominal_log_contribution"]
+            + result["price_log_contribution"]
+            - result["real_log_change"]
+        )
+        .abs()
+        .max()
+    )
 
     assert error == pytest.approx(0.0)
 

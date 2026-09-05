@@ -144,24 +144,24 @@ uv run ruff format --check .
 ### 7.1 毎月勤労統計を更新した場合
 
 ```bash
-uv run python scripts/check_wage_csv.py
-uv run python scripts/check_wage_v2_conditions.py
-uv run python scripts/check_wage_v2_combinations.py
-uv run python scripts/check_wage_data.py
-uv run python scripts/check_working_hours_conditions.py
-uv run python scripts/check_establishment_size_wage.py
+uv run python scripts/wage/check_wage_csv.py
+uv run python scripts/wage/check_wage_v2_conditions.py
+uv run python scripts/wage/check_wage_v2_combinations.py
+uv run python scripts/wage/check_wage_data.py
+uv run python scripts/wage/check_working_hours_conditions.py
+uv run python scripts/wage/check_establishment_size_wage.py
 ```
 
 CPIとの結合結果も確認する場合：
 
 ```bash
-uv run python scripts/check_real_wage_data.py
+uv run python scripts/cpi/check_real_wage_data.py
 ```
 
 実質賃金要因分解への影響も確認する場合：
 
 ```bash
-uv run python scripts/check_real_wage_decomposition_index.py
+uv run python scripts/cpi/check_real_wage_decomposition_index.py
 ```
 
 ### 7.2 労働需給データを更新した場合
@@ -176,16 +176,16 @@ uv run pytest tests/test_labor_market_analysis.py
 まず、公表Excelの構造を確認する。
 
 ```bash
-uv run python scripts/check_wage_revision_excel_structure.py
+uv run python scripts/wage_revision/check_wage_revision_excel_structure.py
 ```
 
 次に、
 
 ```bash
-uv run python scripts/check_wage_revision_amount_rate.py
-uv run python scripts/check_wage_revision_status.py
-uv run python scripts/check_wage_revision_factors.py
-uv run python scripts/check_wage_revision_analysis.py
+uv run python scripts/wage_revision/check_wage_revision_amount_rate.py
+uv run python scripts/wage_revision/check_wage_revision_status.py
+uv run python scripts/wage_revision/check_wage_revision_factors.py
+uv run python scripts/wage_revision/check_wage_revision_analysis.py
 ```
 
 を実行する。
@@ -202,7 +202,7 @@ uv run pytest tests/test_wage_revision_analysis.py
 ### 7.4 実質賃金要因分解用ファイルを更新した場合
 
 ```bash
-uv run python scripts/check_real_wage_decomposition_index.py
+uv run python scripts/cpi/check_real_wage_decomposition_index.py
 uv run pytest tests/test_real_wage_decomposition_analysis.py
 ```
 

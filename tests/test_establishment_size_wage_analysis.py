@@ -71,10 +71,13 @@ def test_build_establishment_size_comparison_identity():
     result = build_establishment_size_comparison(annual)
 
     error = (
-        result["hourly_ratio_30_to_5"]
-        * result["hours_ratio_30_to_5"]
-        - result["wage_ratio_30_to_5"]
-    ).abs().max()
+        (
+            result["hourly_ratio_30_to_5"] * result["hours_ratio_30_to_5"]
+            - result["wage_ratio_30_to_5"]
+        )
+        .abs()
+        .max()
+    )
 
     assert error == pytest.approx(0.0)
 

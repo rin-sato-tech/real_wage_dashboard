@@ -3,7 +3,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-
 OFFICIAL_REAL_INDEX_TOLERANCE = 0.10
 
 
@@ -48,8 +47,7 @@ def find_year_header_row(
 def validate_tl_sheet(df: pd.DataFrame, path: Path) -> None:
     """TLシートが今回の分析条件に対応していることを確認する。"""
     header_text = " ".join(
-        normalize_text(value)
-        for value in df.iloc[:6, :8].to_numpy().ravel()
+        normalize_text(value) for value in df.iloc[:6, :8].to_numpy().ravel()
     )
 
     required_keywords = [
@@ -58,17 +56,10 @@ def validate_tl_sheet(df: pd.DataFrame, path: Path) -> None:
         "就業形態計",
     ]
 
-    missing = [
-        keyword
-        for keyword in required_keywords
-        if keyword not in header_text
-    ]
+    missing = [keyword for keyword in required_keywords if keyword not in header_text]
 
     if missing:
-        raise ValueError(
-            f"{path} のTLシートが想定条件と一致しません。"
-            f"不足: {missing}"
-        )
+        raise ValueError(f"{path} のTLシートが想定条件と一致しません。不足: {missing}")
 
 
 def read_long_term_sheet(
@@ -125,8 +116,7 @@ def extract_annual_index(
         raise ValueError(f"指数データを抽出できませんでした: {path}")
 
     return (
-        result
-        .drop_duplicates(subset=["year"], keep="first")
+        result.drop_duplicates(subset=["year"], keep="first")
         .sort_values("year")
         .reset_index(drop=True)
     )
@@ -167,8 +157,7 @@ def extract_annual_published_yoy(
         raise ValueError(f"前年比データを抽出できませんでした: {path}")
 
     return (
-        result
-        .drop_duplicates(subset=["year"], keep="first")
+        result.drop_duplicates(subset=["year"], keep="first")
         .sort_values("year")
         .reset_index(drop=True)
     )
@@ -188,12 +177,9 @@ def create_complete_annual_cpi(
     work["year"] = work["date"].dt.year
     work["month"] = work["date"].dt.month
 
-    annual = (
-        work.groupby("year", as_index=False)
-        .agg(
-            month_count=("month", "nunique"),
-            cpi=("index_value", "mean"),
-        )
+    annual = work.groupby("year", as_index=False).agg(
+        month_count=("month", "nunique"),
+        cpi=("index_value", "mean"),
     )
 
     annual = (
@@ -202,11 +188,7 @@ def create_complete_annual_cpi(
         .reset_index(drop=True)
     )
 
-    annual["cpi_yoy_pct"] = (
-        annual["cpi"]
-        .pct_change(fill_method=None)
-        .mul(100)
-    )
+    annual["cpi_yoy_pct"] = annual["cpi"].pct_change(fill_method=None).mul(100)
 
     return annual
 
@@ -219,9 +201,7 @@ def build_real_wage_decomposition_data(
     cpi_annual_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """名目賃金・CPI・公式実質賃金を統合し、分解指標を作成する。"""
-    wage_index = wage_index_df.rename(
-        columns={"index_value": "nominal_wage_index"}
-    )
+    wage_index = wage_index_df.rename(columns={"index_value": "nominal_wage_index"})
     wage_yoy = wage_yoy_df.rename(
         columns={"published_yoy_pct": "published_nominal_yoy_pct"}
     )
@@ -233,8 +213,7 @@ def build_real_wage_decomposition_data(
     )
 
     result = (
-        wage_index
-        .merge(wage_yoy, on="year", how="inner", validate="one_to_one")
+        wage_index.merge(wage_yoy, on="year", how="inner", validate="one_to_one")
         .merge(cpi_annual_df, on="year", how="inner", validate="one_to_one")
         .merge(
             official_real_index,
@@ -264,60 +243,44 @@ def build_real_wage_decomposition_data(
     base_value = base["calculated_real_wage_index_raw"].iloc[0]
 
     result["calculated_real_wage_index"] = (
-        result["calculated_real_wage_index_raw"]
-        / base_value
-        * 100
+        result["calculated_real_wage_index_raw"] / base_value * 100
     )
 
     result["real_index_difference"] = (
-        result["calculated_real_wage_index"]
-        - result["official_real_wage_index"]
+        result["calculated_real_wage_index"] - result["official_real_wage_index"]
     )
 
     result["calculated_nominal_yoy_pct"] = (
-        result["nominal_wage_index"]
-        .pct_change(fill_method=None)
-        .mul(100)
+        result["nominal_wage_index"].pct_change(fill_method=None).mul(100)
     )
 
     result["calculated_real_yoy_pct"] = (
-        result["calculated_real_wage_index"]
-        .pct_change(fill_method=None)
-        .mul(100)
+        result["calculated_real_wage_index"].pct_change(fill_method=None).mul(100)
     )
 
     result["official_real_yoy_from_index_pct"] = (
-        result["official_real_wage_index"]
-        .pct_change(fill_method=None)
-        .mul(100)
+        result["official_real_wage_index"].pct_change(fill_method=None).mul(100)
     )
 
     result["wage_price_gap"] = (
-        result["published_nominal_yoy_pct"]
-        - result["cpi_yoy_pct"]
+        result["published_nominal_yoy_pct"] - result["cpi_yoy_pct"]
     )
 
     nominal_rate = result["published_nominal_yoy_pct"] / 100
     price_rate = result["cpi_yoy_pct"] / 100
 
-    result["nominal_log_contribution"] = (
-        np.log1p(nominal_rate) * 100
-    )
-    result["price_log_contribution"] = (
-        -np.log1p(price_rate) * 100
-    )
+    result["nominal_log_contribution"] = np.log1p(nominal_rate) * 100
+    result["price_log_contribution"] = -np.log1p(price_rate) * 100
     result["real_log_change"] = (
-        result["nominal_log_contribution"]
-        + result["price_log_contribution"]
+        result["nominal_log_contribution"] + result["price_log_contribution"]
     )
 
     result["mechanical_real_yoy_pct"] = (
-        ((1 + nominal_rate) / (1 + price_rate) - 1) * 100
-    )
+        (1 + nominal_rate) / (1 + price_rate) - 1
+    ) * 100
 
     result["published_vs_mechanical_real_gap"] = (
-        result["published_real_yoy_pct"]
-        - result["mechanical_real_yoy_pct"]
+        result["published_real_yoy_pct"] - result["mechanical_real_yoy_pct"]
     )
 
     return result
@@ -334,17 +297,13 @@ def summarize_chained_period_change(
 
     required_years = set(range(start_year + 1, end_year + 1))
 
-    period = df.loc[
-        df["year"].between(start_year + 1, end_year)
-    ].copy()
+    period = df.loc[df["year"].between(start_year + 1, end_year)].copy()
 
     available_years = set(period["year"].astype(int))
     missing_years = sorted(required_years - available_years)
 
     if missing_years:
-        raise ValueError(
-            f"期間集計に必要な年が不足しています: {missing_years}"
-        )
+        raise ValueError(f"期間集計に必要な年が不足しています: {missing_years}")
 
     required_columns = [
         "published_nominal_yoy_pct",
@@ -404,8 +363,7 @@ def build_cpi_sensitivity(
     )
 
     result = (
-        wage
-        .merge(
+        wage.merge(
             main[["year", "main_cpi", "main_cpi_yoy_pct"]],
             on="year",
             how="inner",
@@ -430,26 +388,15 @@ def build_cpi_sensitivity(
     nominal_rate = result["published_nominal_yoy_pct"] / 100
 
     result["real_yoy_main_cpi_pct"] = (
-        (
-            (1 + nominal_rate)
-            / (1 + result["main_cpi_yoy_pct"] / 100)
-            - 1
-        )
-        * 100
-    )
+        (1 + nominal_rate) / (1 + result["main_cpi_yoy_pct"] / 100) - 1
+    ) * 100
 
     result["real_yoy_sensitivity_cpi_pct"] = (
-        (
-            (1 + nominal_rate)
-            / (1 + result["sensitivity_cpi_yoy_pct"] / 100)
-            - 1
-        )
-        * 100
-    )
+        (1 + nominal_rate) / (1 + result["sensitivity_cpi_yoy_pct"] / 100) - 1
+    ) * 100
 
     result["real_yoy_sensitivity_gap"] = (
-        result["real_yoy_sensitivity_cpi_pct"]
-        - result["real_yoy_main_cpi_pct"]
+        result["real_yoy_sensitivity_cpi_pct"] - result["real_yoy_main_cpi_pct"]
     )
 
     return result
@@ -462,9 +409,7 @@ def validate_analysis_results(
     tolerance: float = OFFICIAL_REAL_INDEX_TOLERANCE,
 ) -> None:
     """分析結果の基本整合性を検証する。"""
-    period = analysis_df.loc[
-        analysis_df["year"].between(start_year, end_year)
-    ].copy()
+    period = analysis_df.loc[analysis_df["year"].between(start_year, end_year)].copy()
 
     if period.empty:
         raise ValueError("検証対象期間のデータがありません。")
@@ -491,13 +436,16 @@ def validate_analysis_results(
         )
 
     decomposition_error = (
-        period["nominal_log_contribution"]
-        + period["price_log_contribution"]
-        - period["real_log_change"]
-    ).abs().max()
+        (
+            period["nominal_log_contribution"]
+            + period["price_log_contribution"]
+            - period["real_log_change"]
+        )
+        .abs()
+        .max()
+    )
 
     if decomposition_error > 1e-10:
         raise AssertionError(
-            "対数分解の恒等式が成立していません。"
-            f" 最大誤差={decomposition_error:.12f}"
+            f"対数分解の恒等式が成立していません。 最大誤差={decomposition_error:.12f}"
         )
