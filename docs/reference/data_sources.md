@@ -10,14 +10,16 @@ Real Wage Dashboardで現在使用している入力データについて、出�
 
 ## 2. 入力データ一覧
 
-| 分野                   | 統計・系列                       | 公表元               | 取得方法        | リポジトリ内の保存場所                           |
-| ---------------------- | -------------------------------- | -------------------- | --------------- | ------------------------------------------------ |
-| 物価                   | 消費者物価指数                   | 総務省統計局・e-Stat | e-Stat API      | 保存しない                                       |
-| 賃金・労働時間         | 毎月勤労統計調査・長期時系列表   | 厚生労働省・e-Stat   | CSVを手動取得   | `data/raw/hon-maikin-k-jissu.csv`                |
-| 求人倍率               | 一般職業紹介状況                 | 厚生労働省           | Excelを手動取得 | `data/raw/labor_market/`                         |
-| 完全失業率             | 労働力調査・長期時系列データ     | 総務省統計局         | Excelを手動取得 | `data/raw/labor_market/unemployment_rate.xlsx`   |
-| 企業の雇用判断         | 全国企業短期経済観測調査（短観） | 日本銀行             | CSVを手動取得   | `data/raw/labor_market/tankan_employment_di.csv` |
-| 企業業績・生産性・分配 | 法人企業統計調査・年次別調査     | 財務省・e-Stat       | e-Stat API      | 保存しない                                       |
+| 分野                   | 統計・系列                               | 公表元               | 取得方法        | リポジトリ内の保存場所                           |
+| ---------------------- | ---------------------------------------- | -------------------- | --------------- | ------------------------------------------------ |
+| 物価                   | 消費者物価指数                           | 総務省統計局・e-Stat | e-Stat API      | 保存しない                                       |
+| 賃金・労働時間         | 毎月勤労統計調査・長期時系列表           | 厚生労働省・e-Stat   | CSVを手動取得   | `data/raw/hon-maikin-k-jissu.csv`                |
+| 求人倍率               | 一般職業紹介状況                         | 厚生労働省           | Excelを手動取得 | `data/raw/labor_market/`                         |
+| 完全失業率             | 労働力調査・長期時系列データ             | 総務省統計局         | Excelを手動取得 | `data/raw/labor_market/unemployment_rate.xlsx`   |
+| 企業の雇用判断         | 全国企業短期経済観測調査（短観）         | 日本銀行             | CSVを手動取得   | `data/raw/labor_market/tankan_employment_di.csv` |
+| 企業業績・生産性・分配 | 法人企業統計調査・年次別調査             | 財務省・e-Stat       | e-Stat API      | 保存しない                                       |
+| 賃金改定行動           | 賃金引上げ等の実態に関する調査           | 厚生労働省           | Excelを手動取得 | `data/raw/wage_revision/`                        |
+| 実質賃金要因分解       | 毎月勤労統計の賃金指数・公式実質賃金指数 | 厚生労働省           | Excelを手動取得 | `data/raw/real_wage_decomposition/`              |
 
 `data/raw/`には公表元から取得した入力データを保存する。アプリからダウンロードする分析用CSVは入力データではなく、Git管理の対象としない。
 
@@ -29,7 +31,7 @@ Real Wage Dashboardで現在使用している入力データについて、出�
 
 - 統計：消費者物価指数
 - 公表元：総務省統計局
-- 取得元：[e-Stat「2020年基準消費者物価指数」](https://www.e-stat.go.jp/dbview?sid=0003427113)
+- 取得元：e-Stat「2020年基準消費者物価指数」
 - 取得方法：e-Stat API
 - 統計表ID：`0003427113`
 - 指数基準：2020年平均=100
@@ -68,7 +70,7 @@ ESTAT_APP_ID = "your-app-id"
 
 現在の実装は2020年基準の統計表IDと分類コードに固定されている。
 
-CPIの基準を変更する場合は、統計表IDだけを置き換えず、次の項目をまとめて検証する。
+CPIの基準を変更する場合は、次をまとめて検証する。
 
 - 統計表ID
 - 品目分類コード
@@ -89,7 +91,6 @@ CPIの基準を変更する場合は、統計表IDだけを置き換えず、次
 
 - 統計：毎月勤労統計調査（全国調査）
 - 公表元：厚生労働省
-- 取得元：毎月勤労統計調査の結果
 - 使用表：長期時系列表
 - 取得方法：CSVを手動取得
 - 保存先：`data/raw/hon-maikin-k-jissu.csv`
@@ -126,20 +127,62 @@ CPIの基準を変更する場合は、統計表IDだけを置き換えず、次
 
 データの読み込みと条件抽出は`src/real_wage_dashboard/wage_service.py`で処理する。
 
-### 4.4 更新時の注意点
+### 4.4 事業所規模別分析での利用
+
+`docs/analysis/10_establishment_size_wage.md` では、この同じ長期時系列CSVから、
+
+```text
+5人以上
+30人以上
+```
+
+の2系列を抽出して比較する。
+
+主な対象：
+
+- きまって支給する給与
+- 総実労働時間
+- 就業形態計
+- 一般労働者
+- パートタイム労働者
+
+5人以上系列は30人以上事業所を含むため、両系列は独立した二群ではない。
+
+したがって、
+
+```text
+5～29人事業所
+vs
+30人以上事業所
+```
+
+の直接比較とは扱わない。
+
+分析処理は`src/real_wage_dashboard/establishment_size_wage_analysis.py`で行う。
+
+確認には、
+
+```bash
+uv run python scripts/check_establishment_size_wage.py
+```
+
+を使用する。
+
+### 4.5 更新時の注意点
 
 毎月勤労統計では、訂正や時系列データの更新によって過去値が変更される場合がある。
 
 ファイル更新時は次を確認する。
 
 1. 公表元から最新の長期時系列CSVを取得する。
-2. ファイル名をhon-maikin-k-jissu.csvに統一する。
+2. ファイル名を`hon-maikin-k-jissu.csv`に統一する。
 3. 文字コードがCP932で読み込めることを確認する。
 4. 必須列が維持されていることを確認する。
 5. 年月、産業、就業形態、事業所規模の重複を確認する。
 6. 主要条件の対象期間と件数を更新前後で比較する。
-7. 全自動テストとデータ確認スクリプトを実行する。
-8. 分析結果が変化した場合は個別分析文書と概要文書を更新する。
+7. 5人以上・30人以上の主要系列の12か月完全性を確認する。
+8. 全自動テストとデータ確認スクリプトを実行する。
+9. 分析結果が変化した場合は個別分析文書と概要文書を更新する。
 
 ---
 
@@ -149,7 +192,6 @@ CPIの基準を変更する場合は、統計表IDだけを置き換えず、次
 
 - 統計：一般職業紹介状況（職業安定業務統計）
 - 公表元：厚生労働省
-- 取得元：一般職業紹介状況
 - 取得方法：長期時系列Excelを手動取得
 
 ### 5.2 使用ファイル
@@ -171,7 +213,6 @@ CPIの基準を変更する場合は、統計表IDだけを置き換えず、次
 
 - 統計：労働力調査
 - 公表元：総務省統計局
-- 取得元：労働力調査 長期時系列データ
 - 取得方法：Excelを手動取得
 - 保存先：`data/raw/labor_market/unemployment_rate.xlsx`
 - 使用シート：`季節調整値`
@@ -189,8 +230,6 @@ CPIの基準を変更する場合は、統計表IDだけを置き換えず、次
 
 - 統計：全国企業短期経済観測調査（短観）
 - 公表元：日本銀行
-- 取得元：日本銀行時系列統計データ検索サイト
-- 参考：短観の統計・注釈
 - 取得方法：CSVを手動取得
 - 保存先：`data/raw/labor_market/tankan_employment_di.csv`
 - 文字コード：CP932
@@ -225,13 +264,9 @@ CPIの基準を変更する場合は、統計表IDだけを置き換えず、次
 
 企業業績・生産性・付加価値・人件費・労働分配率と賃金の関係を分析するために使用する。
 
-API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固有の取得・整形・派生指標計算は `src/real_wage_dashboard/corporate_performance_service.py` で処理する。
-
----
+API通信は`src/real_wage_dashboard/estat_client.py`、法人企業統計固有の取得・整形・派生指標計算は`src/real_wage_dashboard/corporate_performance_service.py`で処理する。
 
 ### 8.2 主な使用項目
-
-法人企業統計では、次の項目を取得する。
 
 | 分析用列                  | 内容                      | `cat01` |
 | ------------------------- | ------------------------- | ------- |
@@ -249,10 +284,6 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 | `ordinary_profit_margin`  | 売上高経常利益率          | `127`   |
 | `value_added_ratio`       | 付加価値率                | `140`   |
 | `labor_productivity`      | 従業員1人当たり付加価値額 | `141`   |
-
-分析では、これらの公表値から人件費関連指標も計算する。
-
----
 
 ### 8.3 派生指標
 
@@ -286,9 +317,7 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 労働生産性 = 付加価値額 ÷ 期中平均従業員数 × 100
 ```
 
-分析では、公表されている `labor_productivity` と再計算値を比較し、単位・計算条件の整合性を確認する。
-
----
+分析では、公表されている`labor_productivity`と再計算値を比較し、単位・計算条件の整合性を確認する。
 
 ### 8.4 産業条件
 
@@ -300,32 +329,15 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 
 を使用する。
 
-産業コードは `cat02` で指定する。
+産業コードは`cat02`で指定する。
 
-産業別比較では、毎月勤労統計との対応可能性を考慮し、主に次の産業を対象とする。
-
-- 鉱業、採石業、砂利採取業
-- 建設業
-- 製造業
-- 情報通信業
-- 運輸業、郵便業
-- 卸売業、小売業
-- 不動産業、物品賃貸業
-- 学術研究、専門・技術サービス業
-- 宿泊業、飲食サービス業
-- 生活関連サービス業、娯楽業
-- 教育、学習支援業
-- 医療、福祉
+産業別比較では、毎月勤労統計との対応可能性を考慮して対象産業を限定する。
 
 統計間で産業分類や対象範囲が完全には一致しないため、産業別結果は完全に同一母集団の比較とは扱わない。
 
----
-
 ### 8.5 企業規模条件
 
-企業規模は `cat03` で指定する。
-
-主に次の区分を使用する。
+企業規模は`cat03`で指定する。
 
 | 区分                      | コード |
 | ------------------------- | ------ |
@@ -336,31 +348,23 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 
 法人企業統計の企業規模区分は資本金基準である。
 
-毎月勤労統計の「事業所規模5人以上・30人以上」などとは定義が異なるため、両者を同一の規模区分として直接対応させない。
-
----
+毎月勤労統計の「事業所規模5人以上・30人以上」とは定義が異なるため、両者を同一の規模区分として直接対応させない。
 
 ### 8.6 分析期間
 
-構造比較の主期間は、
+構造比較：
 
 ```text
 2015年度 ～ 2024年度
 ```
 
-とする。
-
-これは、近年10年間程度における企業側の付加価値・生産性・人件費・分配構造の変化を確認するために使用する。
-
-長期時系列分析では、
+長期時系列：
 
 ```text
 2000年度 ～ 2024年度
 ```
 
-を使用する。
-
-ただし、人件費・1人当たり人件費・労働分配率の計算に必要な `employee_bonus` は、2000～2006年度で欠損している。
+ただし、`employee_bonus`は2000～2006年度で欠損している。
 
 そのため、
 
@@ -377,9 +381,7 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 
 は原則として2007年度以降を使用する。
 
-欠損値を0として補完したり、2000～2006年度の人件費を推計して埋めたりはしない。
-
----
+欠損値を0として補完したり、過去値を推計して埋めたりはしない。
 
 ### 8.7 毎月勤労統計との接続
 
@@ -389,9 +391,9 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 2024年度 = 2024年4月 ～ 2025年3月
 ```
 
-月額賃金については年度平均を使用する。
+月額賃金は年度平均を使用する。
 
-概算時間当たり賃金については、
+概算時間当たり賃金は、
 
 ```text
 年度内の月額賃金合計 ÷ 年度内の総実労働時間合計
@@ -401,40 +403,179 @@ API通信は `src/real_wage_dashboard/estat_client.py`、法人企業統計固�
 
 年度内の12か月が揃っていない年度は時系列分析から除外する。
 
----
-
 ### 8.8 API取得条件と更新時の注意
-
-法人企業統計の取得条件は `src/real_wage_dashboard/config.py` で管理する。
-
-主な設定項目は、
-
-- 統計表ID
-- `cat01` の調査項目
-- `cat02` の産業
-- `cat03` の企業規模
-- 対象年度
-
-である。
 
 データ更新時は次を確認する。
 
-1. 使用している統計表IDが継続して利用可能か。
-2. `cat01`、`cat02`、`cat03` の分類コードに変更がないか。
+1. 統計表IDが継続して利用可能か。
+2. `cat01`、`cat02`、`cat03`の分類コードに変更がないか。
 3. 最新年度が取得できるか。
-4. 2000年度以降の年度が連続して取得できるか。
+4. 年度が連続して取得できるか。
 5. 主要項目の欠損状況に変化がないか。
-6. `employee_bonus` の利用可能期間に変更がないか。
-7. 公表労働生産性と再計算労働生産性の差が許容範囲内か。
-8. 主要指標の2015年度・2024年度値が既存分析と整合するか。
-9. 全自動テストと法人企業統計の確認スクリプトを実行する。
-10. 結果が変化した場合は `docs/analysis/07_corporate_performance.md` と `docs/analysis/00_overview.md` を更新する。
-
-法人企業統計では、公表値の改定や調査分類の変更が起こる可能性があるため、最新年度だけでなく過去系列も再確認する。
+6. `employee_bonus`の利用可能期間に変更がないか。
+7. 公表労働生産性と再計算値の差が許容範囲内か。
+8. 主要指標が既存分析と整合するか。
+9. 自動テストと確認スクリプトを実行する。
+10. 結果が変化した場合は`07_corporate_performance.md`と`00_overview.md`を更新する。
 
 ---
 
-## 9. データ更新後の確認
+## 9. 賃金引上げ等の実態に関する調査
+
+### 9.1 出典
+
+- 統計：賃金引上げ等の実態に関する調査
+- 公表元：厚生労働省
+- 取得方法：公表Excelを手動取得
+- 主分析期間：2015年～2025年
+- 保存先：`data/raw/wage_revision/`
+
+企業が実際にどの程度賃金を改定したか、また賃金改定時に何を重視したかを分析するために使用する。
+
+読み込み・整形は`src/real_wage_dashboard/wage_revision_service.py`、分析処理は`src/real_wage_dashboard/wage_revision_analysis.py`で行う。
+
+### 9.2 使用ファイル
+
+| ファイル                         | 主な内容                                 |
+| -------------------------------- | ---------------------------------------- |
+| `wage_revision_amount_rate.xlsx` | 1人平均賃金改定額・改定率                |
+| `wage_revision_status.xlsx`      | 賃金引上げ・引下げ・改定なし等の実施状況 |
+| `wage_revision_factors.xlsx`     | 賃金改定時に重視した要素                 |
+
+### 9.3 主な使用系列
+
+- 1人平均賃金改定額
+- 1人平均賃金改定率
+- 賃金を引き上げた企業割合
+- 賃金改定時に最も重視した要素
+- 企業規模別の改定率・回答割合
+
+### 9.4 比較上の注意
+
+年によって、
+
+- 設問文
+- 回答区分
+- 企業規模区分
+- 表の列配置
+
+が変更される場合がある。
+
+特に、2024年以前と2025年では「引下げ」と「変更なし」の扱いが異なる。
+
+そのため、長期比較では「賃金を引き上げた企業割合」を主な実施状況指標として使用し、「引下げ」「変更なし」を単純連結しない。
+
+### 9.5 更新時の確認
+
+公表ファイルを更新した場合は、
+
+```bash
+uv run python scripts/check_wage_revision_excel_structure.py
+uv run python scripts/check_wage_revision_amount_rate.py
+uv run python scripts/check_wage_revision_status.py
+uv run python scripts/check_wage_revision_factors.py
+uv run python scripts/check_wage_revision_analysis.py
+```
+
+を実行する。
+
+加えて、
+
+```bash
+uv run pytest tests/test_wage_revision_service.py
+uv run pytest tests/test_wage_revision_analysis.py
+```
+
+を実行する。
+
+結果が変化した場合は、
+
+- `docs/analysis/08_wage_revision.md`
+- `docs/analysis/00_overview.md`
+
+を更新する。
+
+---
+
+## 10. 実質賃金要因分解用データ
+
+### 10.1 出典
+
+- 統計：毎月勤労統計調査
+- 公表元：厚生労働省
+- 取得方法：公表Excelを手動取得
+- 保存先：`data/raw/real_wage_decomposition/`
+- 主分析期間：2015年～2025年
+
+実質賃金の長期変化を、名目賃金要因と物価要因へ分解するために使用する。
+
+### 10.2 使用ファイル
+
+| ファイル                             | 主な内容                                      |
+| ------------------------------------ | --------------------------------------------- |
+| `wage_index_total_5plus.xls`         | 5人以上・就業形態計の名目賃金指数または増減率 |
+| `official_real_wage_index_5plus.xls` | 厚生労働省公表の公式実質賃金指数・増減率      |
+
+分析処理は`src/real_wage_dashboard/real_wage_decomposition_analysis.py`で行う。
+
+### 10.3 CPIとの接続
+
+実質賃金要因分解では、名目賃金と物価の関係を確認するためCPI系列を併用する。
+
+主分析で使用するCPI系列は個別分析文書で明示する。
+
+アプリ内の実質賃金ページで用いるCPI実質化と、長期要因分解用の再構築系列は目的が異なる。
+
+### 10.4 公表前年比の連鎖
+
+長期累積変化では、各年の公表前年比を連鎖して分析用指数を構築する。
+
+これは、
+
+- 長期累積変化
+- 名目賃金とCPIの差
+- 機械的な実質賃金変化
+
+を比較するための分析用系列である。
+
+元の年平均実額から直接計算した変化率とは計算経路が異なるため、両者を同一の指標として扱わない。
+
+### 10.5 公式系列との整合確認
+
+再構築した実質系列は、厚生労働省の公式実質賃金系列と比較する。
+
+確認対象：
+
+- 年次変化の符号
+- 累積変化
+- 使用するCPI系列
+- 基準化方法
+- 丸めの影響
+
+確認には、
+
+```bash
+uv run python scripts/check_real_wage_decomposition_index.py
+```
+
+を使用する。
+
+自動テスト：
+
+```bash
+uv run pytest tests/test_real_wage_decomposition_analysis.py
+```
+
+結果が変化した場合は、
+
+- `docs/analysis/09_real_wage_decomposition.md`
+- `docs/analysis/00_overview.md`
+
+を更新する。
+
+---
+
+## 11. データ更新後の確認
 
 入力データを更新した場合は、最低限次を実行する。
 
@@ -444,7 +585,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-毎月勤労統計とCPIについては、必要に応じて次の確認スクリプトも実行する。
+毎月勤労統計・CPI：
 
 ```bash
 uv run python scripts/check_wage_csv.py
@@ -454,23 +595,25 @@ uv run python scripts/check_wage_v2_conditions.py
 uv run python scripts/check_working_hours_conditions.py
 uv run python scripts/check_cpi_data.py
 uv run python scripts/check_real_wage_data.py
+uv run python scripts/check_establishment_size_wage.py
+uv run python scripts/check_real_wage_decomposition_index.py
 ```
 
-労働需給データについては、次のテストで読み込みと変換を確認する。
+労働需給：
 
 ```bash
 uv run pytest tests/test_labor_market_service.py
 uv run pytest tests/test_labor_market_analysis.py
 ```
 
-法人企業統計については、次のテストでAPIレスポンス変換、派生指標、企業業績分析ロジックを確認する。
+法人企業統計：
 
 ```bash
 uv run pytest tests/test_corporate_performance_service.py
 uv run pytest tests/test_corporate_performance_analysis.py
 ```
 
-データ取得条件や長期系列を確認する場合は、必要に応じて次の確認スクリプトも実行する。
+必要に応じて、
 
 ```bash
 uv run python scripts/check_corporate_stats_metadata.py
@@ -483,15 +626,27 @@ uv run python scripts/check_corporate_wage_time_series.py
 uv run python scripts/check_corporate_long_term_availability.py
 ```
 
+を実行する。
+
+賃金改定調査：
+
+```bash
+uv run python scripts/check_wage_revision_excel_structure.py
+uv run python scripts/check_wage_revision_amount_rate.py
+uv run python scripts/check_wage_revision_status.py
+uv run python scripts/check_wage_revision_factors.py
+uv run python scripts/check_wage_revision_analysis.py
+```
+
 ---
 
-## 10. 更新記録の方針
+## 12. 更新記録の方針
 
 データファイルを更新するコミットでは、次の情報をコミットメッセージまたは関連文書に残す。
 
 - 更新した統計
 - 公表元
-- データの最終年月
+- データの最終年月・年度
 - 過去値の改定有無
 - 分析結果への影響
 - 実行した検証
