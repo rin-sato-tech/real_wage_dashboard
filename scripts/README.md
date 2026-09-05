@@ -2,24 +2,35 @@
 
 ## 1. この文書の目的
 
-`scripts/`に配置している確認スクリプトの用途、実行条件、pytestとの違い、継続して残す理由を整理する。
+`scripts/` に配置している確認スクリプトの用途、実行条件、pytestとの違い、利用場面を整理する。
 
-これらは、実データまたは実際のe-Stat APIを使って状態を確認するための補助ツールである。
+確認スクリプトは、実データまたは実際のe-Stat APIを使って、
+
+- 入力ファイルの構造
+- 公表統計の変更
+- API取得結果
+- 対象期間・欠損・重複
+- 分析結果の妥当性
+
+を目視または簡易出力で確認するための補助ツールである。
+
+分析ロジックの正しさを自動判定する `tests/` とは役割が異なる。
 
 ---
 
 ## 2. pytestとの違い
 
-| 項目 | `scripts/` | `tests/` |
-| ---- | ---------- | -------- |
-| 主な目的 | 実データ・実APIの状態確認 | 処理仕様の自動検証 |
-| 入力 | 現在の入力ファイル、e-Stat API | テスト用データ、モック |
-| 判定 | 出力を人が確認 | assertによる自動判定 |
-| 再現性 | 外部データやAPI状態に依存 | 原則として一定 |
-| CIでの利用 | 原則として使用しない | 使用可能 |
-| 失敗時の終了コード | 必ずしも非ゼロにならない | テスト失敗として非ゼロになる |
+| 項目       | `scripts/`                              | `tests/`                         |
+| ---------- | --------------------------------------- | -------------------------------- |
+| 主な目的   | 実データ・実API・公表ファイルの状態確認 | 処理仕様の自動検証               |
+| 入力       | 現在の入力ファイル、実API               | テスト用データ、モック           |
+| 判定       | 出力を人が確認する場合がある            | `assert` による自動判定          |
+| 再現性     | 外部データ・API状態に依存               | 原則として一定                   |
+| CIでの利用 | 原則として使用しない                    | 使用可能                         |
+| 終了コード | 必ずしも合否を表さない                  | 失敗時は非ゼロ                   |
+| 主な用途   | データ更新・新規分析・統計様式変更時    | 開発・リファクタリング・回帰防止 |
 
-確認スクリプトの成功だけで、自動テスト通過とみなさない。
+確認スクリプトが正常に実行できても、pytest通過の代替にはならない。
 
 ---
 
@@ -43,189 +54,146 @@ ESTAT_APP_ID = "your-app-id"
 
 認証情報はGitへコミットしない。
 
----
+個別スクリプトは次の形式で実行する。
 
-## 4. スクリプト一覧
-
-| スクリプト | 分類 | 確認内容 | API認証 | 方針 |
-| ---------- | ---- | -------- | -------- | ---- |
-| `check_estat_api.py` | API診断 | API接続、統計表情報、分類コード | 必要 | 残す |
-| `check_cpi_data.py` | API・データ確認 | CPI取得件数、期間、重複、変換結果 | 必要 | 残す |
-| `check_real_wage_data.py` | 結合スモークテスト | CPI・賃金結合、実質化、基準年指数 | 必要 | 残す |
-| `check_wage_csv.py` | 生データ確認 | CSV形状、列名、型、先頭行 | 不要 | 残す |
-| `check_wage_data.py` | 基本系列確認 | 標準条件の抽出、期間、欠損、重複 | 不要 | 残す |
-| `check_wage_v2_conditions.py` | コード体系確認 | 賃金項目、規模、就業形態、期間、欠損月 | 不要 | 残す |
-| `check_wage_v2_combinations.py` | 対応条件確認 | v2対象12条件の件数、期間、2020年、欠損月 | 不要 | 残す |
-| `check_working_hours_conditions.py` | 労働時間確認 | 労働時間3項目の規模・雇用形態別完全性 | 不要 | 残す |
+```bash
+uv run python scripts/<script_name>.py
+```
 
 ---
 
-## 5. 各スクリプトの役割
+## 4. スクリプトの分類
+
+現在の確認スクリプトは、用途別に次のグループへ分ける。
+
+| 分類                   | 主なスクリプト                            | 主な確認対象                               |
+| ---------------------- | ----------------------------------------- | ------------------------------------------ |
+| e-Stat / CPI           | `check_estat_api.py`、`check_cpi_data.py` | API接続、CPI統計表、系列コード、取得期間   |
+| 毎月勤労統計・基本賃金 | `check_wage_*.py`                         | CSV構造、条件コード、対象期間、欠損、重複  |
+| 労働時間               | `check_working_hours_conditions.py`       | 労働時間系列の条件別完全性                 |
+| 基本実質賃金           | `check_real_wage_data.py`                 | CPIと賃金の結合、実質化、基準年指数        |
+| 労働需給               | 労働需給分析で使用する実データ確認        | 求人倍率、失業率、短観と賃金系列           |
+| 企業業績・生産性       | `check_corporate_*.py`                    | 法人企業統計、規模別・産業別・時系列・相関 |
+| 賃金改定行動           | `check_wage_revision_*.py`                | Excel構造、改定率、実施状況、重視要因      |
+| 実質賃金要因分解       | `check_real_wage_decomposition_index.py`  | 名目賃金指数、CPI、公式実質賃金との整合性  |
+| 事業所規模別賃金       | `check_establishment_size_wage.py`        | 5人以上・30人以上系列、賃金・労働時間差    |
+
+スクリプト数が増えているため、本書ではすべてを一律に詳細解説するのではなく、分析単位で用途を管理する。
+
+---
+
+## 5. 基礎データ確認
 
 ### 5.1 `check_estat_api.py`
 
-実行：
+e-Stat APIの接続とメタデータを確認する。
 
-```bash
-uv run python scripts/check_estat_api.py
-```
+主な確認内容：
 
-確認内容：
+- APIへ接続できるか
+- 統計表IDが有効か
+- 統計表名
+- 分類ID・分類コード
+- API設定変更後の初期診断
 
-- e-Stat APIへ接続できるか
-- CPI統計表IDが有効か
-- 統計表名と表題
-- 分類ID、分類名、分類コード
-
-API認証、統計表ID、分類コードを変更した場合の初期診断に使用する。
-
-単体テストでは実APIへ接続しないため、継続して残す。
+CPIや法人企業統計の統計表ID・分類コードを変更した場合に実行する。
 
 ---
 
 ### 5.2 `check_cpi_data.py`
 
-実行：
+CPIの実取得結果を確認する。
 
-```bash
-uv run python scripts/check_cpi_data.py
-```
+主な確認内容：
 
-確認内容：
-
-- APIレスポンスの取得件数
+- APIレスポンス件数
 - DataFrame変換後の件数
-- 先頭・末尾データ
-- データ型
-- 年月の重複
 - 対象期間
-
-CPI統計表ID、系列コード、APIレスポンス構造を変更した場合に使用する。
-
----
-
-### 5.3 `check_real_wage_data.py`
-
-実行：
-
-```bash
-uv run python scripts/check_real_wage_data.py
-```
-
-確認内容：
-
-- CPI件数
-- 名目賃金件数
-- 結合後件数
-- 結合後の対象期間
-- 欠損値と重複年月
-- 2020年の名目・実質賃金指数平均
-
-実APIのCPIと実際の賃金CSVを結合するため、実質賃金処理の実データスモークテストとして残す。
-
----
-
-### 5.4 `check_wage_csv.py`
-
-実行：
-
-```bash
-uv run python scripts/check_wage_csv.py
-```
-
-確認内容：
-
-- CSVの行数・列数
-- 全列名
-- pandasで読み込んだデータ型
-- 先頭データ
-
-毎月勤労統計CSVの様式変更、列名変更、文字コード問題の初期確認に使用する。
-
----
-
-### 5.5 `check_wage_data.py`
-
-実行：
-
-```bash
-uv run python scripts/check_wage_data.py
-```
-
-確認内容：
-
-- CSV全体と標準条件抽出後の件数
-- 先頭・末尾データ
+- 年月重複
 - データ型
+- 先頭・末尾データ
+
+CPI基準改定や系列コード変更時には必ず再確認する。
+
+---
+
+### 5.3 `check_wage_csv.py`
+
+毎月勤労統計CSVそのものの構造を確認する。
+
+主な確認内容：
+
+- 行数・列数
+- 列名
+- データ型
+- 先頭データ
+- 文字コード・読込可否
+
+元CSVを差し替えた直後の初期確認に使用する。
+
+---
+
+### 5.4 `check_wage_data.py`
+
+標準条件で毎月勤労統計を読み込み、基本系列を確認する。
+
+主な確認内容：
+
+- 抽出件数
+- 対象期間
 - 欠損値
 - 重複年月
-- 対象期間
-
-標準条件で賃金サービスと変化率計算を通した結果を確認する。
+- 先頭・末尾データ
 
 ---
 
-### 5.6 `check_wage_v2_conditions.py`
+### 5.5 `check_wage_v2_conditions.py`
 
-実行：
+毎月勤労統計に存在する条件コードを広く確認する。
 
-```bash
-uv run python scripts/check_wage_v2_conditions.py
-```
+主な確認内容：
 
-確認内容：
-
-- 対象賃金項目の存在
-- 就業形態コードの全体像
-- 事業所規模コードの全体像
-- 調査産業計に存在する条件
-- 条件別の対象期間
+- 賃金項目
+- 就業形態コード
+- 事業所規模コード
+- 産業コード
+- 条件別対象期間
+- 欠損月
 - 2020年のデータ件数
-- 月次系列の連続性
 
-元CSVにどのコードと条件が存在するかを調査するために使用する。
-
-`check_wage_v2_combinations.py`より対象範囲が広く、データ構造の探索に使用するため残す。
+新しい分析条件を追加する前の探索に使用する。
 
 ---
 
-### 5.7 `check_wage_v2_combinations.py`
+### 5.6 `check_wage_v2_combinations.py`
 
-実行：
+アプリが正式対応する賃金条件の完全性を確認する。
 
-```bash
-uv run python scripts/check_wage_v2_combinations.py
-```
-
-確認対象：
+主な確認対象：
 
 ```text
-賃金項目2系列
-× 事業所規模2区分
-× 就業形態3区分
-= 12条件
+賃金項目
+× 事業所規模
+× 就業形態
 ```
 
-各条件について次を表示する。
+各条件について、
 
-- 有効な月数
-- 開始年月と終了年月
-- 2020年の月数
-- 欠損月数
+- 有効月数
+- 開始年月
+- 終了年月
+- 基準年データ
+- 欠損月
 
-アプリが正式に対応する12条件をまとめて確認するために残す。
+を確認する。
 
 ---
 
-### 5.8 `check_working_hours_conditions.py`
+### 5.7 `check_working_hours_conditions.py`
 
-実行：
+労働時間系列の条件別完全性を確認する。
 
-```bash
-uv run python scripts/check_working_hours_conditions.py
-```
-
-確認対象：
+主な対象：
 
 - 総実労働時間
 - 所定内労働時間
@@ -235,15 +203,127 @@ uv run python scripts/check_working_hours_conditions.py
 - 5人以上
 - 30人以上
 
-各条件について件数、期間、欠損月、2020年の月数を確認する。
-
-雇用形態比較や労働投入分析で使用する労働時間系列の実データ確認として残す。
+雇用形態比較、労働投入、事業所規模別分析の前提確認に使用する。
 
 ---
 
-## 6. 推奨する実行順序
+## 6. 実質賃金関連
 
-### 6.1 新しい環境でAPI接続を確認する場合
+### 6.1 `check_real_wage_data.py`
+
+アプリ側の実質賃金処理を実データで確認する。
+
+主な確認内容：
+
+- CPI件数
+- 名目賃金件数
+- 結合後件数
+- 対象期間
+- 欠損・重複
+- 2020年基準指数
+
+これはアプリ内で算出する実質賃金のスモークテストである。
+
+---
+
+### 6.2 `check_real_wage_decomposition_index.py`
+
+`09_real_wage_decomposition.md` の分析で使用する系列を確認する。
+
+主な確認内容：
+
+- 名目賃金指数・増減率
+- CPI系列
+- 公式実質賃金指数
+- 公表前年比から連鎖した系列
+- 機械的に再構築した実質系列との整合性
+- 2015～2025年の累積変化
+
+アプリの実質賃金処理とは目的が異なるため、`check_real_wage_data.py` と分けて残す。
+
+---
+
+## 7. 企業業績・生産性分析
+
+法人企業統計関連は `check_corporate_*.py` として複数の確認スクリプトに分かれている。
+
+主な確認対象：
+
+- 統計表メタデータ
+- 利用可能な年度
+- 長期系列の欠損
+- 企業規模別比較
+- 産業別比較
+- 毎月勤労統計との接続
+- 長期時系列
+- 相関・ラグ相関
+- 感応度分析
+
+主なスクリプト例：
+
+- `check_corporate_stats_metadata.py`
+- `check_corporate_performance_data.py`
+- `check_corporate_long_term_availability.py`
+- `check_corporate_performance_comparison.py`
+- `check_corporate_performance_by_capital_class.py`
+- `check_corporate_performance_by_industry.py`
+- `check_corporate_wage_time_series.py`
+- `check_corporate_wage_industry_relationship.py`
+
+企業業績分析は複数統計の接続とAPIメタデータに依存するため、単一スクリプトへ無理に統合しない。
+
+---
+
+## 8. 賃金改定行動分析
+
+賃金引上げ等の実態に関する調査の確認スクリプトは `check_wage_revision_*.py` として管理する。
+
+主なスクリプト：
+
+- `check_wage_revision_excel_structure.py`
+- `check_wage_revision_amount_rate.py`
+- `check_wage_revision_status.py`
+- `check_wage_revision_factors.py`
+- `check_wage_revision_recent_structure.py`
+- `check_wage_revision_analysis.py`
+
+確認内容：
+
+- 公表Excelのシート・列構造
+- 1人平均賃金改定額・改定率
+- 賃金引上げ実施企業割合
+- 賃金改定状況の回答区分
+- 賃金改定時に重視した要素
+- 年次による設問・回答区分変更
+- 企業規模別比較
+
+この統計は年によって回答区分が変更されるため、ファイル構造の確認を残す。
+
+---
+
+## 9. 事業所規模別賃金分析
+
+### `check_establishment_size_wage.py`
+
+`10_establishment_size_wage.md` の分析で使用する5人以上系列と30人以上系列を確認する。
+
+主な確認内容：
+
+- 2015年・2025年の年平均
+- 月額賃金
+- 概算時間当たり賃金
+- 総実労働時間
+- 30人以上 / 5人以上の比率
+- 規模差の対数分解
+- 就業形態別比較
+
+毎月勤労統計の5人以上系列と30人以上系列は包含関係にあるため、独立した二群の比較として解釈しない。
+
+---
+
+## 10. 推奨する実行順序
+
+### 10.1 新しい環境でAPI接続を確認する場合
 
 ```bash
 uv run python scripts/check_estat_api.py
@@ -251,7 +331,9 @@ uv run python scripts/check_cpi_data.py
 uv run python scripts/check_real_wage_data.py
 ```
 
-### 6.2 毎月勤労統計CSVを更新した場合
+---
+
+### 10.2 毎月勤労統計CSVを更新した場合
 
 ```bash
 uv run python scripts/check_wage_csv.py
@@ -259,17 +341,68 @@ uv run python scripts/check_wage_v2_conditions.py
 uv run python scripts/check_wage_v2_combinations.py
 uv run python scripts/check_wage_data.py
 uv run python scripts/check_working_hours_conditions.py
+uv run python scripts/check_establishment_size_wage.py
 ```
 
-### 6.3 CPI設定または実質賃金処理を変更した場合
+分析結果の再現性に影響する場合は、
+
+```bash
+uv run python scripts/check_real_wage_decomposition_index.py
+```
+
+も実行する。
+
+---
+
+### 10.3 CPI設定を変更した場合
 
 ```bash
 uv run python scripts/check_estat_api.py
 uv run python scripts/check_cpi_data.py
 uv run python scripts/check_real_wage_data.py
+uv run python scripts/check_real_wage_decomposition_index.py
 ```
 
-確認スクリプトの後に自動テストを実行する。
+---
+
+### 10.4 法人企業統計を更新・変更した場合
+
+まず、
+
+```bash
+uv run python scripts/check_corporate_stats_metadata.py
+uv run python scripts/check_corporate_performance_data.py
+uv run python scripts/check_corporate_long_term_availability.py
+```
+
+を実行し、その後、変更内容に応じて `check_corporate_*.py` を実行する。
+
+---
+
+### 10.5 賃金改定調査を更新した場合
+
+まず公表ファイル構造を確認し、
+
+```bash
+uv run python scripts/check_wage_revision_excel_structure.py
+```
+
+その後、
+
+```bash
+uv run python scripts/check_wage_revision_amount_rate.py
+uv run python scripts/check_wage_revision_status.py
+uv run python scripts/check_wage_revision_factors.py
+uv run python scripts/check_wage_revision_analysis.py
+```
+
+を実行する。
+
+---
+
+## 11. 確認後に実行する自動テスト
+
+確認スクリプトの後は、原則として次を実行する。
 
 ```bash
 uv run pytest
@@ -277,44 +410,61 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
----
-
-## 7. 現在の棚卸し結果
-
-現時点では、8本すべてを残す。
-
-理由：
-
-- 実データの様式や対象期間を確認できる。
-- e-Stat APIの実接続を確認できる。
-- pytestとは入力と目的が異なる。
-- データ更新時の調査手順として利用できる。
-- スクリプト数が少なく、現状では細分化による利点が小さい。
-
-現時点では`api/`、`wage/`等のサブディレクトリへ分割しない。
+分析値の更新だけでコード変更がない場合でも、入力ファイル差し替えによって前提条件が変わっていないか確認する。
 
 ---
 
-## 8. 今後の見直し基準
+## 12. スクリプトを残す基準
 
-次の場合は、スクリプトの統合、削除、自動テスト化を検討する。
+次のいずれかに該当する確認スクリプトは残す。
 
-- 同じ出力を行うスクリプトが増えた場合
-- 目視確認では見落としやすい判定が増えた場合
-- データ更新を自動化する場合
-- CIで定期的に確認する必要が生じた場合
-- 対応する処理やデータが削除された場合
-- 長期間使用されず、用途も説明できない場合
+- 実APIへ接続する。
+- 公表ファイルの実構造を確認する。
+- データ更新時に対象期間・欠損・重複を確認する。
+- pytestでは代替しにくいメタデータを確認する。
+- 個別分析の再現確認に利用する。
+- 公表統計の仕様変更を検知する役割がある。
 
-機械的に合否判定できる処理は、確認スクリプトではなくpytestへ移す。
+一方、次の場合は統合・削除・pytest化を検討する。
+
+- 同じ入力に対して同じ情報を出力するスクリプトが複数ある。
+- 判定条件が完全に機械化できる。
+- 対応する分析・機能が削除された。
+- 長期間利用されず、用途を説明できない。
+- 一時的な調査コードで、再現性確保にも不要である。
 
 ---
 
-## 9. 更新ルール
+## 13. ディレクトリ構成の方針
+
+現時点では `scripts/` 直下に配置している。
+
+スクリプト数がさらに増え、
+
+```text
+scripts/
+├── wage/
+├── cpi/
+├── corporate/
+├── wage_revision/
+└── validation/
+```
+
+のように分類した方が探索性が高くなった時点でサブディレクトリ化を検討する。
+
+現状では、ファイル名の接頭辞によって分析単位を識別できるため、直下配置を維持する。
+
+---
+
+## 14. 更新ルール
 
 次の場合は本書を更新する。
 
 - スクリプトを追加、削除、改名した場合
+- 新しい分析用の確認スクリプトを追加した場合
 - 実行条件や必要な認証情報が変わった場合
-- 確認対象となる統計や条件が変わった場合
+- 確認対象となる統計・入力ファイルが変わった場合
 - スクリプトをpytestへ移行した場合
+- サブディレクトリ構成へ変更した場合
+
+個別分析文書、`docs/reference/implementation_map.md`、本書の対応がずれない状態を維持する。
