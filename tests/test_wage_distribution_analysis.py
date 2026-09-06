@@ -7,6 +7,7 @@ from real_wage_dashboard.wage_distribution_analysis import (
     add_real_wage_distribution_by_group,
     build_gender_wage_ratio,
     build_wage_distribution_analysis,
+    build_wage_distribution_analysis_by_employment,
     build_wage_distribution_analysis_by_sex,
     summarize_wage_distribution_change,
     validate_wage_distribution_data,
@@ -297,5 +298,96 @@ def test_add_real_wage_distribution_by_group_2025_values() -> None:
 
     assert male_2025["real_p50_index"] == pytest.approx(
         95.112602,
+        abs=1e-6,
+    )
+
+
+def test_build_wage_distribution_analysis_by_employment() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025],
+            "employment": [
+                "regular",
+                "regular",
+                "nonregular",
+                "nonregular",
+            ],
+            "p10": [181.7, 216.1, 136.0, 169.0],
+            "p25": [219.5, 254.6, 155.3, 188.9],
+            "p50": [280.1, 313.3, 183.6, 218.7],
+            "p75": [377.9, 409.1, 227.1, 261.8],
+            "p90": [508.1, 550.3, 290.6, 326.5],
+            "decile_dispersion": [0.58, 0.53, 0.42, 0.36],
+            "quartile_dispersion": [0.28, 0.25, 0.20, 0.17],
+        }
+    )
+
+    result = build_wage_distribution_analysis_by_employment(
+        df,
+        base_year=2015,
+    )
+
+    base = result[result["year"] == 2015]
+
+    assert np.allclose(base["p10_index"], 100.0)
+    assert np.allclose(base["p50_index"], 100.0)
+    assert np.allclose(base["p90_index"], 100.0)
+
+    regular_2025 = result[
+        (result["year"] == 2025) & (result["employment"] == "regular")
+    ].iloc[0]
+
+    assert regular_2025["p10_index"] == pytest.approx(216.1 / 181.7 * 100)
+
+    assert regular_2025["p90_p10"] == pytest.approx(550.3 / 216.1)
+
+
+def test_add_real_wage_distribution_by_employment() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025],
+            "employment": [
+                "regular",
+                "regular",
+                "nonregular",
+                "nonregular",
+            ],
+            "p10": [181.7, 216.1, 136.0, 169.0],
+            "p25": [219.5, 254.6, 155.3, 188.9],
+            "p50": [280.1, 313.3, 183.6, 218.7],
+            "p75": [377.9, 409.1, 227.1, 261.8],
+            "p90": [508.1, 550.3, 290.6, 326.5],
+        }
+    )
+
+    cpi_df = pd.DataFrame(
+        {
+            "year": [2015, 2025],
+            "cpi": [97.8, 114.025],
+        }
+    )
+
+    result = add_real_wage_distribution_by_group(
+        df,
+        cpi_df,
+        group_columns=["employment"],
+        base_year=2015,
+    )
+
+    regular_2025 = result[
+        (result["year"] == 2025) & (result["employment"] == "regular")
+    ].iloc[0]
+
+    nonregular_2025 = result[
+        (result["year"] == 2025) & (result["employment"] == "nonregular")
+    ].iloc[0]
+
+    assert regular_2025["real_p50_index"] == pytest.approx(
+        95.936984,
+        abs=1e-6,
+    )
+
+    assert nonregular_2025["real_p50_index"] == pytest.approx(
+        102.167997,
         abs=1e-6,
     )

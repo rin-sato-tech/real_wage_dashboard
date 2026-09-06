@@ -8,6 +8,7 @@ from real_wage_dashboard.wage_distribution_service import (
     extract_main_distribution_from_dataframe,
     find_wage_distribution_file,
     normalize_distribution_label,
+    parse_employment_distribution_values,
 )
 
 
@@ -203,3 +204,45 @@ def test_extract_distribution_by_sex_uses_separate_blocks() -> None:
 
     assert male["p50"] == pytest.approx(293.8)
     assert female["p50"] == pytest.approx(218.2)
+
+
+def test_parse_employment_distribution_values() -> None:
+    values = [
+        {
+            "@cat02": "1280",
+            "@cat05": "02",
+            "@time": "2015000000",
+            "$": "181.7",
+        },
+        {
+            "@cat02": "1300",
+            "@cat05": "02",
+            "@time": "2015000000",
+            "$": "280.1",
+        },
+        {
+            "@cat02": "1280",
+            "@cat05": "03",
+            "@time": "2015000000",
+            "$": "136.0",
+        },
+        {
+            "@cat02": "1300",
+            "@cat05": "03",
+            "@time": "2015000000",
+            "$": "183.6",
+        },
+    ]
+
+    result = parse_employment_distribution_values(values)
+
+    regular = result[result["employment"] == "regular"].iloc[0]
+
+    nonregular = result[result["employment"] == "nonregular"].iloc[0]
+
+    assert regular["year"] == 2015
+    assert regular["p10"] == pytest.approx(181.7)
+    assert regular["p50"] == pytest.approx(280.1)
+
+    assert nonregular["p10"] == pytest.approx(136.0)
+    assert nonregular["p50"] == pytest.approx(183.6)

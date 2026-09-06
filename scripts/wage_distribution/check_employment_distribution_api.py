@@ -3,9 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-import streamlit as st
-
 import requests
+import streamlit as st
 
 from real_wage_dashboard.wage_distribution_service import (
     load_wage_distribution_history_by_employment,
@@ -30,18 +29,14 @@ EMPLOYMENT_CODE_MAP = {
     "03": "nonregular",
 }
 
-DATA_DIR = Path(
-    "data/raw/wage_distribution/employment"
-)
+DATA_DIR = Path("data/raw/wage_distribution/employment")
 
 
 def get_app_id() -> str:
     app_id = st.secrets["ESTAT_APP_ID"]
 
     if not app_id:
-        raise RuntimeError(
-            "ESTAT_APP_ID が設定されていません。"
-        )
+        raise RuntimeError("ESTAT_APP_ID が設定されていません。")
 
     return app_id
 
@@ -69,9 +64,7 @@ def get_meta_info(
     result = payload["GET_META_INFO"]["RESULT"]
 
     if result["STATUS"] != 0:
-        raise RuntimeError(
-            f"e-Stat API error: {result}"
-        )
+        raise RuntimeError(f"e-Stat API error: {result}")
 
     return payload
 
@@ -108,9 +101,7 @@ def get_stats_data(
     result = payload["GET_STATS_DATA"]["RESULT"]
 
     if result["STATUS"] != 0:
-        raise RuntimeError(
-            f"e-Stat API error: {result}"
-        )
+        raise RuntimeError(f"e-Stat API error: {result}")
 
     return payload
 
@@ -154,25 +145,16 @@ def get_employment_distribution_2015_2019(
     result = payload["GET_STATS_DATA"]["RESULT"]
 
     if result["STATUS"] != 0:
-        raise RuntimeError(
-            f"e-Stat API error: {result}"
-        )
+        raise RuntimeError(f"e-Stat API error: {result}")
 
-    values = (
-        payload["GET_STATS_DATA"]
-        ["STATISTICAL_DATA"]
-        ["DATA_INF"]
-        ["VALUE"]
-    )
+    values = payload["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
 
     records: dict[tuple[int, str], dict] = {}
 
     for value in values:
         year = int(value["@time"][:4])
 
-        employment = EMPLOYMENT_CODE_MAP[
-            value["@cat05"]
-        ]
+        employment = EMPLOYMENT_CODE_MAP[value["@cat05"]]
 
         key = (year, employment)
 
@@ -182,19 +164,13 @@ def get_employment_distribution_2015_2019(
                 "employment": employment,
             }
 
-        column = QUANTILE_CODE_MAP[
-            value["@cat02"]
-        ]
+        column = QUANTILE_CODE_MAP[value["@cat02"]]
 
-        records[key][column] = float(
-            value["$"]
-        )
+        records[key][column] = float(value["$"])
 
     return (
         pd.DataFrame(records.values())
-        .sort_values(
-            ["employment", "year"]
-        )
+        .sort_values(["employment", "year"])
         .reset_index(drop=True)
     )
 
@@ -238,24 +214,15 @@ def get_employment_distribution_2020_2023(
     result = payload["GET_STATS_DATA"]["RESULT"]
 
     if result["STATUS"] != 0:
-        raise RuntimeError(
-            f"e-Stat API error: {result}"
-        )
+        raise RuntimeError(f"e-Stat API error: {result}")
 
-    values = (
-        payload["GET_STATS_DATA"]
-        ["STATISTICAL_DATA"]
-        ["DATA_INF"]
-        ["VALUE"]
-    )
+    values = payload["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
 
     records: dict[tuple[int, str], dict] = {}
 
     for value in values:
         year = int(value["@time"][:4])
-        employment = EMPLOYMENT_CODE_MAP[
-            value["@cat05"]
-        ]
+        employment = EMPLOYMENT_CODE_MAP[value["@cat05"]]
 
         key = (year, employment)
 
@@ -265,19 +232,13 @@ def get_employment_distribution_2020_2023(
                 "employment": employment,
             }
 
-        column = QUANTILE_CODE_MAP[
-            value["@cat02"]
-        ]
+        column = QUANTILE_CODE_MAP[value["@cat02"]]
 
-        records[key][column] = float(
-            value["$"]
-        )
+        records[key][column] = float(value["$"])
 
     return (
         pd.DataFrame(records.values())
-        .sort_values(
-            ["employment", "year"]
-        )
+        .sort_values(["employment", "year"])
         .reset_index(drop=True)
     )
 
@@ -290,12 +251,7 @@ def main() -> None:
         STATS_DATA_ID,
     )
 
-    class_objects = (
-        payload["GET_META_INFO"]
-        ["METADATA_INF"]
-        ["CLASS_INF"]
-        ["CLASS_OBJ"]
-    )
+    class_objects = payload["GET_META_INFO"]["METADATA_INF"]["CLASS_INF"]["CLASS_OBJ"]
 
     # print(
     #     f"=== statsDataId={STATS_DATA_ID} ==="
@@ -405,34 +361,22 @@ def main() -> None:
     # print("=== 2020-2023 雇用形態別賃金分布 ===")
     # print(df_2020_2023.to_string(index=False))
 
-    employment_history = (
-        load_wage_distribution_history_by_employment(
-            app_id=app_id,
-            excel_data_dir=DATA_DIR,
-        )
+    employment_history = load_wage_distribution_history_by_employment(
+        app_id=app_id,
+        excel_data_dir=DATA_DIR,
     )
 
     print()
     print("=== 2015-2025 雇用形態別賃金分布 ===")
-    print(
-        employment_history.to_string(
-            index=False
-        )
-    )
+    print(employment_history.to_string(index=False))
 
     print()
     print("rows:", len(employment_history))
 
     assert len(employment_history) == 22
 
-    assert (
-        employment_history[
-            ["year", "employment"]
-        ]
-        .duplicated()
-        .sum()
-        == 0
-    )
+    assert employment_history[["year", "employment"]].duplicated().sum() == 0
+
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from real_wage_dashboard.wage_distribution_service import (
-    find_wage_distribution_file,
+    # find_wage_distribution_file,
     normalize_text,
 )
 
@@ -59,23 +59,15 @@ from real_wage_dashboard.wage_distribution_service import (
 #                     row_text,
 #                 )
 
-DATA_DIR = Path(
-    "data/raw/wage_distribution/employment"
-)
+DATA_DIR = Path("data/raw/wage_distribution/employment")
 
 FILES = {
-    (2015, "regular"): DATA_DIR / (
-        "wage_distribution_employment_2015_regular.xls"
-    ),
-    (2015, "nonregular"): DATA_DIR / (
-        "wage_distribution_employment_2015_nonregular.xls"
-    ),
-    (2025, "regular"): DATA_DIR / (
-        "wage_distribution_employment_2025_regular.xlsx"
-    ),
-    (2025, "nonregular"): DATA_DIR / (
-        "wage_distribution_employment_2025_nonregular.xlsx"
-    ),
+    (2015, "regular"): DATA_DIR / ("wage_distribution_employment_2015_regular.xls"),
+    (2015, "nonregular"): DATA_DIR
+    / ("wage_distribution_employment_2015_nonregular.xls"),
+    (2025, "regular"): DATA_DIR / ("wage_distribution_employment_2025_regular.xlsx"),
+    (2025, "nonregular"): DATA_DIR
+    / ("wage_distribution_employment_2025_nonregular.xlsx"),
 }
 
 
@@ -100,9 +92,7 @@ for (year, employment), path in FILES.items():
 
         for row_index, row in df.iterrows():
             row_text = "".join(
-                normalize_text(value)
-                for value in row
-                if pd.notna(value)
+                normalize_text(value) for value in row if pd.notna(value)
             )
 
             if "男女計" in row_text:
@@ -120,11 +110,7 @@ for (year, employment), path in FILES.items():
         found = 0
 
         for row_index, row in block.iterrows():
-            row_text = " | ".join(
-                str(value)
-                for value in row
-                if pd.notna(value)
-            )
+            row_text = " | ".join(str(value) for value in row if pd.notna(value))
 
             if any(
                 keyword in row_text

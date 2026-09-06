@@ -364,3 +364,45 @@ def add_real_wage_distribution_by_group(
             ] = result.loc[mask, real_column] / base_row[real_column] * 100
 
     return result
+
+
+def build_wage_distribution_analysis_by_employment(
+    df: pd.DataFrame,
+    base_year: int = BASE_YEAR,
+) -> pd.DataFrame:
+    required_columns = {
+        "year",
+        "employment",
+        *QUANTILE_COLUMNS,
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+    result = df.copy()
+
+    for employment, group in result.groupby("employment"):
+        base_rows = group[group["year"] == base_year]
+
+        if len(base_rows) != 1:
+            raise ValueError(f"{employment}: base year {base_year} is not unique")
+
+        base_row = base_rows.iloc[0]
+
+        mask = result["employment"] == employment
+
+        for column in QUANTILE_COLUMNS:
+            result.loc[
+                mask,
+                f"{column}_index",
+            ] = result.loc[mask, column] / base_row[column] * 100
+
+    result["p90_p10"] = result["p90"] / result["p10"]
+
+    result["p90_p50"] = result["p90"] / result["p50"]
+
+    result["p50_p10"] = result["p50"] / result["p10"]
+
+    return result
