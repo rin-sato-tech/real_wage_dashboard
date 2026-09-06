@@ -1,9 +1,13 @@
+import numpy as np
 import pandas as pd
 import pytest
 
 from real_wage_dashboard.wage_distribution_analysis import (
     add_real_wage_distribution,
+    add_real_wage_distribution_by_group,
+    build_gender_wage_ratio,
     build_wage_distribution_analysis,
+    build_wage_distribution_analysis_by_sex,
     summarize_wage_distribution_change,
     validate_wage_distribution_data,
 )
@@ -150,3 +154,148 @@ def test_add_real_wage_distribution_rejects_missing_cpi(
             wage_distribution_df,
             cpi_df,
         )
+
+
+def test_add_real_wage_distribution_by_group() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025],
+            "sex": [
+                "male",
+                "male",
+                "female",
+                "female",
+            ],
+            "p10": [183.2, 214.9, 149.3, 185.5],
+            "p25": [225.8, 258.2, 176.9, 215.6],
+            "p50": [293.8, 325.8, 218.2, 260.3],
+            "p75": [399.4, 433.1, 276.8, 320.8],
+            "p90": [534.5, 582.6, 357.4, 405.3],
+        }
+    )
+
+    cpi_df = pd.DataFrame(
+        {
+            "year": [2015, 2025],
+            "cpi": [97.8, 114.025],
+        }
+    )
+
+    result = add_real_wage_distribution_by_group(
+        df,
+        cpi_df,
+        group_columns=["sex"],
+    )
+
+    base = result[result["year"] == 2015]
+
+    assert np.allclose(
+        base["real_p10_index"],
+        100.0,
+    )
+
+    assert np.allclose(
+        base["real_p50_index"],
+        100.0,
+    )
+
+    assert np.allclose(
+        base["real_p90_index"],
+        100.0,
+    )
+
+    female_2025 = result[(result["year"] == 2025) & (result["sex"] == "female")].iloc[0]
+
+    expected = (185.5 / (114.025 / 100)) / (149.3 / (97.8 / 100)) * 100
+
+    assert female_2025["real_p10_index"] == pytest.approx(expected)
+
+
+def test_build_wage_distribution_analysis_by_sex() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025],
+            "sex": ["male", "male", "female", "female"],
+            "p10": [183.2, 214.9, 149.3, 185.5],
+            "p25": [225.8, 258.2, 176.9, 215.6],
+            "p50": [293.8, 325.8, 218.2, 260.3],
+            "p75": [399.4, 433.1, 276.8, 320.8],
+            "p90": [534.5, 582.6, 357.4, 405.3],
+        }
+    )
+
+    result = build_wage_distribution_analysis_by_sex(df)
+
+    base = result[result["year"] == 2015]
+
+    assert np.allclose(base["p10_index"], 100.0)
+    assert np.allclose(base["p50_index"], 100.0)
+    assert np.allclose(base["p90_index"], 100.0)
+
+    female_2025 = result[(result["year"] == 2025) & (result["sex"] == "female")].iloc[0]
+
+    assert female_2025["p10_index"] == pytest.approx(185.5 / 149.3 * 100)
+
+
+def test_build_gender_wage_ratio() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025],
+            "sex": ["male", "male", "female", "female"],
+            "p10": [183.2, 214.9, 149.3, 185.5],
+            "p25": [225.8, 258.2, 176.9, 215.6],
+            "p50": [293.8, 325.8, 218.2, 260.3],
+            "p75": [399.4, 433.1, 276.8, 320.8],
+            "p90": [534.5, 582.6, 357.4, 405.3],
+        }
+    )
+
+    result = build_gender_wage_ratio(df)
+
+    row_2015 = result[result["year"] == 2015].iloc[0]
+    row_2025 = result[result["year"] == 2025].iloc[0]
+
+    assert row_2015["female_male_p50_ratio"] == pytest.approx(218.2 / 293.8)
+
+    assert row_2025["female_male_p50_ratio"] == pytest.approx(260.3 / 325.8)
+
+
+def test_add_real_wage_distribution_by_group_2025_values() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025],
+            "sex": ["male", "male", "female", "female"],
+            "p10": [183.2, 214.9, 149.3, 185.5],
+            "p25": [225.8, 258.2, 176.9, 215.6],
+            "p50": [293.8, 325.8, 218.2, 260.3],
+            "p75": [399.4, 433.1, 276.8, 320.8],
+            "p90": [534.5, 582.6, 357.4, 405.3],
+        }
+    )
+
+    cpi_df = pd.DataFrame(
+        {
+            "year": [2015, 2025],
+            "cpi": [97.8, 114.025],
+        }
+    )
+
+    result = add_real_wage_distribution_by_group(
+        df,
+        cpi_df,
+        group_columns=["sex"],
+    )
+
+    female_2025 = result[(result["year"] == 2025) & (result["sex"] == "female")].iloc[0]
+
+    male_2025 = result[(result["year"] == 2025) & (result["sex"] == "male")].iloc[0]
+
+    assert female_2025["real_p50_index"] == pytest.approx(
+        102.319450,
+        abs=1e-6,
+    )
+
+    assert male_2025["real_p50_index"] == pytest.approx(
+        95.112602,
+        abs=1e-6,
+    )

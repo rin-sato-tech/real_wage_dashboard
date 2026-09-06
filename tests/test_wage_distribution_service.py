@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from real_wage_dashboard.wage_distribution_service import (
+    extract_distribution_by_sex_from_dataframe,
     extract_main_distribution_from_dataframe,
     find_wage_distribution_file,
     normalize_distribution_label,
@@ -156,3 +157,49 @@ def test_find_wage_distribution_file_rejects_duplicates(
             data_dir=tmp_path,
             year=2015,
         )
+
+
+def test_extract_distribution_by_sex_uses_separate_blocks() -> None:
+    df = pd.DataFrame(
+        [
+            ["男女計\n学歴計"],
+            ["第1・十分位数（千円）", 166.0],
+            ["第1・四分位数（千円）", 204.1],
+            ["中位数（千円）", 263.4],
+            ["第3・四分位数（千円）", 359.3],
+            ["第9・十分位数（千円）", 487.9],
+            ["十分位分散係数", 0.61],
+            ["四分位分散係数", 0.29],
+            ["男\n学歴計"],
+            ["第1・十分位数（千円）", 183.2],
+            ["第1・四分位数（千円）", 225.8],
+            ["中位数（千円）", 293.8],
+            ["第3・四分位数（千円）", 399.4],
+            ["第9・十分位数（千円）", 534.5],
+            ["十分位分散係数", 0.60],
+            ["四分位分散係数", 0.30],
+            ["女\n学歴計"],
+            ["第1・十分位数（千円）", 149.3],
+            ["第1・四分位数（千円）", 176.9],
+            ["中位数（千円）", 218.2],
+            ["第3・四分位数（千円）", 276.8],
+            ["第9・十分位数（千円）", 357.4],
+            ["十分位分散係数", 0.48],
+            ["四分位分散係数", 0.23],
+        ]
+    )
+
+    male = extract_distribution_by_sex_from_dataframe(
+        df,
+        year=2015,
+        sex="male",
+    )
+
+    female = extract_distribution_by_sex_from_dataframe(
+        df,
+        year=2015,
+        sex="female",
+    )
+
+    assert male["p50"] == pytest.approx(293.8)
+    assert female["p50"] == pytest.approx(218.2)

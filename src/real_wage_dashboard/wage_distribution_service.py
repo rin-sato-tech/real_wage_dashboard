@@ -141,3 +141,96 @@ def load_wage_distribution_history(
         )
 
     return pd.DataFrame(rows).sort_values("year").reset_index(drop=True)
+
+
+SEX_LABELS = {
+    "total": "男女計学歴計",
+    "male": "男学歴計",
+    "female": "女学歴計",
+}
+
+
+def normalize_text(value: object) -> str:
+    if pd.isna(value):
+        return ""
+
+    return str(value).replace(" ", "").replace("　", "").replace("\n", "")
+
+
+def find_sex_block_start(
+    df: pd.DataFrame,
+    sex: str,
+) -> int:
+    if sex not in SEX_LABELS:
+        raise ValueError(f"未対応の性別です: {sex}")
+
+    target = SEX_LABELS[sex]
+
+    for row_index, row in df.iterrows():
+        for value in row:
+            normalized = normalize_text(value)
+
+            if normalized == target:
+                return row_index
+
+    raise ValueError(f"性別ブロックが見つかりません: {sex}")
+
+
+def extract_distribution_by_sex_from_dataframe(
+    df: pd.DataFrame,
+    year: int,
+    sex: str,
+) -> dict[str, float | int | str]:
+    start_row = find_sex_block_start(
+        df=df,
+        sex=sex,
+    )
+
+    block = df.iloc[start_row:].copy()
+
+    result = extract_main_distribution_from_dataframe(
+        df=block,
+        year=year,
+    )
+
+    result["sex"] = sex
+
+    return result
+
+
+def load_wage_distribution_history_by_sex(
+    data_dir: Path,
+    start_year: int = 2015,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    if start_year > end_year:
+        raise ValueError("start_year は end_year 以下である必要があります。")
+
+    rows = []
+
+    for year in range(start_year, end_year + 1):
+        path = find_wage_distribution_file(
+            data_dir=data_dir,
+            year=year,
+        )
+
+        df = pd.read_excel(
+            path,
+            sheet_name=DEFAULT_SHEET_NAME,
+            header=None,
+        )
+
+        for sex in [
+            "total",
+            "male",
+            "female",
+        ]:
+            rows.append(
+                extract_distribution_by_sex_from_dataframe(
+                    df=df,
+                    year=year,
+                    sex=sex,
+                )
+            )
+
+    return pd.DataFrame(rows).sort_values(["year", "sex"]).reset_index(drop=True)
