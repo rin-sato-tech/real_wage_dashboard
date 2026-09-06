@@ -2,10 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-
-DATA_PATH = Path(
-    "data/raw/minimum_wage/regional_minimum_wage_history.xlsx"
-)
+DATA_PATH = Path("data/raw/minimum_wage/regional_minimum_wage_history.xlsx")
 
 
 def main() -> None:
@@ -34,6 +31,7 @@ def main() -> None:
         print()
         print("=== 第1列の末尾10件 ===")
         print(df.iloc[-10:, 0].tolist())
+
 
 if __name__ == "__main__":
     main()
