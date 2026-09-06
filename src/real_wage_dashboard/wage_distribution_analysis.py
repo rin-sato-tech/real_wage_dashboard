@@ -111,3 +111,77 @@ def summarize_wage_distribution_change(
         )
 
     return pd.DataFrame(rows)
+
+
+REAL_QUANTILE_COLUMNS = [
+    "p10",
+    "p25",
+    "p50",
+    "p75",
+    "p90",
+]
+
+
+def add_real_wage_distribution(
+    df: pd.DataFrame,
+    cpi_df: pd.DataFrame,
+    base_year: int = BASE_YEAR,
+) -> pd.DataFrame:
+    """
+    賃金分位をCPIで実質化し、基準年=100の実質指数を追加する。
+
+    cpi_df は少なくとも以下を持つことを想定する。
+    - year
+    - cpi
+    """
+    required_cpi_columns = {
+        "year",
+        "cpi",
+    }
+
+    missing = required_cpi_columns - set(cpi_df.columns)
+
+    if missing:
+        raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
+
+    if cpi_df["year"].duplicated().any():
+        raise ValueError("CPIデータの year が重複しています。")
+
+    if cpi_df["cpi"].isna().any():
+        raise ValueError("CPIに欠損があります。")
+
+    if (cpi_df["cpi"] <= 0).any():
+        raise ValueError("CPIには正の値が必要です。")
+
+    result = df.merge(
+        cpi_df[["year", "cpi"]],
+        on="year",
+        how="left",
+        validate="one_to_one",
+    )
+
+    if result["cpi"].isna().any():
+        missing_years = result.loc[result["cpi"].isna(), "year"].astype(int).tolist()
+
+        raise ValueError(f"CPIが存在しない年があります: {missing_years}")
+
+    for column in REAL_QUANTILE_COLUMNS:
+        real_column = f"real_{column}"
+
+        result[real_column] = result[column] / (result["cpi"] / 100)
+
+    base_rows = result[result["year"] == base_year]
+
+    if len(base_rows) != 1:
+        raise ValueError(f"基準年 {base_year} が一意に存在しません。")
+
+    base_row = base_rows.iloc[0]
+
+    for column in REAL_QUANTILE_COLUMNS:
+        real_column = f"real_{column}"
+
+        result[f"{real_column}_index"] = (
+            result[real_column] / base_row[real_column] * 100
+        )
+
+    return result
