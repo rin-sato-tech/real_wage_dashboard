@@ -3,6 +3,104 @@ import pandas as pd
 BASE_YEAR = 2015
 
 
+TARGET_SIZES = {
+    "5人以上": "T",
+    "30人以上": "0",
+}
+
+TARGET_EMPLOYMENT_TYPES = {
+    "就業形態計": "0",
+    "一般労働者": "1",
+    "パートタイム労働者": "2",
+}
+
+
+def prepare_minimum_wage_wage_data(
+    df: pd.DataFrame,
+    start_year: int = 2015,
+    end_year: int = 2025,
+    industry_code: str = "TL",
+) -> pd.DataFrame:
+    """最低賃金分析用の年次時間当たり賃金系列を作成する。"""
+
+    work = df.copy()
+
+    required_columns = {
+        "産業分類",
+        "規模",
+        "就業形態",
+        "月",
+        "年",
+        "所定内給与",
+        "所定内労働時間",
+    }
+
+    missing = required_columns - set(work.columns)
+
+    if missing:
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    for column in [
+        "産業分類",
+        "規模",
+        "就業形態",
+        "月",
+    ]:
+        work[column] = work[column].astype(str).str.strip()
+
+    work = work[
+        (work["産業分類"] == industry_code)
+        & (work["規模"].isin(TARGET_SIZES.values()))
+        & (work["就業形態"].isin(TARGET_EMPLOYMENT_TYPES.values()))
+        & (work["月"] == "CY")
+    ].copy()
+
+    work["year"] = pd.to_numeric(
+        work["年"],
+        errors="coerce",
+    )
+
+    work = work.loc[
+        work["year"].between(
+            start_year,
+            end_year,
+        )
+    ].copy()
+
+    size_map = {code: name for name, code in TARGET_SIZES.items()}
+
+    employment_map = {code: name for name, code in TARGET_EMPLOYMENT_TYPES.items()}
+
+    work["size_name"] = work["規模"].map(size_map)
+
+    work["employment_name"] = work["就業形態"].map(employment_map)
+
+    work["scheduled_hourly_wage"] = work["所定内給与"] / work["所定内労働時間"]
+
+    result = (
+        work[
+            [
+                "year",
+                "size_name",
+                "employment_name",
+                "所定内給与",
+                "所定内労働時間",
+                "scheduled_hourly_wage",
+            ]
+        ]
+        .sort_values(
+            [
+                "size_name",
+                "employment_name",
+                "year",
+            ]
+        )
+        .reset_index(drop=True)
+    )
+
+    return result
+
+
 def build_minimum_wage_analysis(
     minimum_wage_df: pd.DataFrame,
     wage_df: pd.DataFrame,

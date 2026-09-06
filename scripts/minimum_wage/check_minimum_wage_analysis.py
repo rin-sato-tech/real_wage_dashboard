@@ -1,10 +1,8 @@
 from pathlib import Path
 
-from real_wage_dashboard.establishment_size_wage_analysis import (
-    prepare_establishment_size_annual_data,
-)
 from real_wage_dashboard.minimum_wage_analysis import (
     build_minimum_wage_analysis,
+    prepare_minimum_wage_wage_data,
 )
 from real_wage_dashboard.minimum_wage_service import (
     load_minimum_wage_data,
@@ -21,7 +19,7 @@ def main() -> None:
         file_path=WAGE_DATA_PATH,
     )
 
-    wage_df = prepare_establishment_size_annual_data(
+    wage_df = prepare_minimum_wage_wage_data(
         raw_wage_df,
         start_year=2015,
         end_year=2025,
