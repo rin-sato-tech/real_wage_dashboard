@@ -1,7 +1,11 @@
+import tomllib
 from pathlib import Path
 
+from real_wage_dashboard.cpi_service import load_cpi_dataframe
 from real_wage_dashboard.minimum_wage_analysis import (
+    add_real_minimum_wage,
     build_minimum_wage_analysis,
+    prepare_annual_cpi,
     prepare_minimum_wage_wage_data,
 )
 from real_wage_dashboard.minimum_wage_service import (
@@ -10,6 +14,22 @@ from real_wage_dashboard.minimum_wage_service import (
 from real_wage_dashboard.wage_service import load_wage_csv
 
 WAGE_DATA_PATH = Path("data/raw/hon-maikin-k-jissu.csv")
+
+SECRETS_PATH = Path(".streamlit/secrets.toml")
+
+
+def load_estat_app_id() -> str:
+    with SECRETS_PATH.open("rb") as file:
+        secrets = tomllib.load(file)
+
+    app_id = secrets.get("ESTAT_APP_ID")
+
+    if not app_id:
+        raise ValueError(
+            ".streamlit/secrets.toml に ESTAT_APP_ID が設定されていません。"
+        )
+
+    return str(app_id)
 
 
 def main() -> None:
@@ -30,40 +50,37 @@ def main() -> None:
         wage_df,
     )
 
-    columns = [
-        "year",
-        "size_name",
-        "employment_name",
-        "minimum_wage",
-        "scheduled_hourly_wage",
-        "simple_kaitz",
-        "minimum_wage_index",
-        "wage_index",
-    ]
+    app_id = load_estat_app_id()
 
-    print("=== 最低賃金分析データ ===")
-    print(analysis_df[columns].to_string(index=False))
+    cpi_df = load_cpi_dataframe(
+        app_id=app_id,
+        series_code="0163",
+    )
 
+    annual_cpi_df = prepare_annual_cpi(
+        cpi_df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    analysis_df = add_real_minimum_wage(
+        analysis_df,
+        annual_cpi_df,
+    )
     print()
-    print("=== 2015 → 2025 ===")
+    print("=== 名目・実質最低賃金 ===")
 
-    for (
-        size_name,
-        employment_name,
-    ), group in analysis_df.groupby(["size_name", "employment_name"]):
-        start = group.loc[group["year"] == 2015].iloc[0]
-        end = group.loc[group["year"] == 2025].iloc[0]
+    display = analysis_df[
+        [
+            "year",
+            "minimum_wage",
+            "cpi",
+            "minimum_wage_index",
+            "real_minimum_wage_index",
+        ]
+    ].drop_duplicates(subset=["year"])
 
-        print(
-            f"{size_name} / {employment_name}: "
-            f"Kaitz "
-            f"{start['simple_kaitz']:.3f}"
-            f" → {end['simple_kaitz']:.3f}, "
-            f"賃金指数 "
-            f"{end['wage_index']:.1f}, "
-            f"最低賃金指数 "
-            f"{end['minimum_wage_index']:.1f}"
-        )
+    print(display.to_string(index=False))
 
 
 if __name__ == "__main__":

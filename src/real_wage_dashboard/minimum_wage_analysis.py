@@ -301,3 +301,116 @@ def _validate_analysis_data(
             "簡易Kaitz指数と賃金/最低賃金比の"
             f"逆数関係が成立しません。最大誤差={ratio_error:.12f}"
         )
+
+
+def prepare_annual_cpi(
+    cpi_df: pd.DataFrame,
+    start_year: int = 2015,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """月次CPIから年平均CPIを作成する。"""
+
+    required_columns = {
+        "date",
+        "index_value",
+    }
+
+    missing = required_columns - set(cpi_df.columns)
+
+    if missing:
+        raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
+
+    work = cpi_df.copy()
+
+    work["year"] = work["date"].dt.year
+
+    work = work.loc[
+        work["year"].between(
+            start_year,
+            end_year,
+        )
+    ].copy()
+
+    annual = (
+        work.groupby(
+            "year",
+            as_index=False,
+        )
+        .agg(
+            cpi=("index_value", "mean"),
+            month_count=("index_value", "count"),
+        )
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
+
+    incomplete = annual.loc[annual["month_count"] != 12]
+
+    if not incomplete.empty:
+        raise ValueError(
+            "12か月揃っていないCPI年次データがあります: "
+            f"{incomplete[['year', 'month_count']].to_dict('records')}"
+        )
+
+    return annual[
+        [
+            "year",
+            "cpi",
+        ]
+    ]
+
+
+def add_real_minimum_wage(
+    analysis_df: pd.DataFrame,
+    annual_cpi_df: pd.DataFrame,
+    base_year: int = BASE_YEAR,
+) -> pd.DataFrame:
+    """CPIを結合し、実質最低賃金と指数を計算する。"""
+
+    required_analysis_columns = {
+        "year",
+        "minimum_wage",
+        "minimum_wage_index",
+    }
+
+    required_cpi_columns = {
+        "year",
+        "cpi",
+    }
+
+    missing_analysis = required_analysis_columns - set(analysis_df.columns)
+
+    if missing_analysis:
+        raise ValueError(
+            f"最低賃金分析データに必要な列がありません: {sorted(missing_analysis)}"
+        )
+
+    missing_cpi = required_cpi_columns - set(annual_cpi_df.columns)
+
+    if missing_cpi:
+        raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing_cpi)}")
+
+    result = analysis_df.merge(
+        annual_cpi_df,
+        on="year",
+        how="inner",
+        validate="many_to_one",
+    )
+
+    result["real_minimum_wage"] = result["minimum_wage"] / (result["cpi"] / 100)
+
+    base_real = result.loc[
+        result["year"] == base_year,
+        [
+            "real_minimum_wage",
+        ],
+    ].drop_duplicates()
+
+    if len(base_real) != 1:
+        raise ValueError(f"{base_year}年の実質最低賃金を一意に取得できません。")
+
+    result["real_minimum_wage_index"] = (
+        result["real_minimum_wage"] / base_real.iloc[0]["real_minimum_wage"] * 100
+    )
+
+    return result
