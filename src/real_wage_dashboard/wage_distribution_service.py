@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import requests
+
+EMPLOYMENT_DISTRIBUTION_STATS_ID_2015_2019 = "0003268283"
+EMPLOYMENT_DISTRIBUTION_STATS_ID_2020_2023 = "0003446899"
 
 DEFAULT_SHEET_NAME = "産業計(規模計)"
 
@@ -15,6 +19,26 @@ DISTRIBUTION_LABELS = {
     "十分位分散係数": "decile_dispersion",
     "四分位分散係数": "quartile_dispersion",
 }
+
+EMPLOYMENT_CODE_MAP = {
+    "02": "regular",
+    "03": "nonregular",
+}
+
+QUANTILE_CODE_MAP = {
+    "1280": "p10",
+    "1290": "p25",
+    "1300": "p50",
+    "1310": "p75",
+    "1320": "p90",
+    "1330": "decile_dispersion",
+    "1340": "quartile_dispersion",
+}
+
+EMPLOYMENT_TYPES = [
+    "regular",
+    "nonregular",
+]
 
 
 def normalize_distribution_label(value: object) -> str:
@@ -234,3 +258,267 @@ def load_wage_distribution_history_by_sex(
             )
 
     return pd.DataFrame(rows).sort_values(["year", "sex"]).reset_index(drop=True)
+
+
+def find_employment_distribution_file(
+    data_dir: Path,
+    year: int,
+    employment: str,
+) -> Path:
+    if employment not in EMPLOYMENT_TYPES:
+        raise ValueError(
+            f"Unknown employment type: {employment}"
+        )
+
+    pattern = (
+        f"wage_distribution_employment_"
+        f"{year}_{employment}.xls*"
+    )
+
+    matches = list(data_dir.glob(pattern))
+
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"{pattern}: expected 1 file, "
+            f"found {len(matches)}"
+        )
+
+    return matches[0]
+
+
+def load_employment_distribution(
+    path: Path,
+    year: int,
+    employment: str,
+    sheet_name: str = "産業計",
+) -> dict:
+    if employment not in EMPLOYMENT_TYPES:
+        raise ValueError(
+            f"Unknown employment type: {employment}"
+        )
+
+    df = pd.read_excel(
+        path,
+        sheet_name=sheet_name,
+        header=None,
+    )
+
+    result = extract_main_distribution_from_dataframe(
+        df,
+        year,
+    )
+
+    result["employment"] = employment
+
+    return result
+
+
+def parse_employment_distribution_values(
+    values: list[dict],
+) -> pd.DataFrame:
+    records: dict[tuple[int, str], dict] = {}
+
+    for value in values:
+        year = int(value["@time"][:4])
+
+        employment = EMPLOYMENT_CODE_MAP[
+            value["@cat05"]
+        ]
+
+        metric = QUANTILE_CODE_MAP[
+            value["@cat02"]
+        ]
+
+        key = (year, employment)
+
+        if key not in records:
+            records[key] = {
+                "year": year,
+                "employment": employment,
+            }
+
+        records[key][metric] = float(value["$"])
+
+    return (
+        pd.DataFrame(records.values())
+        .sort_values(["employment", "year"])
+        .reset_index(drop=True)
+    )
+
+
+def load_employment_distribution_2015_2019(
+    app_id: str,
+) -> pd.DataFrame:
+    url = (
+        "https://api.e-stat.go.jp/"
+        "rest/3.0/app/json/getStatsData"
+    )
+
+    params = {
+        "appId": app_id,
+        "statsDataId":
+            EMPLOYMENT_DISTRIBUTION_STATS_ID_2015_2019,
+        "cdCat01": "010",
+        "cdCat02":
+            "1280,1290,1300,1310,1320,1330,1340",
+        "cdCat03": "01",
+        "cdCat04": "01",
+        "cdCat05": "02,03",
+        "cdCat06": "100010",
+        "cdCat07": "01",
+        "cdTime": ",".join(
+            [
+                "2015000000",
+                "2016000000",
+                "2017000000",
+                "2018000000",
+                "20190000000",
+            ]
+        ),
+        "limit": 1000,
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+
+    result = payload["GET_STATS_DATA"]["RESULT"]
+
+    if result["STATUS"] != 0:
+        raise RuntimeError(
+            f"e-Stat API error: {result}"
+        )
+
+    values = (
+        payload["GET_STATS_DATA"]
+        ["STATISTICAL_DATA"]
+        ["DATA_INF"]
+        ["VALUE"]
+    )
+
+    return parse_employment_distribution_values(
+        values
+    )
+
+
+def load_employment_distribution_2020_2023(
+    app_id: str,
+) -> pd.DataFrame:
+    url = (
+        "https://api.e-stat.go.jp/"
+        "rest/3.0/app/json/getStatsData"
+    )
+
+    params = {
+        "appId": app_id,
+        "statsDataId":
+            EMPLOYMENT_DISTRIBUTION_STATS_ID_2020_2023,
+        "cdCat01": "01",
+        "cdCat02":
+            "1280,1290,1300,1310,1320,1330,1340",
+        "cdCat03": "01",
+        "cdCat04": "01",
+        "cdCat05": "02,03",
+        "cdCat06": "01",
+        "cdCat07": "01",
+        "cdCat08": "02",
+        "cdTime": ",".join(
+            [
+                "2020000000",
+                "2021000000",
+                "2022000000",
+                "2023000000",
+            ]
+        ),
+        "limit": 1000,
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+
+    result = payload["GET_STATS_DATA"]["RESULT"]
+
+    if result["STATUS"] != 0:
+        raise RuntimeError(
+            f"e-Stat API error: {result}"
+        )
+
+    values = (
+        payload["GET_STATS_DATA"]
+        ["STATISTICAL_DATA"]
+        ["DATA_INF"]
+        ["VALUE"]
+    )
+
+    return parse_employment_distribution_values(
+        values
+    )
+
+
+def load_employment_distribution_2024_2025(
+    data_dir: Path,
+) -> pd.DataFrame:
+    records = []
+
+    for year in [2024, 2025]:
+        for employment in [
+            "regular",
+            "nonregular",
+        ]:
+            path = find_employment_distribution_file(
+                data_dir,
+                year,
+                employment,
+            )
+
+            record = load_employment_distribution(
+                path,
+                year,
+                employment,
+            )
+
+            records.append(record)
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(["employment", "year"])
+        .reset_index(drop=True)
+    )
+
+
+def load_wage_distribution_history_by_employment(
+    app_id: str,
+    excel_data_dir: Path,
+) -> pd.DataFrame:
+    historical = load_employment_distribution_2015_2019(app_id)
+
+    recent_api = load_employment_distribution_2020_2023(app_id)
+
+    recent_excel = load_employment_distribution_2024_2025(excel_data_dir)
+
+    result = pd.concat(
+        [
+            historical,
+            recent_api,
+            recent_excel,
+        ],
+        ignore_index=True,
+    )
+
+    return (
+        result.sort_values(
+            ["employment", "year"]
+        )
+        .reset_index(drop=True)
+    )
