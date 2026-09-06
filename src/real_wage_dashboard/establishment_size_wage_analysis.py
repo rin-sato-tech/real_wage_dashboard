@@ -30,6 +30,8 @@ def prepare_establishment_size_annual_data(
         "年",
         "現金給与総額",
         "総実労働時間",
+        "所定内給与",
+        "所定内労働時間",
     }
 
     missing = required_columns - set(work.columns)
@@ -59,6 +61,8 @@ def prepare_establishment_size_annual_data(
 
     work["hourly_wage"] = work["現金給与総額"] / work["総実労働時間"]
 
+    work["scheduled_hourly_wage"] = work["所定内給与"] / work["所定内労働時間"]
+
     result = (
         work[
             [
@@ -68,6 +72,9 @@ def prepare_establishment_size_annual_data(
                 "現金給与総額",
                 "総実労働時間",
                 "hourly_wage",
+                "所定内給与",
+                "所定内労働時間",
+                "scheduled_hourly_wage",
             ]
         ]
         .sort_values(["employment_name", "year", "size_name"])
