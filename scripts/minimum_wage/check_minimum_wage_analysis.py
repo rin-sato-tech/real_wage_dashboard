@@ -1,12 +1,14 @@
 import tomllib
 from pathlib import Path
 
-from real_wage_dashboard.cpi_service import load_cpi_dataframe
+# from real_wage_dashboard.cpi_service import load_cpi_dataframe
 from real_wage_dashboard.minimum_wage_analysis import (
-    add_real_minimum_wage,
+    # add_real_minimum_wage,
     build_minimum_wage_analysis,
-    prepare_annual_cpi,
+    # prepare_annual_cpi,
     prepare_minimum_wage_wage_data,
+    # summarize_minimum_wage_correlations,
+    summarize_minimum_wage_lag_correlations,
 )
 from real_wage_dashboard.minimum_wage_service import (
     load_minimum_wage_data,
@@ -50,37 +52,79 @@ def main() -> None:
         wage_df,
     )
 
-    app_id = load_estat_app_id()
+    # correlation_df = summarize_minimum_wage_correlations(
+    #     analysis_df
+    # )
 
-    cpi_df = load_cpi_dataframe(
-        app_id=app_id,
-        series_code="0163",
-    )
+    # print()
+    # print("=== 前年比相関 ===")
+    # print(
+    #     correlation_df.to_string(
+    #         index=False
+    #     )
+    # )
 
-    annual_cpi_df = prepare_annual_cpi(
-        cpi_df,
-        start_year=2015,
-        end_year=2025,
-    )
+    # lag_df = summarize_minimum_wage_lag_correlations(
+    #     analysis_df,
+    #     max_lag_years=1,
+    # )
 
-    analysis_df = add_real_minimum_wage(
-        analysis_df,
-        annual_cpi_df,
-    )
+    # print()
+    # print("=== 前年比ラグ相関 ===")
+    # print(
+    #     lag_df.to_string(
+    #         index=False
+    #     )
+    # )
+
+    # print()
+    # print("=== 最低賃金・賃金前年比 ===")
+
+    # yoy_columns = [
+    #     "year",
+    #     "size_name",
+    #     "employment_name",
+    #     "minimum_wage_yoy",
+    #     "scheduled_hourly_wage_yoy",
+    # ]
+
+    # print(
+    #     analysis_df[
+    #         yoy_columns
+    #     ].to_string(
+    #         index=False
+    #     )
+    # )
+
+    without_2020_df = analysis_df[analysis_df["year"] != 2020].copy()
+
     print()
-    print("=== 名目・実質最低賃金 ===")
+    print("=== 2020年除外・前年比ラグ相関 ===")
 
-    display = analysis_df[
-        [
-            "year",
-            "minimum_wage",
-            "cpi",
-            "minimum_wage_index",
-            "real_minimum_wage_index",
-        ]
-    ].drop_duplicates(subset=["year"])
+    without_2020_correlation_df = summarize_minimum_wage_lag_correlations(
+        without_2020_df,
+        max_lag_years=1,
+    )
 
-    print(display.to_string(index=False))
+    print(without_2020_correlation_df.to_string(index=False))
+
+    # app_id = load_estat_app_id()
+
+    # cpi_df = load_cpi_dataframe(
+    #     app_id=app_id,
+    #     series_code="0163",
+    # )
+
+    # annual_cpi_df = prepare_annual_cpi(
+    #     cpi_df,
+    #     start_year=2015,
+    #     end_year=2025,
+    # )
+
+    # analysis_df = add_real_minimum_wage(
+    #     analysis_df,
+    #     annual_cpi_df,
+    # )
 
 
 if __name__ == "__main__":

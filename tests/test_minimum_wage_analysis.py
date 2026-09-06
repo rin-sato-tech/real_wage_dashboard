@@ -6,6 +6,8 @@ from real_wage_dashboard.minimum_wage_analysis import (
     build_minimum_wage_analysis,
     prepare_annual_cpi,
     prepare_minimum_wage_wage_data,
+    summarize_minimum_wage_correlations,
+    summarize_minimum_wage_lag_correlations,
 )
 from real_wage_dashboard.minimum_wage_service import (
     load_minimum_wage_data,
@@ -302,3 +304,80 @@ def test_real_minimum_wage_index_2025() -> None:
         [120.487362] * len(rows_2025),
         rel=1e-6,
     )
+
+
+def test_summarize_minimum_wage_correlations() -> None:
+    analysis_df = _load_analysis_df()
+
+    result = summarize_minimum_wage_correlations(analysis_df)
+
+    assert len(result) == 6
+    assert set(result["lag_years"]) == {0}
+    assert (result["observation_count"] == 10).all()
+
+    row = result[
+        (result["size_name"] == "5人以上")
+        & (result["employment_name"] == "パートタイム労働者")
+    ].iloc[0]
+
+    assert row["pearson"] == pytest.approx(
+        0.251230,
+        abs=1e-6,
+    )
+
+    assert row["spearman"] == pytest.approx(
+        0.187879,
+        abs=1e-6,
+    )
+
+
+def test_summarize_minimum_wage_lag_correlations() -> None:
+    analysis_df = _load_analysis_df()
+
+    result = summarize_minimum_wage_lag_correlations(
+        analysis_df,
+        max_lag_years=1,
+    )
+
+    assert len(result) == 12
+    assert set(result["lag_years"]) == {
+        0,
+        1,
+    }
+
+    lag_1 = result[result["lag_years"] == 1]
+
+    assert (lag_1["observation_count"] == 9).all()
+
+    row = result[
+        (result["size_name"] == "5人以上")
+        & (result["employment_name"] == "パートタイム労働者")
+        & (result["lag_years"] == 1)
+    ].iloc[0]
+
+    assert row["pearson"] == pytest.approx(
+        0.759811,
+        abs=1e-6,
+    )
+
+    assert row["spearman"] == pytest.approx(
+        0.666667,
+        abs=1e-6,
+    )
+
+
+def test_lag_correlation_matches_by_calendar_year() -> None:
+    analysis_df = _load_analysis_df()
+
+    analysis_df = analysis_df[analysis_df["year"] != 2020].copy()
+
+    result = summarize_minimum_wage_lag_correlations(
+        analysis_df,
+        max_lag_years=1,
+    )
+
+    lag_1 = result[result["lag_years"] == 1]
+
+    # 2020年を削除すると、
+    # 2019→2021を1年ラグとは扱わないため7観測になる。
+    assert (lag_1["observation_count"] == 7).all()

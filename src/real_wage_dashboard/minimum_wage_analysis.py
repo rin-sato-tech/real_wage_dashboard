@@ -414,3 +414,205 @@ def add_real_minimum_wage(
     )
 
     return result
+
+
+def _spearman_correlation(
+    x: pd.Series,
+    y: pd.Series,
+) -> float:
+    """SciPyに依存せずSpearman順位相関を計算する。"""
+
+    return x.rank().corr(
+        y.rank(),
+        method="pearson",
+    )
+
+
+def summarize_minimum_wage_correlations(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """最低賃金前年比と時間当たり賃金前年比の相関を系列別に集計する。"""
+
+    required_columns = {
+        "year",
+        "size_name",
+        "employment_name",
+        "minimum_wage_yoy",
+        "scheduled_hourly_wage_yoy",
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(f"相関分析に必要な列がありません: {sorted(missing)}")
+
+    records: list[dict[str, object]] = []
+
+    for (
+        size_name,
+        employment_name,
+    ), group in df.groupby(
+        [
+            "size_name",
+            "employment_name",
+        ]
+    ):
+        work = (
+            group[
+                [
+                    "year",
+                    "minimum_wage_yoy",
+                    "scheduled_hourly_wage_yoy",
+                ]
+            ]
+            .dropna()
+            .sort_values("year")
+            .reset_index(drop=True)
+        )
+
+        if len(work) < 3:
+            raise ValueError(
+                "相関分析に必要な観測数が不足しています: "
+                f"{size_name} / {employment_name}"
+            )
+
+        pearson = work["minimum_wage_yoy"].corr(
+            work["scheduled_hourly_wage_yoy"],
+            method="pearson",
+        )
+
+        spearman = _spearman_correlation(
+            work["minimum_wage_yoy"],
+            work["scheduled_hourly_wage_yoy"],
+        )
+
+        records.append(
+            {
+                "size_name": size_name,
+                "employment_name": employment_name,
+                "lag_years": 0,
+                "pearson": pearson,
+                "spearman": spearman,
+                "observation_count": len(work),
+            }
+        )
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(
+            [
+                "size_name",
+                "employment_name",
+            ]
+        )
+        .reset_index(drop=True)
+    )
+
+
+def summarize_minimum_wage_lag_correlations(
+    df: pd.DataFrame,
+    max_lag_years: int = 1,
+) -> pd.DataFrame:
+    """最低賃金前年比と賃金前年比のラグ相関を系列別に集計する。"""
+
+    required_columns = {
+        "year",
+        "size_name",
+        "employment_name",
+        "minimum_wage_yoy",
+        "scheduled_hourly_wage_yoy",
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(f"ラグ相関分析に必要な列がありません: {sorted(missing)}")
+
+    records: list[dict[str, object]] = []
+
+    for (
+        size_name,
+        employment_name,
+    ), group in df.groupby(
+        [
+            "size_name",
+            "employment_name",
+        ]
+    ):
+        work = (
+            group[
+                [
+                    "year",
+                    "minimum_wage_yoy",
+                    "scheduled_hourly_wage_yoy",
+                ]
+            ]
+            .sort_values("year")
+            .reset_index(drop=True)
+        )
+
+        minimum_wage_data = work[
+            [
+                "year",
+                "minimum_wage_yoy",
+            ]
+        ].copy()
+
+        for lag_years in range(max_lag_years + 1):
+            wage_data = work[
+                [
+                    "year",
+                    "scheduled_hourly_wage_yoy",
+                ]
+            ].copy()
+
+            # t年の最低賃金を、t + lag年の賃金と対応させる
+            wage_data["year"] = wage_data["year"] - lag_years
+
+            pair = minimum_wage_data.merge(
+                wage_data,
+                on="year",
+                how="inner",
+                validate="one_to_one",
+            ).dropna(
+                subset=[
+                    "minimum_wage_yoy",
+                    "scheduled_hourly_wage_yoy",
+                ]
+            )
+
+            if len(pair) < 3:
+                continue
+
+            pearson = pair["minimum_wage_yoy"].corr(
+                pair["scheduled_hourly_wage_yoy"],
+                method="pearson",
+            )
+
+            spearman = _spearman_correlation(
+                pair["minimum_wage_yoy"],
+                pair["scheduled_hourly_wage_yoy"],
+            )
+
+            records.append(
+                {
+                    "size_name": size_name,
+                    "employment_name": employment_name,
+                    "lag_years": lag_years,
+                    "pearson": pearson,
+                    "spearman": spearman,
+                    "observation_count": len(pair),
+                }
+            )
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(
+            [
+                "size_name",
+                "employment_name",
+                "lag_years",
+            ]
+        )
+        .reset_index(drop=True)
+    )
