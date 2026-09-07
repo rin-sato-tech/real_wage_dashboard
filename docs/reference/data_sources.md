@@ -10,16 +10,17 @@ Real Wage Dashboardで現在使用している入力データについて、出�
 
 ## 2. 入力データ一覧
 
-| 分野                   | 統計・系列                               | 公表元               | 取得方法        | リポジトリ内の保存場所                           |
-| ---------------------- | ---------------------------------------- | -------------------- | --------------- | ------------------------------------------------ |
-| 物価                   | 消費者物価指数                           | 総務省統計局・e-Stat | e-Stat API      | 保存しない                                       |
-| 賃金・労働時間         | 毎月勤労統計調査・長期時系列表           | 厚生労働省・e-Stat   | CSVを手動取得   | `data/raw/hon-maikin-k-jissu.csv`                |
-| 求人倍率               | 一般職業紹介状況                         | 厚生労働省           | Excelを手動取得 | `data/raw/labor_market/`                         |
-| 完全失業率             | 労働力調査・長期時系列データ             | 総務省統計局         | Excelを手動取得 | `data/raw/labor_market/unemployment_rate.xlsx`   |
-| 企業の雇用判断         | 全国企業短期経済観測調査（短観）         | 日本銀行             | CSVを手動取得   | `data/raw/labor_market/tankan_employment_di.csv` |
-| 企業業績・生産性・分配 | 法人企業統計調査・年次別調査             | 財務省・e-Stat       | e-Stat API      | 保存しない                                       |
-| 賃金改定行動           | 賃金引上げ等の実態に関する調査           | 厚生労働省           | Excelを手動取得 | `data/raw/wage_revision/`                        |
-| 実質賃金要因分解       | 毎月勤労統計の賃金指数・公式実質賃金指数 | 厚生労働省           | Excelを手動取得 | `data/raw/real_wage_decomposition/`              |
+| 分野                   | 統計・系列                                     | 公表元               | 取得方法          | リポジトリ内の保存場所                           |
+| ---------------------- | ---------------------------------------------- | -------------------- | ----------------- | ------------------------------------------------ |
+| 物価                   | 消費者物価指数                                 | 総務省統計局・e-Stat | e-Stat API        | 保存しない                                       |
+| 賃金・労働時間         | 毎月勤労統計調査・長期時系列表                 | 厚生労働省・e-Stat   | CSVを手動取得     | `data/raw/hon-maikin-k-jissu.csv`                |
+| 求人倍率               | 一般職業紹介状況                               | 厚生労働省           | Excelを手動取得   | `data/raw/labor_market/`                         |
+| 完全失業率             | 労働力調査・長期時系列データ                   | 総務省統計局         | Excelを手動取得   | `data/raw/labor_market/unemployment_rate.xlsx`   |
+| 企業の雇用判断         | 全国企業短期経済観測調査（短観）               | 日本銀行             | CSVを手動取得     | `data/raw/labor_market/tankan_employment_di.csv` |
+| 企業業績・生産性・分配 | 法人企業統計調査・年次別調査                   | 財務省・e-Stat       | e-Stat API        | 保存しない                                       |
+| 賃金改定行動           | 賃金引上げ等の実態に関する調査                 | 厚生労働省           | Excelを手動取得   | `data/raw/wage_revision/`                        |
+| 実質賃金要因分解       | 毎月勤労統計の賃金指数・公式実質賃金指数       | 厚生労働省           | Excelを手動取得   | `data/raw/real_wage_decomposition/`              |
+| 賃金分布               | 賃金構造基本統計調査・所定内給与額の分布特性値 | 厚生労働省・e-Stat   | Excel・e-Stat API | `data/raw/wage_distribution/`                    |
 
 `data/raw/`には公表元から取得した入力データを保存する。アプリからダウンロードする分析用CSVは入力データではなく、Git管理の対象としない。
 
@@ -575,7 +576,256 @@ uv run pytest tests/test_real_wage_decomposition_analysis.py
 
 ---
 
-## 11. データ更新後の確認
+## 11. 賃金構造基本統計調査・賃金分布
+
+### 11.1 出典
+
+- 統計：賃金構造基本統計調査
+- 公表元：厚生労働省
+- 取得元：e-Statおよび公表Excel
+- 主分析期間：2015年～2025年
+- 対象：一般労働者
+- 主な賃金指標：所定内給与額
+- 分析文書：`docs/analysis/12_wage_distribution.md`
+
+賃金の平均値だけではなく、分布のどの位置で賃金上昇が生じたかを確認するために使用する。
+
+主に以下の分布特性値を利用する。
+
+- 第1十分位数（P10）
+- 第1四分位数（P25）
+- 中位数（P50）
+- 第3四分位数（P75）
+- 第9十分位数（P90）
+- 十分位分散係数
+- 四分位分散係数
+
+読み込み・整形は`src/real_wage_dashboard/wage_distribution_service.py`、分析処理は`src/real_wage_dashboard/wage_distribution_analysis.py`で行う。
+
+### 11.2 全体・男女別・企業規模別データ
+
+2015～2025年について、公表Excelを次の場所へ保存する。
+
+```text
+data/raw/wage_distribution/
+```
+
+ファイル名は、
+
+```text
+wage_distribution_2015.xls
+...
+wage_distribution_2025.xlsx
+```
+
+の形式とする。
+
+Excel形式は年によって`.xls`と`.xlsx`が混在している。
+
+これらのファイルから、主に以下の分析を行う。
+
+- 男女計の賃金分布
+- 男性・女性別の賃金分布
+- 企業規模別の賃金分布
+
+基本集計では、
+
+- 民営事業所
+- 産業計
+- 企業規模計（10人以上）
+- 男女計
+- 学歴計
+- 年齢計
+
+を対象とする。
+
+男女別分析では男女区分を、企業規模別分析では企業規模区分を変更して抽出する。
+
+企業規模別では、年によってExcelのシート名表記に差があるため、完全一致ではなく正規化後の部分一致で対象シートを探索する。
+
+分析上の企業規模区分は、
+
+- 大企業：1,000人以上
+- 中企業：100～999人
+- 小企業：10～99人
+
+である。
+
+これは毎月勤労統計の「事業所規模」とは別の区分であるため、両者を同一の規模指標として扱わない。
+
+### 11.3 雇用形態別データ
+
+雇用形態別の分布特性値は、期間によって取得方法が異なる。
+
+#### 2015～2019年
+
+e-Stat APIを使用する。
+
+統計表ID：
+
+```text
+0003268283
+```
+
+主な条件は以下である。
+
+| 分類     | 条件                                |
+| -------- | ----------------------------------- |
+| 年齢     | 年齢計                              |
+| 学歴     | 学歴計                              |
+| 企業規模 | 10人以上計                          |
+| 産業     | 産業計                              |
+| 性別     | 男女計                              |
+| 雇用形態 | 正社員・正職員 / 正社員・正職員以外 |
+
+分布特性値のコードは以下を使用する。
+
+| コード | 指標           |
+| ------ | -------------- |
+| `1280` | P10            |
+| `1290` | P25            |
+| `1300` | P50            |
+| `1310` | P75            |
+| `1320` | P90            |
+| `1330` | 十分位分散係数 |
+| `1340` | 四分位分散係数 |
+
+#### 2020～2023年
+
+e-Stat APIを使用する。
+
+統計表ID：
+
+```text
+0003446899
+```
+
+分類構造は2015～2019年と異なるが、分析上は同じ条件へそろえて抽出する。
+
+対象とする雇用形態は、
+
+- 正社員・正職員
+- 正社員・正職員以外
+
+である。
+
+#### 2024～2025年
+
+e-Stat APIの同一形式では必要な分布データを取得できないため、公表Excelを使用する。
+
+保存先：
+
+```text
+data/raw/wage_distribution/employment/
+```
+
+保存ファイル：
+
+```text
+wage_distribution_employment_2024_regular.xlsx
+wage_distribution_employment_2024_nonregular.xlsx
+wage_distribution_employment_2025_regular.xlsx
+wage_distribution_employment_2025_nonregular.xlsx
+```
+
+2015～2023年のAPIデータと2024～2025年のExcelデータを結合し、2015～2025年の時系列を構築する。
+
+APIレスポンスそのものはリポジトリへ保存しない。
+
+### 11.4 CPIとの接続
+
+賃金分布の実質化には、消費者物価指数の
+
+```text
+持家の帰属家賃を除く総合
+```
+
+を使用する。
+
+CPI系列コード：
+
+```text
+0163
+```
+
+月次CPIを年平均へ集計し、各分位について、
+
+```text
+実質所定内給与額 = 名目所定内給与額 ÷ (CPI / 100)
+```
+
+として実質化する。
+
+その後、2015年を100として指数化する。
+
+CPI取得は`src/real_wage_dashboard/cpi_service.py`、年次化は`src/real_wage_dashboard/minimum_wage_analysis.py`の`prepare_annual_cpi()`を利用する。
+
+### 11.5 比較上の注意
+
+賃金構造基本統計調査の分布特性値は、同一人物を追跡したパネルデータではない。
+
+そのため、分位別の変化には、
+
+- 年齢構成
+- 性別構成
+- 雇用形態構成
+- 産業構成
+- 職種構成
+- 勤続年数
+- 企業規模構成
+- 地域構成
+
+などの変化が含まれる。
+
+したがって、分位別賃金上昇率の差を、特定政策や企業規模そのものの因果効果として解釈しない。
+
+また、所定内給与額は月額指標であり、最低賃金の時間額とは単位が異なる。
+
+最低賃金との比較は、直接の水準比較や寄与率計算ではなく、時系列的な整合性の確認に限定する。
+
+### 11.6 更新時の確認
+
+賃金分布データを更新した場合は、まず全体・男女別を確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_wage_distribution.py
+```
+
+雇用形態別：
+
+```bash
+uv run python scripts/wage_distribution/check_employment_distribution_api.py
+uv run python scripts/wage_distribution/check_employment_distribution_analysis.py
+```
+
+企業規模別：
+
+```bash
+uv run python scripts/wage_distribution/check_company_size_distribution.py
+uv run python scripts/wage_distribution/check_company_size_distribution_analysis.py
+```
+
+自動テスト：
+
+```bash
+uv run pytest tests/test_wage_distribution_service.py
+uv run pytest tests/test_wage_distribution_analysis.py
+```
+
+更新時は少なくとも以下を確認する。
+
+1. P10～P90と分散係数が取得できること。
+2. 2015年の基準値が欠落していないこと。
+3. 年次が連続していること。
+4. 男女・雇用形態・企業規模の区分が意図した条件になっていること。
+5. Excelのシート構成やラベル表記が変更されていないこと。
+6. APIの統計表ID・分類コードに変更がないこと。
+7. 主要な2015～2025年変化率が既存分析と大きく乖離していないこと。
+8. 結果が変化した場合は`12_wage_distribution.md`と`00_overview.md`を更新する。
+
+---
+
+## 12. データ更新後の確認
 
 入力データを更新した場合は、最低限次を実行する。
 
@@ -640,7 +890,7 @@ uv run python scripts/wage_revision/check_wage_revision_analysis.py
 
 ---
 
-## 12. 更新記録の方針
+## 13. 更新記録の方針
 
 データファイルを更新するコミットでは、次の情報をコミットメッセージまたは関連文書に残す。
 

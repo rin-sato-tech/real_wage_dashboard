@@ -60,21 +60,23 @@ analysis
 
 ## 3. 共通モジュール
 
-| モジュール                            | 役割                                               | 主な利用先                               | 主なテスト                                 |
-| ------------------------------------- | -------------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
-| `config.py`                           | 統計表ID、系列コード、初期値、ファイルパス         | 全体                                     | 各機能テストから間接確認                   |
-| `estat_client.py`                     | e-Stat API通信とAPIエラー処理                      | CPI、法人企業統計                        | 直接テストなし                             |
-| `wage_service.py`                     | 毎月勤労統計CSVの読み込みと条件抽出                | 名目・実質賃金、各賃金分析               | `test_wage_service.py`                     |
-| `wage_analysis.py`                    | 名目賃金の変化率と移動平均                         | 名目・実質賃金                           | `test_wage_analysis.py`                    |
-| `working_hours_service.py`            | 労働時間系列の抽出                                 | 雇用形態、労働投入、産業別、事業所規模別 | `test_working_hours_service.py`            |
-| `working_days_service.py`             | 出勤日数系列の抽出                                 | 労働投入                                 | `test_labor_input_analysis.py`から間接確認 |
-| `time_series.py`                      | 時系列の共通処理                                   | 複数分析                                 | 関連分析テストから間接確認                 |
-| `corporate_performance_service.py`    | 法人企業統計APIデータの整形、企業業績指標生成      | 企業業績分析                             | `test_corporate_performance_service.py`    |
-| `corporate_performance_analysis.py`   | 期間比較、規模別・産業別比較、賃金との結合、相関等 | 企業業績分析                             | `test_corporate_performance_analysis.py`   |
-| `wage_revision_service.py`            | 賃金引上げ等の実態に関する調査の読み込み・整形     | 賃金改定行動分析                         | `test_wage_revision_service.py`            |
-| `wage_revision_analysis.py`           | 改定率、実施状況、重視要因等の比較                 | 賃金改定行動分析                         | `test_wage_revision_analysis.py`           |
-| `real_wage_decomposition_analysis.py` | 名目賃金・物価・実質賃金の連鎖・分解               | 実質賃金要因分解                         | `test_real_wage_decomposition_analysis.py` |
-| `establishment_size_wage_analysis.py` | 5人以上・30人以上系列の比較、規模差の分解          | 事業所規模別賃金分析                     | `test_establishment_size_wage_analysis.py` |
+| モジュール                            | 役割                                                                                           | 主な利用先                               | 主なテスト                                 |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
+| `config.py`                           | 統計表ID、系列コード、初期値、ファイルパス                                                     | 全体                                     | 各機能テストから間接確認                   |
+| `estat_client.py`                     | e-Stat API通信とAPIエラー処理                                                                  | CPI、法人企業統計                        | 直接テストなし                             |
+| `wage_service.py`                     | 毎月勤労統計CSVの読み込みと条件抽出                                                            | 名目・実質賃金、各賃金分析               | `test_wage_service.py`                     |
+| `wage_analysis.py`                    | 名目賃金の変化率と移動平均                                                                     | 名目・実質賃金                           | `test_wage_analysis.py`                    |
+| `working_hours_service.py`            | 労働時間系列の抽出                                                                             | 雇用形態、労働投入、産業別、事業所規模別 | `test_working_hours_service.py`            |
+| `working_days_service.py`             | 出勤日数系列の抽出                                                                             | 労働投入                                 | `test_labor_input_analysis.py`から間接確認 |
+| `time_series.py`                      | 時系列の共通処理                                                                               | 複数分析                                 | 関連分析テストから間接確認                 |
+| `corporate_performance_service.py`    | 法人企業統計APIデータの整形、企業業績指標生成                                                  | 企業業績分析                             | `test_corporate_performance_service.py`    |
+| `corporate_performance_analysis.py`   | 期間比較、規模別・産業別比較、賃金との結合、相関等                                             | 企業業績分析                             | `test_corporate_performance_analysis.py`   |
+| `wage_revision_service.py`            | 賃金引上げ等の実態に関する調査の読み込み・整形                                                 | 賃金改定行動分析                         | `test_wage_revision_service.py`            |
+| `wage_revision_analysis.py`           | 改定率、実施状況、重視要因等の比較                                                             | 賃金改定行動分析                         | `test_wage_revision_analysis.py`           |
+| `real_wage_decomposition_analysis.py` | 名目賃金・物価・実質賃金の連鎖・分解                                                           | 実質賃金要因分解                         | `test_real_wage_decomposition_analysis.py` |
+| `establishment_size_wage_analysis.py` | 5人以上・30人以上系列の比較、規模差の分解                                                      | 事業所規模別賃金分析                     | `test_establishment_size_wage_analysis.py` |
+| `wage_distribution_service.py`        | 賃金構造基本統計調査の分布特性値の読み込み、API・Excel統合、男女別・雇用形態別・企業規模別抽出 | 賃金分布分析                             | `test_wage_distribution_service.py`        |
+| `wage_distribution_analysis.py`       | 分位指数、分位比、実質分位指数、男女・雇用形態・企業規模別分析                                 | 賃金分布分析                             | `test_wage_distribution_analysis.py`       |
 
 ---
 
@@ -98,12 +100,13 @@ analysis
 
 UI化していない分析も、分析モジュール・確認スクリプト・テスト・分析文書までを正式な成果物とする。
 
-| 分析                             | 主な分析処理                          | データ処理・入力                                                                          | 主な確認スクリプト                       | 主なテスト                                                                        | 分析文書                        |
-| -------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------- |
-| 企業業績・生産性・分配           | `corporate_performance_analysis.py`   | `corporate_performance_service.py`、`estat_client.py`、法人企業統計API、`wage_service.py` | `check_corporate_*.py`                   | `test_corporate_performance_analysis.py`、`test_corporate_performance_service.py` | `07_corporate_performance.md`   |
-| 賃金改定行動                     | `wage_revision_analysis.py`           | `wage_revision_service.py`、賃金引上げ等の実態に関する調査                                | `check_wage_revision_*.py`               | `test_wage_revision_analysis.py`、`test_wage_revision_service.py`                 | `08_wage_revision.md`           |
-| 実質賃金の名目賃金・物価要因分解 | `real_wage_decomposition_analysis.py` | 毎月勤労統計の指数・増減率、公表実質賃金系列、CPI系列                                     | `check_real_wage_decomposition_index.py` | `test_real_wage_decomposition_analysis.py`                                        | `09_real_wage_decomposition.md` |
-| 事業所規模別賃金                 | `establishment_size_wage_analysis.py` | `wage_service.py`、`working_hours_service.py`、毎月勤労統計5人以上・30人以上系列          | `check_establishment_size_wage.py`       | `test_establishment_size_wage_analysis.py`                                        | `10_establishment_size_wage.md` |
+| 分析                             | 主な分析処理                          | データ処理・入力                                                                          | 主な確認スクリプト                                                                                        | 主なテスト                                                                        | 分析文書                        |
+| -------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------- |
+| 企業業績・生産性・分配           | `corporate_performance_analysis.py`   | `corporate_performance_service.py`、`estat_client.py`、法人企業統計API、`wage_service.py` | `check_corporate_*.py`                                                                                    | `test_corporate_performance_analysis.py`、`test_corporate_performance_service.py` | `07_corporate_performance.md`   |
+| 賃金改定行動                     | `wage_revision_analysis.py`           | `wage_revision_service.py`、賃金引上げ等の実態に関する調査                                | `check_wage_revision_*.py`                                                                                | `test_wage_revision_analysis.py`、`test_wage_revision_service.py`                 | `08_wage_revision.md`           |
+| 実質賃金の名目賃金・物価要因分解 | `real_wage_decomposition_analysis.py` | 毎月勤労統計の指数・増減率、公表実質賃金系列、CPI系列                                     | `check_real_wage_decomposition_index.py`                                                                  | `test_real_wage_decomposition_analysis.py`                                        | `09_real_wage_decomposition.md` |
+| 事業所規模別賃金                 | `establishment_size_wage_analysis.py` | `wage_service.py`、`working_hours_service.py`、毎月勤労統計5人以上・30人以上系列          | `check_establishment_size_wage.py`                                                                        | `test_establishment_size_wage_analysis.py`                                        | `10_establishment_size_wage.md` |
+| 賃金分布分析                     | `wage_distribution_analysis.py`       | `wage_distribution_service.py`、賃金構造基本統計調査、e-Stat API、Excel、`cpi_service.py` | `check_wage_distribution.py`、`check_employment_distribution_*.py`、`check_company_size_distribution*.py` | `test_wage_distribution_analysis.py`、`test_wage_distribution_service.py`         | `12_wage_distribution.md`       |
 
 UI化の有無は分析の完成度とは別に判断する。
 
@@ -212,7 +215,7 @@ UI化の有無は分析の完成度とは別に判断する。
 | UI         | なし                                                          |
 | 中核処理   | `src/real_wage_dashboard/real_wage_decomposition_analysis.py` |
 | 入力       | 毎月勤労統計の指数・増減率、公表実質賃金系列、CPI系列         |
-| 確認       | `scripts/cpi/check_real_wage_decomposition_index.py`              |
+| 確認       | `scripts/cpi/check_real_wage_decomposition_index.py`          |
 | 中核テスト | `tests/test_real_wage_decomposition_analysis.py`              |
 
 ### 6.10 事業所規模別賃金分析
@@ -224,8 +227,26 @@ UI化の有無は分析の完成度とは別に判断する。
 | 中核処理     | `src/real_wage_dashboard/establishment_size_wage_analysis.py` |
 | 賃金抽出     | `src/real_wage_dashboard/wage_service.py`                     |
 | 労働時間抽出 | `src/real_wage_dashboard/working_hours_service.py`            |
-| 確認         | `scripts/wage/check_establishment_size_wage.py`                    |
+| 確認         | `scripts/wage/check_establishment_size_wage.py`               |
 | 中核テスト   | `tests/test_establishment_size_wage_analysis.py`              |
+
+### 6.11 賃金分布分析
+
+| 項目               | 対応                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| 文書               | `docs/analysis/12_wage_distribution.md`                                               |
+| 設計文書           | `docs/analysis/12_wage_distribution_analysis_design.md`                               |
+| UI                 | なし                                                                                  |
+| 中核分析           | `src/real_wage_dashboard/wage_distribution_analysis.py`                               |
+| データ処理         | `src/real_wage_dashboard/wage_distribution_service.py`                                |
+| CPI取得            | `src/real_wage_dashboard/cpi_service.py`                                              |
+| CPI年次化          | `src/real_wage_dashboard/minimum_wage_analysis.py` の `prepare_annual_cpi()`          |
+| 全体分布確認       | `scripts/wage_distribution/check_wage_distribution.py`                                |
+| 雇用形態別取得確認 | `scripts/wage_distribution/check_employment_distribution_api.py`                      |
+| 雇用形態別分析確認 | `scripts/wage_distribution/check_employment_distribution_analysis.py`                 |
+| 企業規模別取得確認 | `scripts/wage_distribution/check_company_size_distribution.py`                        |
+| 企業規模別分析確認 | `scripts/wage_distribution/check_company_size_distribution_analysis.py`               |
+| 中核テスト         | `tests/test_wage_distribution_analysis.py`、`tests/test_wage_distribution_service.py` |
 
 ---
 

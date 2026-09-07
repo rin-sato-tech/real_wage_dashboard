@@ -23,6 +23,15 @@ data/
     ├── real_wage_decomposition/
     │   ├── official_real_wage_index_5plus.xls
     │   └── wage_index_total_5plus.xls
+    ├── wage_distribution/
+    │   ├── wage_distribution_2015.xls
+    │   ├── ...
+    │   ├── wage_distribution_2025.xlsx
+    │   └── employment/
+    │       ├── wage_distribution_employment_2024_regular.xlsx
+    │       ├── wage_distribution_employment_2024_nonregular.xlsx
+    │       ├── wage_distribution_employment_2025_regular.xlsx
+    │       └── wage_distribution_employment_2025_nonregular.xlsx
     └── wage_revision/
         ├── wage_revision_amount_rate.xlsx
         ├── wage_revision_factors.xlsx
@@ -39,18 +48,20 @@ e-Stat APIから都度取得するCPI・法人企業統計のAPIレスポンス�
 
 ## 3. ファイルの役割
 
-| ファイル                                                         | 内容                                             | 主な利用先                                                                         |
-| ---------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `raw/hon-maikin-k-jissu.csv`                                     | 毎月勤労統計の賃金、労働時間、出勤日数、労働者数 | 名目・実質賃金、雇用形態、給与構成、労働投入、産業分析、産業構成、事業所規模別分析 |
-| `raw/labor_market/effective_job_openings_ratio.xlsx`             | 有効求人倍率・季節調整値                         | 労働需給分析                                                                       |
-| `raw/labor_market/new_job_openings_ratio.xlsx`                   | 新規求人倍率・季節調整値                         | 労働需給分析                                                                       |
-| `raw/labor_market/unemployment_rate.xlsx`                        | 完全失業率・季節調整値                           | 労働需給分析                                                                       |
-| `raw/labor_market/tankan_employment_di.csv`                      | 企業規模別の雇用人員判断DI                       | 労働需給分析                                                                       |
-| `raw/real_wage_decomposition/wage_index_total_5plus.xls`         | 5人以上・就業形態計の名目賃金指数・増減率        | 実質賃金要因分解                                                                   |
-| `raw/real_wage_decomposition/official_real_wage_index_5plus.xls` | 厚生労働省公表の実質賃金指数・増減率             | 実質賃金要因分解、再構築系列の整合確認                                             |
-| `raw/wage_revision/wage_revision_amount_rate.xlsx`               | 1人平均賃金改定額・改定率                        | 賃金改定行動分析                                                                   |
-| `raw/wage_revision/wage_revision_status.xlsx`                    | 賃金引上げ・引下げ・変更なし等の実施状況         | 賃金改定行動分析                                                                   |
-| `raw/wage_revision/wage_revision_factors.xlsx`                   | 賃金改定時に重視した要素                         | 賃金改定行動分析                                                                   |
+| ファイル                                                                            | 内容                                                                                     | 主な利用先                                                                         |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `raw/hon-maikin-k-jissu.csv`                                                        | 毎月勤労統計の賃金、労働時間、出勤日数、労働者数                                         | 名目・実質賃金、雇用形態、給与構成、労働投入、産業分析、産業構成、事業所規模別分析 |
+| `raw/labor_market/effective_job_openings_ratio.xlsx`                                | 有効求人倍率・季節調整値                                                                 | 労働需給分析                                                                       |
+| `raw/labor_market/new_job_openings_ratio.xlsx`                                      | 新規求人倍率・季節調整値                                                                 | 労働需給分析                                                                       |
+| `raw/labor_market/unemployment_rate.xlsx`                                           | 完全失業率・季節調整値                                                                   | 労働需給分析                                                                       |
+| `raw/labor_market/tankan_employment_di.csv`                                         | 企業規模別の雇用人員判断DI                                                               | 労働需給分析                                                                       |
+| `raw/real_wage_decomposition/wage_index_total_5plus.xls`                            | 5人以上・就業形態計の名目賃金指数・増減率                                                | 実質賃金要因分解                                                                   |
+| `raw/real_wage_decomposition/official_real_wage_index_5plus.xls`                    | 厚生労働省公表の実質賃金指数・増減率                                                     | 実質賃金要因分解、再構築系列の整合確認                                             |
+| `raw/wage_revision/wage_revision_amount_rate.xlsx`                                  | 1人平均賃金改定額・改定率                                                                | 賃金改定行動分析                                                                   |
+| `raw/wage_revision/wage_revision_status.xlsx`                                       | 賃金引上げ・引下げ・変更なし等の実施状況                                                 | 賃金改定行動分析                                                                   |
+| `raw/wage_revision/wage_revision_factors.xlsx`                                      | 賃金改定時に重視した要素                                                                 | 賃金改定行動分析                                                                   |
+| `raw/wage_distribution/wage_distribution_2015.xls` ～ `wage_distribution_2025.xlsx` | 賃金構造基本統計調査の所定内給与額の分布特性値。全体・男女別・企業規模別の分布分析に利用 | 賃金分布分析                                                                       |
+| `raw/wage_distribution/employment/`                                                 | 2024～2025年の正社員・正職員／正社員・正職員以外の分布特性値                             | 賃金分布の雇用形態別分析                                                           |
 
 CPIと法人企業統計はe-Stat APIから取得するため、`data/raw/`には保存しない。
 
@@ -217,6 +228,35 @@ uv run pytest tests/test_real_wage_decomposition_analysis.py
 - 長期累積変化
 - 個別分析文書に記載した主要結果
 
+### 7.5 賃金分布データを更新した場合
+
+全体・男女別の抽出を確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_wage_distribution.py
+```
+
+雇用形態別について確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_employment_distribution_api.py
+uv run python scripts/wage_distribution/check_employment_distribution_analysis.py
+```
+
+企業規模別について確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_company_size_distribution.py
+uv run python scripts/wage_distribution/check_company_size_distribution_analysis.py
+```
+
+最後に自動テストを実行する。
+
+```bash
+uv run pytest tests/test_wage_distribution_service.py
+uv run pytest tests/test_wage_distribution_analysis.py
+```
+
 ---
 
 ## 8. データ別の注意点
@@ -252,6 +292,24 @@ uv run pytest tests/test_real_wage_decomposition_analysis.py
 公表前年比を連鎖して作る分析用指数は、年平均実額から直接計算した変化率とは計算経路が異なる。
 
 両者を同一系列として比較しない。
+
+### 8.4 賃金構造基本統計調査・賃金分布
+
+賃金分布分析では、賃金構造基本統計調査の一般労働者の所定内給与額について、P10、P25、P50、P75、P90および分散係数を利用する。
+
+年によってExcel形式やシート名が異なるため、ファイル名やシート名を固定的に仮定しすぎない。
+
+特に企業規模別では、シート名の表記揺れを吸収して対象シートを探索する。
+
+雇用形態別データは取得方法が期間によって異なる。
+
+- 2015～2019年：e-Stat API
+- 2020～2023年：e-Stat API
+- 2024～2025年：e-Stat Excel
+
+APIレスポンスは保存せず、2024～2025年のExcelのみ `data/raw/wage_distribution/employment/` に保存する。
+
+データ更新時は、各年についてP10～P90および分散係数が取得できること、基準年2015年が欠落していないこと、属性区分が意図した条件になっていることを確認する。
 
 ---
 
