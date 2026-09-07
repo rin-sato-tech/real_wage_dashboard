@@ -1,31 +1,12 @@
 import pandas as pd
 
-from real_wage_dashboard.time_series import add_moving_average
+from real_wage_dashboard.time_series import add_monthly_changes, add_moving_average
 
 
 def add_cpi_changes(df: pd.DataFrame) -> pd.DataFrame:
     """CPI指数から前月比と前年同月比を計算する。"""
 
-    required_columns = {"date", "index_value"}
-
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
-        raise ValueError(f"必要な列がありません: {sorted(missing)}")
-
-    result = df.sort_values("date").reset_index(drop=True).copy()
-
-    result["mom_pct"] = result["index_value"].pct_change(fill_method=None).mul(100)
-
-    result["yoy_pct"] = (
-        result["index_value"]
-        .pct_change(
-            periods=12,
-            fill_method=None,
-        )
-        .mul(100)
-    )
-
-    return result
+    return add_monthly_changes(df, column="index_value")
 
 
 def add_cpi_moving_average(df: pd.DataFrame) -> pd.DataFrame:
@@ -37,3 +18,60 @@ def add_cpi_moving_average(df: pd.DataFrame) -> pd.DataFrame:
         output_column="index_value_ma_12",
         window=12,
     )
+
+
+def prepare_annual_cpi(
+    cpi_df: pd.DataFrame,
+    start_year: int = 2015,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """月次CPIから年平均CPIを作成する。"""
+
+    required_columns = {
+        "date",
+        "index_value",
+    }
+
+    missing = required_columns - set(cpi_df.columns)
+
+    if missing:
+        raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
+
+    work = cpi_df.copy()
+
+    work["year"] = work["date"].dt.year
+
+    work = work.loc[
+        work["year"].between(
+            start_year,
+            end_year,
+        )
+    ].copy()
+
+    annual = (
+        work.groupby(
+            "year",
+            as_index=False,
+        )
+        .agg(
+            cpi=("index_value", "mean"),
+            month_count=("index_value", "count"),
+        )
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
+
+    incomplete = annual.loc[annual["month_count"] != 12]
+
+    if not incomplete.empty:
+        raise ValueError(
+            "12か月揃っていないCPI年次データがあります: "
+            f"{incomplete[['year', 'month_count']].to_dict('records')}"
+        )
+
+    return annual[
+        [
+            "year",
+            "cpi",
+        ]
+    ]

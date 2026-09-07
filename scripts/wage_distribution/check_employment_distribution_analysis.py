@@ -5,8 +5,8 @@ from pathlib import Path
 import streamlit as st
 
 from real_wage_dashboard.config import CPI_SERIES
+from real_wage_dashboard.cpi_analysis import prepare_annual_cpi
 from real_wage_dashboard.cpi_service import load_cpi_dataframe
-from real_wage_dashboard.minimum_wage_analysis import prepare_annual_cpi
 from real_wage_dashboard.wage_distribution_analysis import (
     BASE_YEAR,
     add_real_wage_distribution_by_group,

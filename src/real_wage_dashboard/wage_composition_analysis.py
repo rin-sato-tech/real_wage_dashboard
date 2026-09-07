@@ -1,6 +1,6 @@
 import pandas as pd
 
-from real_wage_dashboard.wage_analysis import add_moving_average
+from real_wage_dashboard.time_series import add_moving_average
 
 WAGE_COMPONENT_COLUMNS = {
     "現金給与総額": "total_cash_earnings",

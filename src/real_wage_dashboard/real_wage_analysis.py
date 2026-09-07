@@ -4,7 +4,7 @@ from real_wage_dashboard.config import (
     WAGE_BASE_YEAR,
     WAGE_MOVING_AVERAGE_WINDOW,
 )
-from real_wage_dashboard.time_series import add_moving_average
+from real_wage_dashboard.time_series import add_monthly_changes, add_moving_average
 
 
 def merge_wage_and_cpi(
@@ -184,19 +184,9 @@ def add_real_wage_changes(df: pd.DataFrame) -> pd.DataFrame:
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
-    result = df.sort_values("date").reset_index(drop=True).copy()
-
-    result["real_wage_mom_pct"] = (
-        result["real_wage_amount"].pct_change(fill_method=None).mul(100)
+    return add_monthly_changes(
+        df,
+        column="real_wage_amount",
+        mom_column="real_wage_mom_pct",
+        yoy_column="real_wage_yoy_pct",
     )
-
-    result["real_wage_yoy_pct"] = (
-        result["real_wage_amount"]
-        .pct_change(
-            periods=12,
-            fill_method=None,
-        )
-        .mul(100)
-    )
-
-    return result

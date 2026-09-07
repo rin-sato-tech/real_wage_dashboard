@@ -63,12 +63,15 @@ analysis
 | モジュール                            | 役割                                                                                           | 主な利用先                               | 主なテスト                                 |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
 | `config.py`                           | 統計表ID、系列コード、初期値、ファイルパス                                                     | 全体                                     | 各機能テストから間接確認                   |
-| `estat_client.py`                     | e-Stat API通信とAPIエラー処理                                                                  | CPI、法人企業統計                        | 直接テストなし                             |
+| `estat_client.py`                     | e-Stat API通信とAPIエラー処理                                                                  | CPI、法人企業統計                        | `test_estat_client.py`                     |
+| `estat_response.py` | e-Statの単一値・リスト形式の正規化 | CPI、法人企業統計 | `test_corporate_performance_service.py`、`test_cpi_service.py` |
+| `monthly_labor_service.py` | 毎月勤労統計の月次抽出・数値化・欠損除外・重複処理 | 賃金・労働時間・出勤日数サービス | `test_monthly_labor_service.py`、各サービステスト |
+| `cpi_analysis.py` | CPI変化率・移動平均・年平均 | CPI、最低賃金、賃金分布 | `test_cpi_analysis.py`、`test_minimum_wage_analysis.py` |
 | `wage_service.py`                     | 毎月勤労統計CSVの読み込みと条件抽出                                                            | 名目・実質賃金、各賃金分析               | `test_wage_service.py`                     |
 | `wage_analysis.py`                    | 名目賃金の変化率と移動平均                                                                     | 名目・実質賃金                           | `test_wage_analysis.py`                    |
 | `working_hours_service.py`            | 労働時間系列の抽出                                                                             | 雇用形態、労働投入、産業別、事業所規模別 | `test_working_hours_service.py`            |
 | `working_days_service.py`             | 出勤日数系列の抽出                                                                             | 労働投入                                 | `test_labor_input_analysis.py`から間接確認 |
-| `time_series.py`                      | 時系列の共通処理                                                                               | 複数分析                                 | 関連分析テストから間接確認                 |
+| `time_series.py`                      | 月次変化率・移動平均の共通処理                                                                 | CPI・名目・実質賃金等                    | `test_time_series.py`、各分析テスト        |
 | `corporate_performance_service.py`    | 法人企業統計APIデータの整形、企業業績指標生成                                                  | 企業業績分析                             | `test_corporate_performance_service.py`    |
 | `corporate_performance_analysis.py`   | 期間比較、規模別・産業別比較、賃金との結合、相関等                                             | 企業業績分析                             | `test_corporate_performance_analysis.py`   |
 | `wage_revision_service.py`            | 賃金引上げ等の実態に関する調査の読み込み・整形                                                 | 賃金改定行動分析                         | `test_wage_revision_service.py`            |
@@ -79,6 +82,9 @@ analysis
 | `wage_distribution_analysis.py`       | 分位指数、分位比、実質分位指数、男女・雇用形態・企業規模別分析                                 | 賃金分布分析                             | `test_wage_distribution_analysis.py`       |
 
 ---
+
+共通処理の配置と互換性の方針は [src共通処理のリファクタリング](../planning/src_refactoring.md) を参照する。
+年平均CPIの正本は `cpi_analysis.prepare_annual_cpi` とし、`minimum_wage_analysis` の同名関数は既存呼び出し向けに残す。
 
 ## 4. UI化している分析
 

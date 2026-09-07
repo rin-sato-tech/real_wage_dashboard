@@ -12,17 +12,7 @@ from real_wage_dashboard.config import (
     CORPORATE_STATS_DATA_ID,
 )
 from real_wage_dashboard.estat_client import get_stats_data
-
-
-def ensure_list(value: Any) -> list[Any]:
-    """値を必ずリストとして返す。"""
-    if value is None:
-        return []
-
-    if isinstance(value, list):
-        return value
-
-    return [value]
+from real_wage_dashboard.estat_response import ensure_list
 
 
 def create_corporate_time_codes(
