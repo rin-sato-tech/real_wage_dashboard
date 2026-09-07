@@ -1,5 +1,7 @@
 import pandas as pd
 
+from real_wage_dashboard import cpi_analysis
+
 BASE_YEAR = 2015
 
 
@@ -303,63 +305,6 @@ def _validate_analysis_data(
         )
 
 
-def prepare_annual_cpi(
-    cpi_df: pd.DataFrame,
-    start_year: int = 2015,
-    end_year: int = 2025,
-) -> pd.DataFrame:
-    """月次CPIから年平均CPIを作成する。"""
-
-    required_columns = {
-        "date",
-        "index_value",
-    }
-
-    missing = required_columns - set(cpi_df.columns)
-
-    if missing:
-        raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
-
-    work = cpi_df.copy()
-
-    work["year"] = work["date"].dt.year
-
-    work = work.loc[
-        work["year"].between(
-            start_year,
-            end_year,
-        )
-    ].copy()
-
-    annual = (
-        work.groupby(
-            "year",
-            as_index=False,
-        )
-        .agg(
-            cpi=("index_value", "mean"),
-            month_count=("index_value", "count"),
-        )
-        .sort_values("year")
-        .reset_index(drop=True)
-    )
-
-    incomplete = annual.loc[annual["month_count"] != 12]
-
-    if not incomplete.empty:
-        raise ValueError(
-            "12か月揃っていないCPI年次データがあります: "
-            f"{incomplete[['year', 'month_count']].to_dict('records')}"
-        )
-
-    return annual[
-        [
-            "year",
-            "cpi",
-        ]
-    ]
-
-
 def add_real_minimum_wage(
     analysis_df: pd.DataFrame,
     annual_cpi_df: pd.DataFrame,
@@ -616,3 +561,12 @@ def summarize_minimum_wage_lag_correlations(
         )
         .reset_index(drop=True)
     )
+
+
+def prepare_annual_cpi(
+    cpi_df: pd.DataFrame,
+    start_year: int = 2015,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """旧importとの互換用。新規コードはcpi_analysisを直接参照する。"""
+    return cpi_analysis.prepare_annual_cpi(cpi_df, start_year, end_year)

@@ -758,7 +758,7 @@ CPI系列コード：
 
 その後、2015年を100として指数化する。
 
-CPI取得は`src/real_wage_dashboard/cpi_service.py`、年次化は`src/real_wage_dashboard/minimum_wage_analysis.py`の`prepare_annual_cpi()`を利用する。
+CPI取得は`src/real_wage_dashboard/cpi_service.py`、年次化は`src/real_wage_dashboard/cpi_analysis.py`の`prepare_annual_cpi()`を利用する。
 
 ### 11.5 比較上の注意
 
