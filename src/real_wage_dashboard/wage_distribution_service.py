@@ -40,6 +40,12 @@ EMPLOYMENT_TYPES = [
     "nonregular",
 ]
 
+COMPANY_SIZE_KEYWORDS = {
+    "large": "1000人以上",
+    "medium": "100～999人",
+    "small": "10～99人",
+}
+
 
 def normalize_distribution_label(value: object) -> str:
     if pd.isna(value):
@@ -473,3 +479,106 @@ def load_wage_distribution_history_by_employment(
     )
 
     return result.sort_values(["employment", "year"]).reset_index(drop=True)
+
+
+def normalize_sheet_name(value: str) -> str:
+    return (
+        value.replace(" ", "")
+        .replace("　", "")
+        .replace(",", "")
+        .replace("，", "")
+        .replace("（", "(")
+        .replace("）", ")")
+    )
+
+
+def find_company_size_sheet_name(
+    path: Path,
+    company_size: str,
+) -> str:
+    if company_size not in COMPANY_SIZE_KEYWORDS:
+        raise ValueError(f"Unknown company size: {company_size}")
+
+    keyword = COMPANY_SIZE_KEYWORDS[company_size]
+
+    excel = pd.ExcelFile(path)
+
+    matches = [
+        sheet_name
+        for sheet_name in excel.sheet_names
+        if keyword in normalize_sheet_name(sheet_name)
+    ]
+
+    if len(matches) != 1:
+        raise ValueError(
+            f"{path.name}: company_size={company_size}, "
+            f"keyword={keyword}, "
+            f"matched sheets={matches}"
+        )
+
+    return matches[0]
+
+
+def load_wage_distribution_by_company_size(
+    path: Path,
+    year: int,
+) -> pd.DataFrame:
+    records = []
+
+    for company_size in [
+        "large",
+        "medium",
+        "small",
+    ]:
+        sheet_name = find_company_size_sheet_name(
+            path,
+            company_size,
+        )
+
+        df = pd.read_excel(
+            path,
+            sheet_name=sheet_name,
+            header=None,
+        )
+
+        record = extract_main_distribution_from_dataframe(
+            df,
+            year,
+        )
+
+        record["company_size"] = company_size
+
+        records.append(record)
+
+    return pd.DataFrame(records)
+
+
+def load_wage_distribution_history_by_company_size(
+    data_dir: Path,
+    start_year: int = 2015,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    frames = []
+
+    for year in range(
+        start_year,
+        end_year + 1,
+    ):
+        path = find_wage_distribution_file(
+            data_dir,
+            year,
+        )
+
+        frame = load_wage_distribution_by_company_size(
+            path,
+            year,
+        )
+
+        frames.append(frame)
+
+    result = pd.concat(
+        frames,
+        ignore_index=True,
+    )
+
+    return result.sort_values(["company_size", "year"]).reset_index(drop=True)

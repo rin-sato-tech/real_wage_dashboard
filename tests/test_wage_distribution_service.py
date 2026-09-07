@@ -8,6 +8,7 @@ from real_wage_dashboard.wage_distribution_service import (
     extract_main_distribution_from_dataframe,
     find_wage_distribution_file,
     normalize_distribution_label,
+    normalize_sheet_name,
     parse_employment_distribution_values,
 )
 
@@ -246,3 +247,7 @@ def test_parse_employment_distribution_values() -> None:
 
     assert nonregular["p10"] == pytest.approx(136.0)
     assert nonregular["p50"] == pytest.approx(183.6)
+
+
+def test_normalize_sheet_name() -> None:
+    assert normalize_sheet_name("産業計（1,000人以上）") == "産業計(1000人以上)"

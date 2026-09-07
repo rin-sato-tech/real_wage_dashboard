@@ -7,6 +7,7 @@ from real_wage_dashboard.wage_distribution_analysis import (
     add_real_wage_distribution_by_group,
     build_gender_wage_ratio,
     build_wage_distribution_analysis,
+    build_wage_distribution_analysis_by_company_size,
     build_wage_distribution_analysis_by_employment,
     build_wage_distribution_analysis_by_sex,
     summarize_wage_distribution_change,
@@ -389,5 +390,100 @@ def test_add_real_wage_distribution_by_employment() -> None:
 
     assert nonregular_2025["real_p50_index"] == pytest.approx(
         102.167997,
+        abs=1e-6,
+    )
+
+
+def test_build_wage_distribution_analysis_by_company_size() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025, 2015, 2025],
+            "company_size": [
+                "large",
+                "large",
+                "medium",
+                "medium",
+                "small",
+                "small",
+            ],
+            "p10": [180.5, 211.1, 164.6, 198.3, 157.4, 192.2],
+            "p25": [226.5, 255.5, 200.5, 234.7, 189.9, 226.7],
+            "p50": [305.3, 328.6, 254.8, 288.4, 240.1, 278.5],
+            "p75": [431.3, 450.1, 337.9, 372.3, 310.7, 350.5],
+            "p90": [587.8, 632.0, 452.6, 494.8, 398.4, 444.7],
+            "decile_dispersion": [0.67, 0.64, 0.57, 0.51, 0.50, 0.45],
+            "quartile_dispersion": [0.34, 0.30, 0.27, 0.24, 0.25, 0.22],
+        }
+    )
+
+    result = build_wage_distribution_analysis_by_company_size(
+        df,
+        base_year=2015,
+    )
+
+    base = result[result["year"] == 2015]
+
+    assert np.allclose(base["p10_index"], 100.0)
+    assert np.allclose(base["p50_index"], 100.0)
+    assert np.allclose(base["p90_index"], 100.0)
+
+    small_2025 = result[
+        (result["year"] == 2025) & (result["company_size"] == "small")
+    ].iloc[0]
+
+    assert small_2025["p10_index"] == pytest.approx(192.2 / 157.4 * 100)
+
+    assert small_2025["p90_p10"] == pytest.approx(444.7 / 192.2)
+
+
+def test_add_real_wage_distribution_by_company_size() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025, 2015, 2025, 2015, 2025],
+            "company_size": [
+                "large",
+                "large",
+                "medium",
+                "medium",
+                "small",
+                "small",
+            ],
+            "p10": [180.5, 211.1, 164.6, 198.3, 157.4, 192.2],
+            "p25": [226.5, 255.5, 200.5, 234.7, 189.9, 226.7],
+            "p50": [305.3, 328.6, 254.8, 288.4, 240.1, 278.5],
+            "p75": [431.3, 450.1, 337.9, 372.3, 310.7, 350.5],
+            "p90": [587.8, 632.0, 452.6, 494.8, 398.4, 444.7],
+        }
+    )
+
+    cpi_df = pd.DataFrame(
+        {
+            "year": [2015, 2025],
+            "cpi": [97.8, 114.025],
+        }
+    )
+
+    result = add_real_wage_distribution_by_group(
+        df,
+        cpi_df,
+        group_columns=["company_size"],
+        base_year=2015,
+    )
+
+    large_2025 = result[
+        (result["year"] == 2025) & (result["company_size"] == "large")
+    ].iloc[0]
+
+    small_2025 = result[
+        (result["year"] == 2025) & (result["company_size"] == "small")
+    ].iloc[0]
+
+    assert large_2025["real_p50_index"] == pytest.approx(
+        92.316542,
+        abs=1e-6,
+    )
+
+    assert small_2025["real_p50_index"] == pytest.approx(
+        99.488255,
         abs=1e-6,
     )

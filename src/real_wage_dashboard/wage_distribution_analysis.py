@@ -191,46 +191,11 @@ def build_wage_distribution_analysis_by_sex(
     df: pd.DataFrame,
     base_year: int = BASE_YEAR,
 ) -> pd.DataFrame:
-    required_columns = {
-        "year",
-        "sex",
-        *QUANTILE_COLUMNS,
-    }
-
-    missing = required_columns - set(df.columns)
-
-    if missing:
-        raise ValueError(f"必要な列がありません: {sorted(missing)}")
-
-    if df.empty:
-        raise ValueError("男女別賃金分布データが空です。")
-
-    if df.duplicated(["year", "sex"]).any():
-        raise ValueError("year・sex の組み合わせが重複しています。")
-
-    result = df.copy().sort_values(["sex", "year"]).reset_index(drop=True)
-
-    for sex, group in result.groupby("sex"):
-        base_rows = group[group["year"] == base_year]
-
-        if len(base_rows) != 1:
-            raise ValueError(f"{sex}: 基準年 {base_year} が一意に存在しません。")
-
-        base_row = base_rows.iloc[0]
-
-        for column in QUANTILE_COLUMNS:
-            mask = result["sex"] == sex
-
-            result.loc[
-                mask,
-                f"{column}_index",
-            ] = result.loc[mask, column] / base_row[column] * 100
-
-    result["p90_p10"] = result["p90"] / result["p10"]
-    result["p90_p50"] = result["p90"] / result["p50"]
-    result["p50_p10"] = result["p50"] / result["p10"]
-
-    return result
+    return build_wage_distribution_analysis_by_group(
+        df,
+        group_columns=["sex"],
+        base_year=base_year,
+    )
 
 
 def build_gender_wage_ratio(
@@ -370,9 +335,32 @@ def build_wage_distribution_analysis_by_employment(
     df: pd.DataFrame,
     base_year: int = BASE_YEAR,
 ) -> pd.DataFrame:
+    return build_wage_distribution_analysis_by_group(
+        df,
+        group_columns=["employment"],
+        base_year=base_year,
+    )
+
+
+def build_wage_distribution_analysis_by_company_size(
+    df: pd.DataFrame,
+    base_year: int = BASE_YEAR,
+) -> pd.DataFrame:
+    return build_wage_distribution_analysis_by_group(
+        df,
+        group_columns=["company_size"],
+        base_year=base_year,
+    )
+
+
+def build_wage_distribution_analysis_by_group(
+    df: pd.DataFrame,
+    group_columns: list[str],
+    base_year: int = BASE_YEAR,
+) -> pd.DataFrame:
     required_columns = {
         "year",
-        "employment",
+        *group_columns,
         *QUANTILE_COLUMNS,
     }
 
@@ -383,15 +371,38 @@ def build_wage_distribution_analysis_by_employment(
 
     result = df.copy()
 
-    for employment, group in result.groupby("employment"):
+    group_key: str | list[str]
+
+    if len(group_columns) == 1:
+        group_key = group_columns[0]
+    else:
+        group_key = group_columns
+
+    for group_values, group in result.groupby(
+        group_key,
+        dropna=False,
+    ):
+        if not isinstance(group_values, tuple):
+            group_values = (group_values,)
+
         base_rows = group[group["year"] == base_year]
 
         if len(base_rows) != 1:
-            raise ValueError(f"{employment}: base year {base_year} is not unique")
+            raise ValueError(f"{group_values}: base year {base_year} is not unique")
 
         base_row = base_rows.iloc[0]
 
-        mask = result["employment"] == employment
+        mask = pd.Series(
+            True,
+            index=result.index,
+        )
+
+        for column_name, value in zip(
+            group_columns,
+            group_values,
+            strict=True,
+        ):
+            mask &= result[column_name] == value
 
         for column in QUANTILE_COLUMNS:
             result.loc[
