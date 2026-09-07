@@ -34,6 +34,12 @@ scripts/
 │   ├── check_corporate_wage_industry_relationship.py
 │   ├── check_corporate_wage_time_series.py
 │   └── check_corporate_long_term_availability.py
+├── wage_distribution/
+│   ├── check_wage_distribution.py
+│   ├── check_employment_distribution_api.py
+│   ├── check_employment_distribution_analysis.py
+│   ├── check_company_size_distribution.py
+│   └── check_company_size_distribution_analysis.py
 └── wage_revision/
     ├── check_wage_revision_excel_structure.py
     ├── check_wage_revision_amount_rate.py
@@ -237,7 +243,57 @@ uv run python scripts/wage_revision/check_wage_revision_analysis.py
 
 ---
 
-## 9. 推奨実行順序
+## 9. 賃金分布分析
+
+### 全体・男女別
+
+```bash
+uv run python scripts/wage_distribution/check_wage_distribution.py
+```
+
+賃金構造基本統計調査の2015～2025年Excelから、P10、P25、P50、P75、P90、十分位分散係数、四分位分散係数を抽出し、全体・男女別の時系列を確認する。
+
+### 雇用形態別
+
+取得経路とデータ接続を確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_employment_distribution_api.py
+```
+
+2015～2023年のe-Stat APIデータと2024～2025年のExcelデータが、正社員・正職員／正社員・正職員以外について連続した時系列として取得できることを確認する。
+
+分析結果を確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_employment_distribution_analysis.py
+```
+
+名目分位の変化率、分位比、分散係数、CPIで実質化した分位指数を確認する。
+
+### 企業規模別
+
+データ抽出を確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_company_size_distribution.py
+```
+
+大企業・中企業・小企業について、年ごとに対象Excelシートが正しく取得できることを確認する。
+
+分析結果を確認する。
+
+```bash
+uv run python scripts/wage_distribution/check_company_size_distribution_analysis.py
+```
+
+企業規模別の名目分位変化率、分位比、分散係数、実質分位指数を確認する。
+
+企業規模は賃金構造基本統計調査の企業規模区分であり、毎月勤労統計の事業所規模とは区別する。
+
+---
+
+## 10. 推奨実行順序
 
 ### 毎月勤労統計を更新した場合
 
@@ -283,9 +339,19 @@ uv run python scripts/wage_revision/check_wage_revision_factors.py
 uv run python scripts/wage_revision/check_wage_revision_analysis.py
 ```
 
+### 賃金分布データを更新・再検証する場合
+
+```bash
+uv run python scripts/wage_distribution/check_wage_distribution.py
+uv run python scripts/wage_distribution/check_employment_distribution_api.py
+uv run python scripts/wage_distribution/check_employment_distribution_analysis.py
+uv run python scripts/wage_distribution/check_company_size_distribution.py
+uv run python scripts/wage_distribution/check_company_size_distribution_analysis.py
+```
+
 ---
 
-## 10. スクリプト実行後
+## 11. スクリプト実行後
 
 確認スクリプトで異常がなければ、最後に自動テストと静的チェックを実行する。
 
@@ -299,7 +365,7 @@ uv run ruff format --check .
 
 ---
 
-## 11. 新しい確認スクリプトを追加する場合
+## 12. 新しい確認スクリプトを追加する場合
 
 配置先は対象データ・分析領域で決める。
 
@@ -307,6 +373,7 @@ uv run ruff format --check .
 - CPI・実質賃金：`scripts/cpi/`
 - 法人企業統計・企業業績：`scripts/corporate/`
 - 賃金改定調査：`scripts/wage_revision/`
+- 賃金構造基本統計調査・賃金分布：`scripts/wage_distribution/`
 
 新しい分析領域で複数の確認スクリプトが必要になった場合だけ、新しいサブディレクトリを追加する。
 
@@ -314,7 +381,7 @@ uv run ruff format --check .
 
 ---
 
-## 12. 削除・統合の基準
+## 13. 削除・統合の基準
 
 次の場合はスクリプトの削除・統合を検討する。
 
