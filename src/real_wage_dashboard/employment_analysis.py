@@ -2,6 +2,12 @@ import numpy as np
 import pandas as pd
 
 
+# ============================================================
+# 1. 基礎データ作成
+# ============================================================
+
+
+# 1-1
 def merge_wage_and_working_hours(
     wage_df: pd.DataFrame,
     working_hours_df: pd.DataFrame,
@@ -18,6 +24,7 @@ def merge_wage_and_working_hours(
         "working_hours",
     }
 
+    # wage_dfとworking_hours_dfの必要列が揃っているか確認
     if not wage_required.issubset(wage_df.columns):
         missing = wage_required - set(wage_df.columns)
         raise ValueError(f"賃金データに必要な列がありません: {sorted(missing)}")
@@ -40,6 +47,7 @@ def merge_wage_and_working_hours(
         ]
     ].copy()
 
+    # wageとhoursを年月で結合, 重複のときはエラーを出す
     result = wage.merge(
         hours,
         on="date",
@@ -50,9 +58,8 @@ def merge_wage_and_working_hours(
     return result.sort_values("date").reset_index(drop=True)
 
 
-def add_approx_hourly_wage(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+# 1-2
+def add_approx_hourly_wage(df: pd.DataFrame) -> pd.DataFrame:
     """月額賃金と総実労働時間から概算時間当たり賃金を算出する。"""
 
     required_columns = {
@@ -60,6 +67,7 @@ def add_approx_hourly_wage(
         "working_hours",
     }
 
+    # 必要列が揃っているか確認
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
@@ -76,22 +84,40 @@ def add_approx_hourly_wage(
     return result
 
 
+# 1-3
 def create_employment_analysis_dataframe(
     wage_df: pd.DataFrame,
     working_hours_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """賃金・労働時間・概算時間当たり賃金をまとめたDataFrameを作成する。"""
 
+    # 1-1. 賃金と労働時間を年月で結合
     result = merge_wage_and_working_hours(
         wage_df,
         working_hours_df,
     )
 
+    # 1-2. 月額賃金 ÷ 総実労働時間で概算時間当たり賃金を追加
     result = add_approx_hourly_wage(result)
 
     return result
 
 
+'''
+ここまでの列: [
+    'date',
+    'nominal_wage_amount',
+    'working_hours',
+    'approx_hourly_wage'
+]
+'''
+
+# ============================================================
+# 2. 名目指標の指数化・前年同月比
+# ============================================================
+
+
+# 2-1
 def add_base_year_index(
     df: pd.DataFrame,
     column: str,
@@ -105,16 +131,19 @@ def add_base_year_index(
         column,
     }
 
+    # 必要列が揃っているか確認
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     result = df.copy()
 
+    # 基準年に合致するデータを抽出し、基準年平均を算出
     base_df = result[result["date"].dt.year == base_year].copy()
 
     base_months = base_df["date"].dt.to_period("M").drop_duplicates()
 
+    # 基準年のデータが12か月揃っているか確認
     if len(base_months) != 12:
         raise ValueError(f"{base_year}年の基準データが12か月揃っていません。")
 
@@ -123,11 +152,13 @@ def add_base_year_index(
     if pd.isna(base_value) or base_value <= 0:
         raise ValueError("基準年平均は0より大きい必要があります。")
 
+    # 以上の処理は add_employment_comparison_indices()のfor文で回している
     result[output_column] = result[column] / base_value * 100
 
     return result
 
 
+# 2-2
 def add_employment_comparison_indices(
     df: pd.DataFrame,
     base_year: int = 2020,
@@ -153,9 +184,8 @@ def add_employment_comparison_indices(
     return result
 
 
-def add_employment_changes(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+# 2-3
+def add_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
     """雇用形態比較で使用する主要指標の前年同月比を追加する。"""
 
     required_columns = {
@@ -165,42 +195,45 @@ def add_employment_changes(
         "approx_hourly_wage",
     }
 
+    # 必要列が揃っているか確認
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     result = df.sort_values("date").reset_index(drop=True).copy()
 
+    # pct_change(12)で前年同月比を算出, fill_method=Noneで欠損値を補完しない
     result["regular_wage_yoy_pct"] = (
-        result["nominal_wage_amount"]
-        .pct_change(
-            periods=12,
-            fill_method=None,
-        )
-        .mul(100)
+        result["nominal_wage_amount"].pct_change(periods=12, fill_method=None).mul(100)
     )
 
     result["working_hours_yoy_pct"] = (
-        result["working_hours"]
-        .pct_change(
-            periods=12,
-            fill_method=None,
-        )
-        .mul(100)
+        result["working_hours"].pct_change(periods=12, fill_method=None).mul(100)
     )
 
     result["approx_hourly_wage_yoy_pct"] = (
-        result["approx_hourly_wage"]
-        .pct_change(
-            periods=12,
-            fill_method=None,
-        )
-        .mul(100)
+        result["approx_hourly_wage"].pct_change(periods=12, fill_method=None).mul(100)
     )
 
     return result
 
 
+'''
+ここまでの列: [
+    'date',
+    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
+    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
+    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct']
+]
+実数、2020年基準指数、前年同月比
+'''
+
+# ============================================================
+# 3. CPI結合・実質値の作成
+# ============================================================
+
+
+# 3-1
 def merge_employment_analysis_with_cpi(
     df: pd.DataFrame,
     cpi_df: pd.DataFrame,
@@ -236,6 +269,7 @@ def merge_employment_analysis_with_cpi(
         ]
     ].copy()
 
+    # analysisとcpiを年月で結合, 重複のときはエラーを出す
     result = analysis.merge(
         cpi,
         on="date",
@@ -246,9 +280,8 @@ def merge_employment_analysis_with_cpi(
     return result.sort_values("date").reset_index(drop=True)
 
 
-def add_real_employment_values(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+# 3-2
+def add_real_employment_values(df: pd.DataFrame) -> pd.DataFrame:
     """CPIで実質月額賃金と実質概算時間当たり賃金を算出する。"""
 
     required_columns = {
@@ -277,22 +310,39 @@ def add_real_employment_values(
     return result
 
 
+# 3-3
 def add_real_employment_analysis(
     df: pd.DataFrame,
     cpi_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """雇用形態比較データにCPIと実質値を追加する。"""
 
+    # 3-1. 月次分析データとCPIを結合
     result = merge_employment_analysis_with_cpi(
         df,
         cpi_df,
     )
 
+    # 3-2. 名目値をCPIで実質化
     result = add_real_employment_values(result)
 
     return result
 
 
+'''
+ここまでの列: [
+    'date',
+    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
+    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
+    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct'],
+    'index_value',
+    ['real_regular_wage', 'real_approx_hourly_wage']
+]
+実数、2020年基準指数、前年同月比、CPI、実質値
+'''
+
+
+# 3-4
 def add_real_employment_indices(
     df: pd.DataFrame,
     base_year: int = 2020,
@@ -318,9 +368,8 @@ def add_real_employment_indices(
     return result
 
 
-def add_real_employment_changes(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+# 3-5
+def add_real_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
     """実質賃金系の前年同月比を追加する。"""
 
     required_columns = {
@@ -329,28 +378,45 @@ def add_real_employment_changes(
         "real_approx_hourly_wage",
     }
 
+    # 必要列が揃っているか確認
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     result = df.sort_values("date").reset_index(drop=True).copy()
 
+    # pct_change(12)で前年同月比を算出, fill_method=Noneで欠損値を補完しない
     result["real_regular_wage_yoy_pct"] = (
         result["real_regular_wage"].pct_change(periods=12, fill_method=None).mul(100)
     )
 
     result["real_approx_hourly_wage_yoy_pct"] = (
-        result["real_approx_hourly_wage"]
-        .pct_change(periods=12, fill_method=None)
-        .mul(100)
+        result["real_approx_hourly_wage"].pct_change(periods=12, fill_method=None).mul(100)
     )
 
     return result
 
 
-def add_wage_change_decomposition(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+'''
+ここまでの列（総数17列）: [
+    'date',
+    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
+    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
+    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct'],
+    'index_value',
+    ['real_regular_wage', 'real_approx_hourly_wage'],
+    ['real_regular_wage_index', 'real_approx_hourly_wage_index'],
+    ['real_regular_wage_yoy_pct', 'real_approx_hourly_wage_yoy_pct']
+]
+実数、2020年基準指数、前年同月比、CPI、実質値、実質2020年基準指数、実質前年同月比
+'''
+
+# ============================================================
+# 4. 月額賃金変化の要因分解
+# ============================================================
+
+
+def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
     """月額賃金の前年同月変化を時間当たり賃金要因と労働時間要因に分解する。"""
 
     required_columns = {
@@ -360,6 +426,7 @@ def add_wage_change_decomposition(
         "approx_hourly_wage",
     }
 
+    # 必要列が揃っているか確認
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
@@ -373,6 +440,7 @@ def add_wage_change_decomposition(
     ):
         raise ValueError("要因分解には0より大きい賃金・労働時間データが必要です。")
 
+    # 前年同月比の対数差で月額賃金変化率を算出
     result["wage_log_change"] = (
         np.log(result["nominal_wage_amount"])
         - np.log(result["nominal_wage_amount"].shift(12))
@@ -390,6 +458,26 @@ def add_wage_change_decomposition(
     return result
 
 
+'''
+ここまでの列（総数20列）: [
+    'date',
+    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
+    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
+    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct'],
+    'index_value',
+    ['real_regular_wage', 'real_approx_hourly_wage'],
+    ['real_regular_wage_index', 'real_approx_hourly_wage_index'],
+    ['real_regular_wage_yoy_pct', 'real_approx_hourly_wage_yoy_pct'],
+    ['wage_log_change', 'hourly_wage_log_contribution', 'working_hours_log_contribution']
+]
+実数、2020年基準指数、前年同月比、CPI、実質値、実質2020年基準指数、実質前年同月比、月額賃金変化の要因分解（対数差）
+'''
+
+# ============================================================
+# 5. 月次分析パイプライン
+# ============================================================
+
+
 def create_full_employment_analysis_dataframe(
     wage_df: pd.DataFrame,
     working_hours_df: pd.DataFrame,
@@ -398,35 +486,48 @@ def create_full_employment_analysis_dataframe(
 ) -> pd.DataFrame:
     """雇用形態比較に必要な分析列をまとめて作成する。"""
 
+    # 5-1. 賃金・労働時間・概算時間当たり賃金の基本データを作成
     result = create_employment_analysis_dataframe(
         wage_df,
         working_hours_df,
     )
 
+    # 5-2. 名目指標を基準年平均=100で指数化
     result = add_employment_comparison_indices(
         result,
         base_year=base_year,
     )
 
+    # 5-3. 名目指標の前年同月比を追加
     result = add_employment_changes(result)
 
+    # 5-4. CPIを結合し、実質月額賃金・実質概算時間当たり賃金を追加
     result = add_real_employment_analysis(
         result,
         cpi_df,
     )
 
+    # 5-5. 実質指標を基準年平均=100で指数化
     result = add_real_employment_indices(
         result,
         base_year=base_year,
     )
 
+    # 5-6. 実質指標の前年同月比を追加
     result = add_real_employment_changes(result)
 
+    # 5-7. 月額賃金変化を時間当たり賃金要因と労働時間要因に分解
     result = add_wage_change_decomposition(result)
 
     return result
 
 
+# ============================================================
+# 6. 年平均・期間変化の比較
+# ============================================================
+
+
+# 6-1
 def calculate_yearly_averages(
     df: pd.DataFrame,
     year: int,
@@ -439,10 +540,12 @@ def calculate_yearly_averages(
         *columns,
     }
 
+    # 必要列が揃っているか確認
     if not required_columns.issubset(df.columns):
         missing = required_columns - set(df.columns)
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
+    # 指定年のデータを抽出, 年平均を算出
     year_df = df[df["date"].dt.year == year].copy()
 
     months = year_df["date"].dt.to_period("M")
@@ -453,9 +556,22 @@ def calculate_yearly_averages(
     if year_df[columns].isna().any().any():
         raise ValueError(f"{year}年の分析対象データに欠損値があります。")
 
+    # 各列の平均を辞書で返す
+    # 平均賃金の平均値を労働時間の平均値で割った値と、各月の概算時間当たり賃金の平均値は一致しない場合がある
     return {column: float(year_df[column].mean()) for column in columns}
 
 
+'''
+{
+    'nominal_wage_amount': 123456.78,
+    'working_hours': 160.0,
+    'approx_hourly_wage': 771.6,
+    ...
+}
+'''
+
+
+# 6-2
 def calculate_change_rate(
     start_value: float,
     end_value: float,
@@ -465,9 +581,11 @@ def calculate_change_rate(
     if start_value <= 0:
         raise ValueError("開始値は0より大きい必要があります。")
 
+    # 年平均値を使って変化率を算出
     return (end_value / start_value - 1) * 100
 
 
+# 6-3
 def calculate_yearly_change_rates(
     start_averages: dict[str, float],
     end_averages: dict[str, float],
@@ -478,6 +596,7 @@ def calculate_yearly_change_rates(
         raise ValueError("比較する年平均の指標が一致していません。")
 
     return {
+        # for文でkeyを取り出し、calculate_change_rate()に数値を渡す
         column: calculate_change_rate(
             start_averages[column],
             end_averages[column],
@@ -486,6 +605,15 @@ def calculate_yearly_change_rates(
     }
 
 
+'''
+ANALYSIS_INDICATORS = [
+    ["nominal_wage_amount", "working_hours", "approx_hourly_wage"],
+    ["real_regular_wage", "real_approx_hourly_wage"]
+]
+'''
+
+
+# 6-4
 def create_yearly_comparison_summary(
     general_df: pd.DataFrame,
     part_df: pd.DataFrame,
@@ -501,6 +629,7 @@ def create_yearly_comparison_summary(
         ("一般労働者", general_df),
         ("パートタイム労働者", part_df),
     ]:
+        # 指定年の年平均を算出
         start_averages = calculate_yearly_averages(
             df,
             year=start_year,
@@ -513,6 +642,7 @@ def create_yearly_comparison_summary(
             columns=columns,
         )
 
+        # 指定年の年平均から変化率を算出
         change_rates = calculate_yearly_change_rates(
             start_averages,
             end_averages,
@@ -534,6 +664,12 @@ def create_yearly_comparison_summary(
     return pd.DataFrame(rows)
 
 
+# ============================================================
+# 7. 雇用形態間の比較・考察
+# ============================================================
+
+
+# 7-1
 def compare_employment_change_rates(
     summary_df: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -584,6 +720,7 @@ def compare_employment_change_rates(
     ]
 
 
+# 7-2
 def describe_change_direction(
     value: float,
     tolerance: float = 0.1,
@@ -599,6 +736,7 @@ def describe_change_direction(
     return "横ばい"
 
 
+# 7-3
 def create_employment_analysis_discussion(
     summary_df: pd.DataFrame,
     tolerance: float = 0.1,
@@ -703,6 +841,12 @@ def create_employment_analysis_discussion(
     return discussions
 
 
+# ============================================================
+# 8. 要因分解の期間要約
+# ============================================================
+
+
+# 8-1
 def summarize_wage_change_decomposition(
     df: pd.DataFrame,
     start_year: int,
