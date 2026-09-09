@@ -846,6 +846,87 @@ def main() -> None:
                 "「2020年価格換算」はCPIの2020年基準に対応した表記です。"
             )
 
+        # 集計順序による変化率の違いを確認する。
+        sensitivity_rows = []
+
+        for employment_type, analysis_df in [
+            ("一般労働者", general_df),
+            ("パートタイム労働者", part_df),
+        ]:
+            alternative_values = {}
+
+            for year in [ANALYSIS_START_YEAR, ANALYSIS_END_YEAR]:
+                annual_df = analysis_df.loc[
+                    analysis_df["date"].dt.year == year
+                ]
+
+                # 賃金・時間等の12か月確認は、
+                # 上で実行した年次比較関数で実施済み。
+                cpi = annual_df["index_value"]
+                if (
+                    cpi.isna().any()
+                    or not cpi.between(0, float("inf"), inclusive="neither").all()
+                ):
+                    raise ValueError(
+                        f"{employment_type}・{year}年のCPIが不正です。"
+                    )
+
+                mean_wage = annual_df["nominal_wage_amount"].mean()
+                mean_hours = annual_df["working_hours"].mean()
+                mean_cpi = cpi.mean()
+
+                alternative_values[year] = {
+                    "approx_hourly_wage": mean_wage / mean_hours,
+                    "real_regular_wage": mean_wage / mean_cpi * 100,
+                    "real_approx_hourly_wage": (
+                        mean_wage / mean_hours / mean_cpi * 100
+                    ),
+                }
+
+            for indicator, label in [
+                ("approx_hourly_wage", "時間当たり賃金"),
+                ("real_regular_wage", "実質月額賃金"),
+                ("real_approx_hourly_wage", "実質時間当たり賃金"),
+            ]:
+                start_value = alternative_values[ANALYSIS_START_YEAR][indicator]
+                end_value = alternative_values[ANALYSIS_END_YEAR][indicator]
+                alternative_rate = (end_value / start_value - 1) * 100
+
+                current_rate = get_change_rate(
+                    comparison_summary_df,
+                    employment_type,
+                    indicator,
+                )
+
+                sensitivity_rows.append(
+                    {
+                        "就業形態": employment_type,
+                        "指標": label,
+                        "現在の方法（%）": current_rate,
+                        "年平均から計算（%）": alternative_rate,
+                        "差（ポイント）": alternative_rate - current_rate,
+                    }
+                )
+
+        with st.expander("集計方法による結果の違いを確認", expanded=True):
+            st.dataframe(
+                pd.DataFrame(sensitivity_rows),
+                hide_index=True,
+                column_config={
+                    column: st.column_config.NumberColumn(format="%+.3f")
+                    for column in [
+                        "現在の方法（%）",
+                        "年平均から計算（%）",
+                        "差（ポイント）",
+                    ]
+                },
+            )
+            st.caption(
+                "2015年平均から2025年平均への変化率を比較しています。"
+                "差は「年平均から計算－現在の方法」です。"
+                "公式の労働者数加重平均との比較ではありません。"
+            )
+
         st.divider()
 
     st.subheader("時系列推移")
