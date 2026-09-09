@@ -2,6 +2,43 @@ import numpy as np
 import pandas as pd
 
 
+def _align_previous_year(
+    df: pd.DataFrame,
+    columns: list[str],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """年月を照合し、各行に対応する前年同月の値を取得する。"""
+
+    required_columns = {"date", *columns}
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    result = df.sort_values("date").reset_index(drop=True).copy()
+
+    if result["date"].isna().any():
+        raise ValueError("年月に欠損があります。")
+
+    # 年月だけをPeriodIndexに変換
+    months = pd.PeriodIndex(result["date"], freq="M")
+
+    if months.has_duplicates:
+        raise ValueError("同じ年月のデータが重複しています。")
+
+    # 年月をインデックスにしたdfを作成
+    monthly_values = result[columns].copy()
+    monthly_values.index = months
+
+    # 各行の前年同月を検索する。存在しない月の値はNaN。
+    previous = monthly_values.reindex(months - 12)
+
+    # result / previousで前年比を算出できるよう、行インデックスを合わせる。
+    previous.index = result.index
+
+    return result, previous
+
+
 # ============================================================
 # 1. 基礎データ作成
 # ============================================================
@@ -124,35 +161,46 @@ def add_base_year_index(
     output_column: str,
     base_year: int = 2020,
 ) -> pd.DataFrame:
-    """指定列を基準年平均=100として指数化する。"""
+    """有効な基準年12か月の平均を100として指数化する。"""
 
-    required_columns = {
-        "date",
-        column,
-    }
+    required_columns = {"date", column}
 
-    # 必要列が揃っているか確認
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
+    # 欠損・重複のチェック
+    missing = required_columns - set(df.columns)
+    if missing:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     result = df.copy()
+    if result["date"].isna().any():
+        raise ValueError("年月に欠損があります。")
 
-    # 基準年に合致するデータを抽出し、基準年平均を算出
-    base_df = result[result["date"].dt.year == base_year].copy()
+    months = pd.PeriodIndex(result["date"], freq="M")
+    if months.has_duplicates:
+        raise ValueError("同じ年月のデータが重複しています。")
 
-    base_months = base_df["date"].dt.to_period("M").drop_duplicates()
-
-    # 基準年のデータが12か月揃っているか確認
-    if len(base_months) != 12:
+    base_df = result.loc[months.year == base_year]
+    if len(base_df) != 12:
         raise ValueError(f"{base_year}年の基準データが12か月揃っていません。")
 
-    base_value = base_df[column].mean()
+    base_values = base_df[column]
+    if base_values.isna().any():
+        raise ValueError(f"{base_year}年の基準データに欠損値があります: {column}")
 
-    if pd.isna(base_value) or base_value <= 0:
-        raise ValueError("基準年平均は0より大きい必要があります。")
+    if (
+        not np.isfinite(base_values).all()
+        or (base_values <= 0).any()
+    ):
+        raise ValueError(f"基準年の値はすべて0より大きい有限値である必要があります。")
 
-    # 以上の処理は add_employment_comparison_indices()のfor文で回している
+    # 基準年以外も無限大は認めない。欠測値は保持する。
+    observed_values = result[column].dropna()
+    if not np.isfinite(observed_values).all():
+        raise ValueError(f"分析対象データに無限大があります: {column}")
+
+    base_value = base_values.mean()
+    if not np.isfinite(base_value) or base_value <= 0:
+        raise ValueError(f"基準年平均は0より大きい有限値である必要があります。")
+
     result[output_column] = result[column] / base_value * 100
 
     return result
@@ -186,34 +234,24 @@ def add_employment_comparison_indices(
 
 # 2-3
 def add_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
-    """雇用形態比較で使用する主要指標の前年同月比を追加する。"""
+    """主要指標の前年同月比を、年月を照合して算出する。"""
 
-    required_columns = {
-        "date",
-        "nominal_wage_amount",
-        "working_hours",
-        "approx_hourly_wage",
+    output_columns = {
+        "nominal_wage_amount": "regular_wage_yoy_pct",
+        "working_hours": "working_hours_yoy_pct",
+        "approx_hourly_wage": "approx_hourly_wage_yoy_pct",
     }
 
-    # 必要列が揃っているか確認
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
-        raise ValueError(f"必要な列がありません: {sorted(missing)}")
-
-    result = df.sort_values("date").reset_index(drop=True).copy()
-
-    # pct_change(12)で前年同月比を算出, fill_method=Noneで欠損値を補完しない
-    result["regular_wage_yoy_pct"] = (
-        result["nominal_wage_amount"].pct_change(periods=12, fill_method=None).mul(100)
+    result, previous = _align_previous_year(
+        df,
+        columns=list(output_columns),
     )
 
-    result["working_hours_yoy_pct"] = (
-        result["working_hours"].pct_change(periods=12, fill_method=None).mul(100)
-    )
+    for column, output_column in output_columns.items():
+        # 前年値が0の場合、変化率は定義できないためNaNとする。NaNになるのはwhereの仕様。
+        denominator = previous[column].where(previous[column] != 0)
 
-    result["approx_hourly_wage_yoy_pct"] = (
-        result["approx_hourly_wage"].pct_change(periods=12, fill_method=None).mul(100)
-    )
+        result[output_column] = (result[column] / denominator - 1) * 100
 
     return result
 
@@ -238,7 +276,7 @@ def merge_employment_analysis_with_cpi(
     df: pd.DataFrame,
     cpi_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """雇用形態比較データとCPIを年月でone-to-one結合する。"""
+    """分析対象月を保持し、同じ年月のCPIを左結合する。"""
 
     analysis_required = {
         "date",
@@ -246,34 +284,43 @@ def merge_employment_analysis_with_cpi(
         "working_hours",
         "approx_hourly_wage",
     }
+    cpi_required = {"date", "index_value"}
 
-    cpi_required = {
-        "date",
-        "index_value",
-    }
-
-    if not analysis_required.issubset(df.columns):
-        missing = analysis_required - set(df.columns)
+    missing = analysis_required - set(df.columns)
+    if missing:
         raise ValueError(f"雇用形態比較データに必要な列がありません: {sorted(missing)}")
 
-    if not cpi_required.issubset(cpi_df.columns):
-        missing = cpi_required - set(cpi_df.columns)
+    missing = cpi_required - set(cpi_df.columns)
+    if missing:
         raise ValueError(f"CPIデータに必要な列がありません: {sorted(missing)}")
 
+    if "index_value" in df.columns:
+        raise ValueError("分析データには既にCPI列があります。")
+
     analysis = df.copy()
+    cpi = cpi_df[["date", "index_value"]].copy()
 
-    cpi = cpi_df[
-        [
-            "date",
-            "index_value",
-        ]
-    ].copy()
+    # 年月の欠損や重複をチェック
+    for label, frame in [
+        ("分析データ", analysis),
+        ("CPIデータ", cpi),
+    ]:
+        if frame["date"].isna().any():
+            raise ValueError(f"{label}の年月に欠損があります。")
 
-    # analysisとcpiを年月で結合, 重複のときはエラーを出す
+        months = pd.PeriodIndex(frame["date"], freq="M")
+
+        if months.has_duplicates:
+            raise ValueError(f"{label}に同じ年月の重複があります。")
+
+        # 日付の日部分を月初に統一する。
+        frame["date"] = months.to_timestamp()
+
+    # left結合で、分析対象月を保持しつつCPIを結合する。重複のときはエラー。
     result = analysis.merge(
         cpi,
         on="date",
-        how="inner",
+        how="left",
         validate="one_to_one",
     )
 
@@ -370,29 +417,24 @@ def add_real_employment_indices(
 
 # 3-5
 def add_real_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
-    """実質賃金系の前年同月比を追加する。"""
+    """実質指標の前年同月比を、年月を照合して算出する。"""
 
-    required_columns = {
-        "date",
-        "real_regular_wage",
-        "real_approx_hourly_wage",
+    output_columns = {
+        "real_regular_wage": "real_regular_wage_yoy_pct",
+        "real_approx_hourly_wage": "real_approx_hourly_wage_yoy_pct",
     }
 
-    # 必要列が揃っているか確認
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
-        raise ValueError(f"必要な列がありません: {sorted(missing)}")
-
-    result = df.sort_values("date").reset_index(drop=True).copy()
-
-    # pct_change(12)で前年同月比を算出, fill_method=Noneで欠損値を補完しない
-    result["real_regular_wage_yoy_pct"] = (
-        result["real_regular_wage"].pct_change(periods=12, fill_method=None).mul(100)
+    # 前年同月比を算出するために、年月を照合して前年同月の値を取得
+    result, previous = _align_previous_year(
+        df,
+        columns=list(output_columns),
     )
 
-    result["real_approx_hourly_wage_yoy_pct"] = (
-        result["real_approx_hourly_wage"].pct_change(periods=12, fill_method=None).mul(100)
-    )
+    # 前年同月比を算出する。前年値が0の場合、変化率は定義できないためNaNとする。
+    for column, output_column in output_columns.items():
+        denominator = previous[column].where(previous[column] != 0)
+
+        result[output_column] = (result[column] / denominator - 1) * 100
 
     return result
 
@@ -417,43 +459,32 @@ def add_real_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
-    """月額賃金の前年同月変化を時間当たり賃金要因と労働時間要因に分解する。"""
+    """月額賃金の前年同月変化を時間当たり賃金と労働時間に分解する。"""
 
-    required_columns = {
-        "date",
-        "nominal_wage_amount",
-        "working_hours",
-        "approx_hourly_wage",
+    output_columns = {
+        "nominal_wage_amount": "wage_log_change",
+        "approx_hourly_wage": "hourly_wage_log_contribution",
+        "working_hours": "working_hours_log_contribution",
     }
 
-    # 必要列が揃っているか確認
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
-        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+    result, previous = _align_previous_year(
+        df,
+        columns=list(output_columns),
+    )
 
-    result = df.sort_values("date").reset_index(drop=True).copy()
+    values = result[list(output_columns)]
 
-    if (
-        (result["nominal_wage_amount"] <= 0).any()
-        or (result["working_hours"] <= 0).any()
-        or (result["approx_hourly_wage"] <= 0).any()
-    ):
-        raise ValueError("要因分解には0より大きい賃金・労働時間データが必要です。")
+    invalid = values.notna() & (
+        (values <= 0) | ~np.isfinite(values)
+    )
 
-    # 前年同月比の対数差で月額賃金変化率を算出
-    result["wage_log_change"] = (
-        np.log(result["nominal_wage_amount"])
-        - np.log(result["nominal_wage_amount"].shift(12))
-    ) * 100
+    if invalid.any().any():
+        raise ValueError("要因分解には0より大きい有限の賃金・労働時間データが必要です。")
 
-    result["hourly_wage_log_contribution"] = (
-        np.log(result["approx_hourly_wage"])
-        - np.log(result["approx_hourly_wage"].shift(12))
-    ) * 100
-
-    result["working_hours_log_contribution"] = (
-        np.log(result["working_hours"]) - np.log(result["working_hours"].shift(12))
-    ) * 100
+    for column, output_column in output_columns.items():
+        result[output_column] = (
+            np.log(result[column]) - np.log(previous[column])
+        ) * 100
 
     return result
 
@@ -484,39 +515,35 @@ def create_full_employment_analysis_dataframe(
     cpi_df: pd.DataFrame,
     base_year: int = 2020,
 ) -> pd.DataFrame:
-    """雇用形態比較に必要な分析列をまとめて作成する。"""
+    """雇用形態比較に必要な月次指標を作成する。"""
 
-    # 5-1. 賃金・労働時間・概算時間当たり賃金の基本データを作成
+    # 1. 賃金・労働時間・時間当たり賃金を作成する。
     result = create_employment_analysis_dataframe(
         wage_df,
         working_hours_df,
     )
 
-    # 5-2. 名目指標を基準年平均=100で指数化
-    result = add_employment_comparison_indices(
-        result,
-        base_year=base_year,
-    )
-
-    # 5-3. 名目指標の前年同月比を追加
-    result = add_employment_changes(result)
-
-    # 5-4. CPIを結合し、実質月額賃金・実質概算時間当たり賃金を追加
+    # 2. 分析対象月を保持してCPIを結合し、実質値を作成する。
     result = add_real_employment_analysis(
         result,
         cpi_df,
     )
 
-    # 5-5. 実質指標を基準年平均=100で指数化
+    # 3. 名目指標・実質指標を基準年平均=100で指数化する。
+    result = add_employment_comparison_indices(
+        result,
+        base_year=base_year,
+    )
     result = add_real_employment_indices(
         result,
         base_year=base_year,
     )
 
-    # 5-6. 実質指標の前年同月比を追加
+    # 4. 年月を照合して前年同月比を算出する。
+    result = add_employment_changes(result)
     result = add_real_employment_changes(result)
 
-    # 5-7. 月額賃金変化を時間当たり賃金要因と労働時間要因に分解
+    # 5. 名目月額賃金の前年同月変化を対数分解する。
     result = add_wage_change_decomposition(result)
 
     return result
@@ -670,10 +697,8 @@ def create_yearly_comparison_summary(
 
 
 # 7-1
-def compare_employment_change_rates(
-    summary_df: pd.DataFrame,
-) -> pd.DataFrame:
-    """各指標について一般労働者とパートの変化率を比較する。"""
+def compare_employment_change_rates(summary_df: pd.DataFrame) -> pd.DataFrame:
+    """一般・パートの変化率を比較し、欠測時は判定不可とする。"""
 
     required_columns = {
         "employment_type",
@@ -681,9 +706,21 @@ def compare_employment_change_rates(
         "change_rate_pct",
     }
 
-    if not required_columns.issubset(summary_df.columns):
-        missing = required_columns - set(summary_df.columns)
+    missing = required_columns - set(summary_df.columns)
+    if missing:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    key_columns = ["indicator", "employment_type"]
+    if summary_df[key_columns].isna().any().any():
+        raise ValueError("指標名または就業形態に欠損があります。")
+
+    if summary_df.duplicated(subset=key_columns).any():
+        raise ValueError("同じ指標・就業形態の比較結果が重複しています。")
+
+    observed_rates = summary_df["change_rate_pct"].dropna()
+
+    if not np.isfinite(observed_rates).all():
+        raise ValueError("変化率に無限大があります。")
 
     pivot_df = summary_df.pivot(
         index="indicator",
@@ -701,13 +738,32 @@ def compare_employment_change_rates(
 
     result = pivot_df.reset_index()
 
-    result["difference_pct_point"] = result["パートタイム労働者"] - result["一般労働者"]
-
-    result["larger_change"] = result["difference_pct_point"].map(
-        lambda diff: (
-            "パートタイム労働者" if diff > 0 else "一般労働者" if diff < 0 else "同程度"
-        )
+    result["difference_pct_point"] = (
+        result["パートタイム労働者"] - result["一般労働者"]
     )
+
+    comparable = result[
+        ["一般労働者", "パートタイム労働者"]
+    ].notna().all(axis=1)
+
+    difference = result["difference_pct_point"]
+
+    result["larger_change"] = "判定不可"
+
+    result.loc[
+        comparable & (difference > 0),
+        "larger_change",
+    ] = "パートタイム労働者"
+
+    result.loc[
+        comparable & (difference < 0),
+        "larger_change",
+    ] = "一般労働者"
+
+    result.loc[
+        comparable & (difference == 0),
+        "larger_change",
+    ] = "同程度"
 
     return result[
         [
@@ -721,11 +777,21 @@ def compare_employment_change_rates(
 
 
 # 7-2
-def describe_change_direction(
-    value: float,
-    tolerance: float = 0.1,
-) -> str:
-    """変化率を上昇・低下・横ばいに分類する。"""
+def describe_change_direction(value: float, tolerance: float = 0.1) -> str:
+    """変化率を上昇・低下・横ばいに分類し、欠測時は判定不可とする。"""
+
+    if (
+        pd.isna(tolerance)
+        or not np.isfinite(tolerance)
+        or tolerance < 0
+    ):
+        raise ValueError("許容幅は0以上の有限値である必要があります。")
+
+    if pd.isna(value):
+        return "判定不可"
+
+    if not np.isfinite(value):
+        raise ValueError("変化率は有限値である必要があります。")
 
     if value > tolerance:
         return "上昇"
