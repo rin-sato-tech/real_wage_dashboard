@@ -417,8 +417,9 @@ def add_real_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
 # ============================================================
 
 
+# 4-1
 def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
-    """月額賃金の前年同月変化を時間当たり賃金と労働時間に分解する。"""
+    """整合的な月次指標から、前年同月の対数変化を分解する。"""
 
     output_columns = {
         "nominal_wage_amount": "wage_log_change",
@@ -433,17 +434,49 @@ def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
 
     values = result[list(output_columns)]
 
+    # 欠測は保持するが、観測値は正の有限値に限定する。
     invalid = values.notna() & (
         (values <= 0) | ~np.isfinite(values)
     )
-
     if invalid.any().any():
         raise ValueError("要因分解には0より大きい有限の賃金・労働時間データが必要です。")
 
+    # 3指標がそろう行で、時間当たり賃金の定義を検証する。
+    complete = values.notna().all(axis=1)
+    expected_hourly = (
+        result.loc[complete, "nominal_wage_amount"]
+        / result.loc[complete, "working_hours"]
+    )
+
+    consistent = np.isclose(
+        result.loc[complete, "approx_hourly_wage"],
+        expected_hourly,
+        rtol=1e-10,
+        atol=1e-10,
+    )
+
+    if not consistent.all():
+        invalid_months = (
+            result.loc[complete, "date"]
+            .loc[~consistent]
+            .astype(str)
+            .tolist()
+        )
+        raise ValueError(
+            f"時間当たり賃金が月額賃金÷労働時間と一致しません: {invalid_months}"
+        )
+
+    # 当月・前年同月の全指標がそろう月だけ、3項を算出する。
+    valid_pair = (
+        values.notna().all(axis=1)
+        & previous.notna().all(axis=1)
+    )
+
     for column, output_column in output_columns.items():
-        result[output_column] = (
+        change = (
             np.log(result[column]) - np.log(previous[column])
         ) * 100
+        result[output_column] = change.where(valid_pair)
 
     return result
 
@@ -981,51 +1014,101 @@ def summarize_wage_change_decomposition(
     df: pd.DataFrame,
     start_year: int,
     end_year: int,
-) -> dict[str, float | int]:
-    """指定期間の月額賃金要因分解を要約する。"""
+    *,
+    target_months: list[str] | None = None,
+) -> dict[str, float | int | list[str]]:
+    """指定期間の分解を要約し、有効月・除外月を返す。"""
 
-    required_columns = {
-        "date",
+    if start_year > end_year:
+        raise ValueError("開始年は終了年以下にしてください。")
+
+    columns = [
         "wage_log_change",
         "hourly_wage_log_contribution",
         "working_hours_log_contribution",
-    }
+    ]
+    required = {"date", *columns}
 
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
+    missing = required - set(df.columns)
+    if missing:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
-    period_df = df[
-        (df["date"].dt.year >= start_year) & (df["date"].dt.year <= end_year)
-    ][
-        [
-            "date",
-            "wage_log_change",
-            "hourly_wage_log_contribution",
-            "working_hours_log_contribution",
-        ]
-    ].dropna()
+    if df["date"].isna().any():
+        raise ValueError("年月に欠損があります。")
 
-    if period_df.empty:
+    months = pd.PeriodIndex(df["date"], freq="M")
+    if months.has_duplicates:
+        raise ValueError("同じ年月のデータが重複しています。")
+
+    expected_months = pd.period_range(
+        start=f"{start_year}-01",
+        end=f"{end_year}-12",
+        freq="M",
+    )
+
+    monthly = df[columns].copy()
+    monthly.index = months
+    period_df = monthly.reindex(expected_months)
+
+    # 欠測以外の無限大等は、除外せずエラーにする。
+    invalid = period_df.notna() & ~np.isfinite(period_df)
+    if invalid.any().any():
+        raise ValueError("要因分解データに無限大があります。")
+
+    valid_df = period_df.dropna()
+
+    # 分解3項の恒等関係を確認する。
+    consistent = np.isclose(
+        valid_df["wage_log_change"],
+        (
+            valid_df["hourly_wage_log_contribution"]
+            + valid_df["working_hours_log_contribution"]
+        ),
+        rtol=1e-10,
+        atol=1e-8,
+    )
+    if not consistent.all():
+        raise ValueError("月額賃金の対数変化と各要因の合計が一致しません。")
+
+    if target_months is not None:
+        selected = pd.PeriodIndex(target_months, freq="M")
+
+        if selected.isna().any() or selected.has_duplicates:
+            raise ValueError("指定月に欠損または重複があります。")
+
+        if not selected.isin(expected_months).all():
+            raise ValueError("指定月に分析期間外の月があります。")
+
+        if not selected.isin(valid_df.index).all():
+            raise ValueError("指定月に分解不能な月があります。")
+
+        valid_df = valid_df.loc[selected.sort_values()]
+
+    if valid_df.empty:
         raise ValueError("指定期間に要因分解データがありません。")
 
-    hourly_abs = period_df["hourly_wage_log_contribution"].abs()
-    hours_abs = period_df["working_hours_log_contribution"].abs()
+    hourly = valid_df["hourly_wage_log_contribution"]
+    hours = valid_df["working_hours_log_contribution"]
+    excluded = expected_months.difference(valid_df.index)
 
     return {
-        "n_months": len(period_df),
-        "mean_wage_log_change": float(period_df["wage_log_change"].mean()),
-        "mean_hourly_wage_contribution": float(
-            period_df["hourly_wage_log_contribution"].mean()
+        "n_expected_months": len(expected_months),
+        "n_months": len(valid_df),
+        "n_excluded_months": len(excluded),
+        "valid_months": valid_df.index.astype(str).tolist(),
+        "excluded_months": excluded.astype(str).tolist(),
+        "mean_wage_log_change": float(
+            valid_df["wage_log_change"].mean()
         ),
-        "mean_working_hours_contribution": float(
-            period_df["working_hours_log_contribution"].mean()
-        ),
+        "mean_hourly_wage_contribution": float(hourly.mean()),
+        "mean_working_hours_contribution": float(hours.mean()),
         "hourly_positive_share_pct": float(
-            (period_df["hourly_wage_log_contribution"] > 0).mean() * 100
+            (hourly > 0).mean() * 100
         ),
         "hours_negative_share_pct": float(
-            (period_df["working_hours_log_contribution"] < 0).mean() * 100
+            (hours < 0).mean() * 100
         ),
-        "hourly_dominant_share_pct": float((hourly_abs > hours_abs).mean() * 100),
+        "hourly_dominant_share_pct": float(
+            (hourly.abs() > hours.abs()).mean() * 100
+        ),
     }

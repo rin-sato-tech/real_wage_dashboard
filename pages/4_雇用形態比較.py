@@ -14,7 +14,6 @@ from real_wage_dashboard.config import (
 )
 from real_wage_dashboard.cpi_service import create_cpi_dataframe
 from real_wage_dashboard.employment_analysis import (
-    create_employment_analysis_discussion,
     create_full_employment_analysis_dataframe,
     create_yearly_comparison_summary,
     summarize_wage_change_decomposition,
@@ -719,12 +718,56 @@ def main() -> None:
 
         st.markdown("#### 考察")
 
-        analysis_discussion = create_employment_analysis_discussion(
-            comparison_summary_df
+        st.caption(
+            "記述日：2026年9月9日 ｜ "
+            "対象：5人以上・調査産業計・CPI総合 ｜ "
+            "比較：2015年平均→2025年平均"
         )
 
-        for discussion in analysis_discussion:
-            st.write(discussion)
+        if (
+            establishment_size == "5人以上"
+            and selected_series == "総合"
+            and ANALYSIS_START_YEAR == 2015
+            and ANALYSIS_END_YEAR == 2025
+        ):
+            st.markdown(
+                """
+                名目月額賃金は、一般労働者で10.6%、パートタイム労働者で15.5%
+                上昇した。一方、総実労働時間はそれぞれ4.8%、11.2%減少し、
+                時間当たり賃金は16.2%、30.1%上昇した。
+                両者とも、時間当たり賃金の上昇率が月額賃金の上昇率を上回り、
+                特にパートタイム労働者でその違いが大きかった。
+
+                物価を考慮すると、実質月額賃金は一般労働者で2.9%低下し、
+                パートタイム労働者では1.4%上昇した。
+                実質時間当たり賃金は、それぞれ2.0%、14.2%上昇した。
+                一般労働者では月額と時間当たりで増減方向が異なり、
+                パートタイム労働者でも、実質月額賃金の改善は小幅にとどまった。
+
+                月次で各比率を計算してから平均する方法と、
+                年平均の賃金・労働時間・CPIから比率を計算する方法を比較したところ、
+                対象とした6項目の変化率の差は、すべて絶対値
+                0.01パーセントポイント未満だった。
+                今回の対象・比較期間では、集計順序を変えても主な結論は維持された。
+                ただし、公式の労働者数加重平均との比較は含まれない。
+
+                これらは各就業形態の集団平均の変化であり、
+                同じ労働者の賃上げや勤務時間の短縮を示すものではない。
+                時間当たり賃金も、月額賃金を実労働時間で割った概算値であり、
+                契約上の時給とは異なる。
+                また、この比較だけでは、賃金や労働時間が変化した原因は特定できない。
+
+                以上から、賃金変化を評価する際には、
+                一般・パートの違いに加え、月額と時間当たり、
+                名目と実質を区別する必要がある。
+                """
+            )
+        else:
+            st.info(
+                "この考察は、5人以上・CPI総合による"
+                "2015年平均から2025年平均の比較について記述したものです。"
+                "現在の選択条件に対応する考察は未掲載です。"
+            )
 
         general_wage_change = get_change_rate(
             comparison_summary_df,
@@ -1133,17 +1176,53 @@ def main() -> None:
         "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
     )
 
-    general_decomposition_summary = summarize_wage_change_decomposition(
+    # 各就業形態で、まず分解可能な月を確認する。
+    general_available = summarize_wage_change_decomposition(
         general_df,
         start_year=ANALYSIS_START_YEAR,
         end_year=ANALYSIS_END_YEAR,
     )
-
-    part_decomposition_summary = summarize_wage_change_decomposition(
+    part_available = summarize_wage_change_decomposition(
         part_df,
         start_year=ANALYSIS_START_YEAR,
         end_year=ANALYSIS_END_YEAR,
     )
+
+    common_months = sorted(
+        set(general_available["valid_months"])
+        & set(part_available["valid_months"])
+    )
+
+    if not common_months:
+        st.warning("一般・パートに共通する分解可能な月がありません。")
+        st.stop()
+
+    # 共通月だけを使い、比較用の要約を作成する。
+    general_decomposition_summary = summarize_wage_change_decomposition(
+        general_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+        target_months=common_months,
+    )
+    part_decomposition_summary = summarize_wage_change_decomposition(
+        part_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+        target_months=common_months,
+    )
+
+    n_expected = general_decomposition_summary["n_expected_months"]
+    excluded_months = general_decomposition_summary["excluded_months"]
+
+    st.caption(
+        f"期間要約の対象：一般・パート共通の{len(common_months)}か月"
+        f"／対象期間の{n_expected}か月。"
+        "各値は前年同月との対数変化に基づきます。"
+    )
+
+    if excluded_months:
+        with st.expander("期間要約から除外した月"):
+            st.write("、".join(excluded_months))
 
     st.altair_chart(
         create_decomposition_chart(
