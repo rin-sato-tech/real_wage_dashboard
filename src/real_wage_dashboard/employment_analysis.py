@@ -49,46 +49,40 @@ def merge_wage_and_working_hours(
     wage_df: pd.DataFrame,
     working_hours_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """月次賃金と労働時間を年月でone-to-one結合する。"""
+    """賃金の対象月を保持し、同じ年月の労働時間を左結合する。"""
 
-    wage_required = {
-        "date",
-        "nominal_wage_amount",
-    }
+    wage_required = {"date", "nominal_wage_amount"}
+    hours_required = {"date", "working_hours"}
 
-    hours_required = {
-        "date",
-        "working_hours",
-    }
-
-    # wage_dfとworking_hours_dfの必要列が揃っているか確認
-    if not wage_required.issubset(wage_df.columns):
-        missing = wage_required - set(wage_df.columns)
+    missing = wage_required - set(wage_df.columns)
+    if missing:
         raise ValueError(f"賃金データに必要な列がありません: {sorted(missing)}")
 
-    if not hours_required.issubset(working_hours_df.columns):
-        missing = hours_required - set(working_hours_df.columns)
+    missing = hours_required - set(working_hours_df.columns)
+    if missing:
         raise ValueError(f"労働時間データに必要な列がありません: {sorted(missing)}")
 
-    wage = wage_df[
-        [
-            "date",
-            "nominal_wage_amount",
-        ]
-    ].copy()
+    wage = wage_df[["date", "nominal_wage_amount"]].copy()
+    hours = working_hours_df[["date", "working_hours"]].copy()
 
-    hours = working_hours_df[
-        [
-            "date",
-            "working_hours",
-        ]
-    ].copy()
+    for label, frame in [
+        ("賃金データ", wage),
+        ("労働時間データ", hours),
+    ]:
+        if frame["date"].isna().any():
+            raise ValueError(f"{label}の年月に欠損があります。")
 
-    # wageとhoursを年月で結合, 重複のときはエラーを出す
+        months = pd.PeriodIndex(frame["date"], freq="M")
+        if months.has_duplicates:
+            raise ValueError(f"{label}に同じ年月の重複があります。")
+
+        # 日付の日部分を月初に統一する。
+        frame["date"] = months.to_timestamp()
+
     result = wage.merge(
         hours,
         on="date",
-        how="inner",
+        how="left",
         validate="one_to_one",
     )
 
@@ -140,15 +134,6 @@ def create_employment_analysis_dataframe(
     return result
 
 
-'''
-ここまでの列: [
-    'date',
-    'nominal_wage_amount',
-    'working_hours',
-    'approx_hourly_wage'
-]
-'''
-
 # ============================================================
 # 2. 名目指標の指数化・前年同月比
 # ============================================================
@@ -190,7 +175,7 @@ def add_base_year_index(
         not np.isfinite(base_values).all()
         or (base_values <= 0).any()
     ):
-        raise ValueError(f"基準年の値はすべて0より大きい有限値である必要があります。")
+        raise ValueError("基準年の値はすべて0より大きい有限値である必要があります。")
 
     # 基準年以外も無限大は認めない。欠測値は保持する。
     observed_values = result[column].dropna()
@@ -199,7 +184,7 @@ def add_base_year_index(
 
     base_value = base_values.mean()
     if not np.isfinite(base_value) or base_value <= 0:
-        raise ValueError(f"基準年平均は0より大きい有限値である必要があります。")
+        raise ValueError("基準年平均は0より大きい有限値である必要があります。")
 
     result[output_column] = result[column] / base_value * 100
 
@@ -255,16 +240,6 @@ def add_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
 
     return result
 
-
-'''
-ここまでの列: [
-    'date',
-    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
-    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
-    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct']
-]
-実数、2020年基準指数、前年同月比
-'''
 
 # ============================================================
 # 3. CPI結合・実質値の作成
@@ -329,7 +304,7 @@ def merge_employment_analysis_with_cpi(
 
 # 3-2
 def add_real_employment_values(df: pd.DataFrame) -> pd.DataFrame:
-    """CPIで実質月額賃金と実質概算時間当たり賃金を算出する。"""
+    """CPIで実質月額賃金と実質時間当たり賃金を算出する。"""
 
     required_columns = {
         "nominal_wage_amount",
@@ -337,14 +312,25 @@ def add_real_employment_values(df: pd.DataFrame) -> pd.DataFrame:
         "index_value",
     }
 
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
+    missing = required_columns - set(df.columns)
+    if missing:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     result = df.copy()
 
-    if (result["index_value"] <= 0).any():
-        raise ValueError("CPIには0より大きい値が必要です。")
+    # CPIの欠測値は保持するが、0以下や無限大はエラーとする。
+    observed_cpi = result["index_value"].dropna()
+    if (
+        not np.isfinite(observed_cpi).all()
+        or (observed_cpi <= 0).any()
+    ):
+        raise ValueError("CPIには0より大きい有限値が必要です。")
+
+    for column in ["nominal_wage_amount", "approx_hourly_wage"]:
+        observed_values = result[column].dropna()
+
+        if not np.isfinite(observed_values).all():
+            raise ValueError(f"賃金データに無限大があります: {column}")
 
     result["real_regular_wage"] = (
         result["nominal_wage_amount"] / result["index_value"] * 100
@@ -374,19 +360,6 @@ def add_real_employment_analysis(
     result = add_real_employment_values(result)
 
     return result
-
-
-'''
-ここまでの列: [
-    'date',
-    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
-    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
-    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct'],
-    'index_value',
-    ['real_regular_wage', 'real_approx_hourly_wage']
-]
-実数、2020年基準指数、前年同月比、CPI、実質値
-'''
 
 
 # 3-4
@@ -439,20 +412,6 @@ def add_real_employment_changes(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-'''
-ここまでの列（総数17列）: [
-    'date',
-    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
-    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
-    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct'],
-    'index_value',
-    ['real_regular_wage', 'real_approx_hourly_wage'],
-    ['real_regular_wage_index', 'real_approx_hourly_wage_index'],
-    ['real_regular_wage_yoy_pct', 'real_approx_hourly_wage_yoy_pct']
-]
-実数、2020年基準指数、前年同月比、CPI、実質値、実質2020年基準指数、実質前年同月比
-'''
-
 # ============================================================
 # 4. 月額賃金変化の要因分解
 # ============================================================
@@ -490,18 +449,32 @@ def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
 
 
 '''
-ここまでの列（総数20列）: [
-    'date',
-    ['nominal_wage_amount', 'working_hours', 'approx_hourly_wage',],
-    ['regular_wage_index', 'working_hours_index', 'approx_hourly_wage_index',],
-    ['regular_wage_yoy_pct', 'working_hours_yoy_pct', 'approx_hourly_wage_yoy_pct'],
-    'index_value',
-    ['real_regular_wage', 'real_approx_hourly_wage'],
-    ['real_regular_wage_index', 'real_approx_hourly_wage_index'],
-    ['real_regular_wage_yoy_pct', 'real_approx_hourly_wage_yoy_pct'],
-    ['wage_log_change', 'hourly_wage_log_contribution', 'working_hours_log_contribution']
-]
-実数、2020年基準指数、前年同月比、CPI、実質値、実質2020年基準指数、実質前年同月比、月額賃金変化の要因分解（対数差）
+ここまでの列（総数20列）:
+    # 基本指標
+    date, nominal_wage_amount, working_hours, approx_hourly_wage,
+
+    # CPI・実質値
+    index_value, real_regular_wage, real_approx_hourly_wage,
+
+    # 名目指標の基準年指数
+    regular_wage_index, working_hours_index, approx_hourly_wage_index
+
+    # 実質指標の基準年指数
+    real_regular_wage_index, real_approx_hourly_wage_index
+
+    # 名目指標の前年同月比（%）
+    regular_wage_yoy_pct, working_hours_yoy_pct, approx_hourly_wage_yoy_pct
+
+    # 実質指標の前年同月比（%）
+    real_regular_wage_yoy_pct, real_approx_hourly_wage_yoy_pct
+
+    # 月額賃金変化の要因分解（前年同月との自然対数差 × 100）
+    wage_log_change, hourly_wage_log_contribution, working_hours_log_contribution
+
+基準年指数は、指定した基準年の平均を100とする（既定：2020年）。
+CPI欠測月も保持し、その月の実質値・実質指数は欠損となる。
+前年同月比・要因分解は年月を照合し、必要な値が欠測なら欠損となる。
+ただし、基準年に必要な値が欠測している場合はエラーとする。
 '''
 
 # ============================================================
@@ -560,33 +533,41 @@ def calculate_yearly_averages(
     year: int,
     columns: list[str],
 ) -> dict[str, float]:
-    """指定年の12か月平均を算出する。"""
+    """指定年の有効な12か月について、各指標の単純平均を算出する。"""
 
-    required_columns = {
-        "date",
-        *columns,
-    }
+    required_columns = {"date", *columns}
 
-    # 必要列が揃っているか確認
-    if not required_columns.issubset(df.columns):
-        missing = required_columns - set(df.columns)
+    missing = required_columns - set(df.columns)
+    if missing:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
-    # 指定年のデータを抽出, 年平均を算出
-    year_df = df[df["date"].dt.year == year].copy()
+    if df["date"].isna().any():
+        raise ValueError("年月に欠損があります。")
 
-    months = year_df["date"].dt.to_period("M")
+    months = pd.PeriodIndex(df["date"], freq="M")
+    year_mask = months.year == year
 
-    if len(year_df) != 12 or months.nunique() != 12:
+    # 指定年のデータを抽出し、12か月揃っているか確認
+    year_df = df.loc[year_mask]
+    year_months = months[year_mask]
+    if len(year_df) != 12 or year_months.nunique() != 12:
         raise ValueError(f"{year}年のデータが12か月揃っていません。")
 
-    if year_df[columns].isna().any().any():
+    # 指定列の欠損・無限大をチェック
+    values = year_df[columns]
+    if values.isna().any().any():
         raise ValueError(f"{year}年の分析対象データに欠損値があります。")
+    if not np.isfinite(values).all().all():
+        raise ValueError(f"{year}年の分析対象データに無限大があります。")
 
-    # 各列の平均を辞書で返す
-    # 平均賃金の平均値を労働時間の平均値で割った値と、各月の概算時間当たり賃金の平均値は一致しない場合がある
-    return {column: float(year_df[column].mean()) for column in columns}
+    averages = values.mean()
+    if not np.isfinite(averages).all():
+        raise ValueError(f"{year}年の年平均を有限値として算出できません。")
 
+    return {
+        column: float(averages[column])
+        for column in columns
+    }
 
 '''
 {
@@ -599,18 +580,24 @@ def calculate_yearly_averages(
 
 
 # 6-2
-def calculate_change_rate(
-    start_value: float,
-    end_value: float,
-) -> float:
+def calculate_change_rate(start_value: float, end_value: float) -> float:
     """開始値から終了値までの変化率（%）を算出する。"""
+
+    if pd.isna(start_value) or pd.isna(end_value):
+        raise ValueError("開始値・終了値に欠損があります。")
+
+    if not np.isfinite(start_value) or not np.isfinite(end_value):
+        raise ValueError("開始値・終了値は有限値である必要があります。")
 
     if start_value <= 0:
         raise ValueError("開始値は0より大きい必要があります。")
 
-    # 年平均値を使って変化率を算出
-    return (end_value / start_value - 1) * 100
+    change_rate = (end_value / start_value - 1) * 100
 
+    if not np.isfinite(change_rate):
+        raise ValueError("変化率を有限値として算出できません。")
+
+    return float(change_rate)
 
 # 6-3
 def calculate_yearly_change_rates(
@@ -807,15 +794,33 @@ def create_employment_analysis_discussion(
     summary_df: pd.DataFrame,
     tolerance: float = 0.1,
 ) -> list[str]:
-    """一般労働者とパートタイム労働者の比較結果から総合考察を生成する。"""
+    """一般・パートの比較結果から、観測事実に基づく考察を生成する。"""
+
+    required_columns = {
+        "employment_type",
+        "indicator",
+        "change_rate_pct",
+    }
+
+    missing = required_columns - set(summary_df.columns)
+    if missing:
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
+
+    if (
+        pd.isna(tolerance)
+        or not np.isfinite(tolerance)
+        or tolerance < 0
+    ):
+        raise ValueError("許容幅は0以上の有限値である必要があります。")
 
     def get_rate(
         employment_type: str,
         indicator: str,
     ) -> float:
-        matched = summary_df[
+        matched = summary_df.loc[
             (summary_df["employment_type"] == employment_type)
-            & (summary_df["indicator"] == indicator)
+            & (summary_df["indicator"] == indicator),
+            "change_rate_pct",
         ]
 
         if len(matched) != 1:
@@ -823,86 +828,145 @@ def create_employment_analysis_discussion(
                 f"比較結果を一意に取得できません: {employment_type}, {indicator}"
             )
 
-        return float(matched.iloc[0]["change_rate_pct"])
+        value = matched.iloc[0]
 
-    general_wage = get_rate(
-        "一般労働者",
-        "nominal_wage_amount",
-    )
-    part_wage = get_rate(
-        "パートタイム労働者",
-        "nominal_wage_amount",
-    )
+        if pd.isna(value):
+            return float("nan")
 
-    general_hours = get_rate(
-        "一般労働者",
-        "working_hours",
-    )
-    part_hours = get_rate(
-        "パートタイム労働者",
-        "working_hours",
-    )
+        if not np.isfinite(value):
+            raise ValueError(
+                f"変化率は有限値である必要があります: {employment_type}, {indicator}"
+            )
 
-    general_hourly = get_rate(
-        "一般労働者",
-        "approx_hourly_wage",
-    )
-    part_hourly = get_rate(
-        "パートタイム労働者",
-        "approx_hourly_wage",
-    )
+        return float(value)
 
-    general_real_wage = get_rate(
-        "一般労働者",
-        "real_regular_wage",
-    )
-    part_real_wage = get_rate(
-        "パートタイム労働者",
-        "real_regular_wage",
-    )
+    indicators = {
+        "wage": "nominal_wage_amount",
+        "hours": "working_hours",
+        "hourly": "approx_hourly_wage",
+        "real_wage": "real_regular_wage",
+    }
+
+    rates = {
+        employment_type: {
+            key: get_rate(employment_type, indicator)
+            for key, indicator in indicators.items()
+        }
+        for employment_type in [
+            "一般労働者",
+            "パートタイム労働者",
+        ]
+    }
 
     discussions = []
 
-    if (
-        general_hourly > tolerance
-        and part_hourly > tolerance
-        and general_hours < -tolerance
-        and part_hours < -tolerance
-    ):
-        discussions.append(
-            "両就業形態とも、時間当たり賃金が上昇する一方で"
-            "総実労働時間は減少しています。"
-            "このため、時間当たり賃金の改善が月額賃金を押し上げる一方、"
-            "労働時間の減少はその伸びを抑える方向に働いたと考えられます。"
-        )
+    # 1. 各就業形態で、時間当たり賃金と労働時間の方向を確認する。
+    for employment_type, values in rates.items():
+        hourly = values["hourly"]
+        hours = values["hours"]
+        wage = values["wage"]
 
-    hourly_difference = part_hourly - general_hourly
-    hours_difference = part_hours - general_hours
-
-    if hourly_difference > tolerance:
-        text = "特にパートタイム労働者では、一般労働者より時間当たり賃金の伸びが大きく"
-
-        if hours_difference < -tolerance:
-            text += (
-                "、同時に労働時間の減少も大きいため、"
-                "時間当たり賃金の改善ほど月額賃金は伸びていません。"
+        if (
+            pd.notna(hourly)
+            and pd.notna(hours)
+            and hourly > tolerance
+            and hours < -tolerance
+        ):
+            discussions.append(
+                f"{employment_type}では、時間当たり賃金が上昇する一方、"
+                "総実労働時間は減少しています。"
             )
-        else:
-            text += "なっています。"
 
-        discussions.append(text)
+        # 月額賃金との大小関係を直接確認する。
+        if (
+            pd.notna(hourly)
+            and pd.notna(wage)
+            and hourly > tolerance
+            and wage < hourly - tolerance
+        ):
+            discussions.append(
+                f"{employment_type}の月額賃金の変化率は、"
+                "時間当たり賃金の変化率を下回っています。"
+            )
 
+    # 2. 一般・パートの時間当たり賃金の変化率を比較する。
+    general = rates["一般労働者"]
+    part = rates["パートタイム労働者"]
+
+    if pd.notna(general["hourly"]) and pd.notna(part["hourly"]):
+        difference = part["hourly"] - general["hourly"]
+
+        if difference > tolerance:
+            discussions.append(
+                "パートタイム労働者の時間当たり賃金の変化率は、"
+                "一般労働者を上回っています。"
+            )
+        elif difference < -tolerance:
+            discussions.append(
+                "一般労働者の時間当たり賃金の変化率は、"
+                "パートタイム労働者を上回っています。"
+            )
+
+    # 3. 両者とも労働時間が減っている場合だけ、減少幅を比較する。
     if (
-        general_wage > tolerance
-        and part_wage > tolerance
-        and general_real_wage < general_wage - tolerance
-        and part_real_wage < part_wage - tolerance
+        pd.notna(general["hours"])
+        and pd.notna(part["hours"])
+        and general["hours"] < -tolerance
+        and part["hours"] < -tolerance
     ):
+        difference = part["hours"] - general["hours"]
+
+        if difference < -tolerance:
+            discussions.append(
+                "総実労働時間の減少率は、"
+                "パートタイム労働者の方が大きくなっています。"
+            )
+        elif difference > tolerance:
+            discussions.append(
+                "総実労働時間の減少率は、"
+                "一般労働者の方が大きくなっています。"
+            )
+
+    # 4. 各就業形態の名目・実質月額賃金を比較する。
+    for employment_type, values in rates.items():
+        wage = values["wage"]
+        real_wage = values["real_wage"]
+
+        if pd.notna(wage) and pd.notna(real_wage):
+            if real_wage < wage - tolerance:
+                discussions.append(
+                    f"{employment_type}では、物価調整後の実質月額賃金の"
+                    "変化率が、名目月額賃金の変化率を下回っています。"
+                )
+
+        if pd.notna(real_wage):
+            direction = describe_change_direction(
+                real_wage,
+                tolerance=tolerance,
+            )
+            discussions.append(
+                f"{employment_type}の実質月額賃金は、"
+                f"比較開始年に対して{direction}です。"
+            )
+
+    # 5. 欠測による考察の省略を明示する。
+    has_missing = any(
+        pd.isna(value)
+        for values in rates.values()
+        for value in values.values()
+    )
+
+    if has_missing:
         discussions.append(
-            "また、両就業形態とも名目月額賃金の伸びに比べて"
-            "実質月額賃金の伸びは小さく、"
-            "物価上昇によって名目賃金の改善の一部が相殺されています。"
+            "一部の指標が欠測しているため、"
+            "該当する指標についての考察は省略しています。"
         )
+
+    discussions.append(
+        "これらは集団平均の変化であり、"
+        "同一労働者の賃上げや労働時間の変化、"
+        "それらの原因を直接示すものではありません。"
+    )
 
     return discussions
 
