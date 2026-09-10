@@ -1,6 +1,14 @@
 import altair as alt
 import pandas as pd
 import streamlit as st
+import hashlib
+import io
+import json
+import platform
+from datetime import datetime, timezone
+from importlib.metadata import version
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from real_wage_dashboard.config import (
     CPI_BASE_FILTERS,
@@ -42,11 +50,11 @@ ANALYSIS_INDICATORS = [
 ]
 
 ANALYSIS_INDICATOR_LABELS = {
-    "nominal_wage_amount": "月額賃金",
+    "nominal_wage_amount": "名目月額賃金",
     "working_hours": "総実労働時間",
-    "approx_hourly_wage": "概算時間当たり賃金",
+    "approx_hourly_wage": "時間当たり賃金",
     "real_regular_wage": "実質月額賃金",
-    "real_approx_hourly_wage": "実質概算時間当たり賃金",
+    "real_approx_hourly_wage": "実質時間当たり賃金",
 }
 
 ANALYSIS_INDICATOR_UNITS = {
@@ -468,11 +476,15 @@ def create_change_summary_display(
         ]
     ].copy()
 
-    result = change_df.pivot(
-        index="indicator",
-        columns="employment_type",
-        values="change_rate_pct",
-    ).reset_index()
+    result = (
+        change_df.pivot(
+            index="indicator",
+            columns="employment_type",
+            values="change_rate_pct",
+        )
+        .reindex(ANALYSIS_INDICATORS)
+        .reset_index()
+    )
 
     result["指標"] = result["indicator"].map(ANALYSIS_INDICATOR_LABELS)
 
@@ -578,15 +590,6 @@ def main() -> None:
         "月額賃金・労働時間・概算時間当たり賃金・実質購買力の推移を比較します。"
     )
 
-    st.markdown(
-        """
-    ### 問い
-
-    **一般労働者とパートタイム労働者では、賃金・労働時間・
-    時間当たり賃金・実質購買力がどのように異なる推移をしてきたか。**
-    """
-    )
-
     # -------------------------
     # 分析条件
     # -------------------------
@@ -669,7 +672,10 @@ def main() -> None:
         f"{general_df['date'].max().strftime('%Y年%m月')}"
     )
 
-    st.subheader("2015年から2025年の変化")
+    st.subheader(
+        f"主要結果：{ANALYSIS_START_YEAR}年から"
+        f"{ANALYSIS_END_YEAR}年の変化"
+    )
 
     try:
         comparison_summary_df = create_yearly_comparison_summary(
@@ -685,8 +691,6 @@ def main() -> None:
         st.stop()
 
     else:
-        st.markdown("#### 分析結果")
-
         change_summary_df = create_change_summary_display(comparison_summary_df)
 
         st.dataframe(
@@ -703,7 +707,7 @@ def main() -> None:
                     format="%+.1f%%",
                 ),
                 "差（pt）": st.column_config.NumberColumn(
-                    "パート － 一般",
+                    "パート－一般（ポイント）",
                     format="%+.1f",
                 ),
             },
@@ -715,6 +719,66 @@ def main() -> None:
             "「パート－一般」は変化率の差（%ポイント）であり、"
             "賃金額そのものの差ではありません。"
         )
+
+        analysis_display_df = comparison_summary_df.copy()
+
+        analysis_display_df["指標"] = analysis_display_df["indicator"].map(
+            ANALYSIS_INDICATOR_LABELS
+        )
+
+        analysis_display_df["単位"] = analysis_display_df["indicator"].map(
+            ANALYSIS_INDICATOR_UNITS
+        )
+
+        analysis_display_df["就業形態"] = analysis_display_df["employment_type"]
+
+        analysis_display_df[f"{ANALYSIS_START_YEAR}年平均"] = analysis_display_df[
+            "start_value"
+        ]
+
+        analysis_display_df[f"{ANALYSIS_END_YEAR}年平均"] = analysis_display_df[
+            "end_value"
+        ]
+
+        analysis_display_df["変化率"] = analysis_display_df["change_rate_pct"]
+
+        analysis_display_df = analysis_display_df[
+            [
+                "指標",
+                "就業形態",
+                "単位",
+                f"{ANALYSIS_START_YEAR}年平均",
+                f"{ANALYSIS_END_YEAR}年平均",
+                "変化率",
+            ]
+        ]
+
+        with st.expander(
+            f"{ANALYSIS_START_YEAR}年・"
+            f"{ANALYSIS_END_YEAR}年の年平均を確認",
+            expanded=False,
+        ):
+            st.dataframe(
+                analysis_display_df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    f"{ANALYSIS_START_YEAR}年平均": st.column_config.NumberColumn(
+                        format="%.1f",
+                    ),
+                    f"{ANALYSIS_END_YEAR}年平均": st.column_config.NumberColumn(
+                        format="%.1f",
+                    ),
+                    "変化率": st.column_config.NumberColumn(
+                        format="%+.1f%%",
+                    ),
+                },
+            )
+
+            st.caption(
+                "実質値は選択中のCPI系列を用いて実質化しています。"
+                "「2020年価格換算」はCPIの2020年基準に対応した表記です。"
+            )
 
         st.markdown("#### 考察")
 
@@ -829,66 +893,6 @@ def main() -> None:
             "real_approx_hourly_wage",
         )
 
-        st.markdown("#### 年平均の詳細")
-
-        analysis_display_df = comparison_summary_df.copy()
-
-        analysis_display_df["指標"] = analysis_display_df["indicator"].map(
-            ANALYSIS_INDICATOR_LABELS
-        )
-
-        analysis_display_df["単位"] = analysis_display_df["indicator"].map(
-            ANALYSIS_INDICATOR_UNITS
-        )
-
-        analysis_display_df["就業形態"] = analysis_display_df["employment_type"]
-
-        analysis_display_df[f"{ANALYSIS_START_YEAR}年平均"] = analysis_display_df[
-            "start_value"
-        ]
-
-        analysis_display_df[f"{ANALYSIS_END_YEAR}年平均"] = analysis_display_df[
-            "end_value"
-        ]
-
-        analysis_display_df["変化率"] = analysis_display_df["change_rate_pct"]
-
-        analysis_display_df = analysis_display_df[
-            [
-                "指標",
-                "就業形態",
-                "単位",
-                f"{ANALYSIS_START_YEAR}年平均",
-                f"{ANALYSIS_END_YEAR}年平均",
-                "変化率",
-            ]
-        ]
-
-        with st.expander(
-            f"{ANALYSIS_START_YEAR}年・{ANALYSIS_END_YEAR}年の年平均を確認"
-        ):
-            st.dataframe(
-                analysis_display_df,
-                width="stretch",
-                hide_index=True,
-                column_config={
-                    f"{ANALYSIS_START_YEAR}年平均": st.column_config.NumberColumn(
-                        format="%.1f",
-                    ),
-                    f"{ANALYSIS_END_YEAR}年平均": st.column_config.NumberColumn(
-                        format="%.1f",
-                    ),
-                    "変化率": st.column_config.NumberColumn(
-                        format="%+.1f%%",
-                    ),
-                },
-            )
-
-            st.caption(
-                "実質値は選択中のCPI系列を用いて実質化しています。"
-                "「2020年価格換算」はCPIの2020年基準に対応した表記です。"
-            )
-
         # 集計順序による変化率の違いを確認する。
         sensitivity_rows = []
 
@@ -971,6 +975,116 @@ def main() -> None:
             )
 
         st.divider()
+
+    st.subheader("期間別の変化")
+
+    comparison_periods = [
+        (2015, 2019),
+        (2019, 2020),
+        (2020, 2025),
+        (2019, 2025),
+    ]
+
+    period_results = []
+
+    try:
+        for start_year, end_year in comparison_periods:
+            result = create_yearly_comparison_summary(
+                general_df,
+                part_df,
+                start_year=start_year,
+                end_year=end_year,
+                columns=ANALYSIS_INDICATORS,
+            )
+
+            # 年率換算には、正の開始値・終了値を使用する。
+            if (
+                result[["start_value", "end_value"]] <= 0
+            ).any().any():
+                raise ValueError(
+                    f"{start_year}→{end_year}年の"
+                    "年率換算には正の開始値・終了値が必要です。"
+                )
+
+            years = end_year - start_year
+            result["annualized_change_pct"] = (
+                (
+                    result["end_value"]
+                    / result["start_value"]
+                ) ** (1 / years)
+                - 1
+            ) * 100
+
+            result["period"] = f"{start_year}→{end_year}"
+            period_results.append(result)
+
+        period_comparison_df = pd.concat(
+            period_results,
+            ignore_index=True,
+        )
+
+    except ValueError as exc:
+        st.error(f"期間別比較を作成できませんでした：{exc}")
+        st.stop()
+
+    period_labels = {
+        "nominal_wage_amount": "名目月額賃金",
+        "working_hours": "総実労働時間",
+        "approx_hourly_wage": "時間当たり賃金",
+        "real_regular_wage": "実質月額賃金",
+        "real_approx_hourly_wage": "実質時間当たり賃金",
+    }
+
+    for employment_type in [
+        "一般労働者",
+        "パートタイム労働者",
+    ]:
+        selected = period_comparison_df.loc[
+            period_comparison_df["employment_type"]
+            == employment_type
+        ]
+
+        st.markdown(f"#### {employment_type}")
+
+        for value_column, title in [
+            ("change_rate_pct", "期間全体の変化率（%）"),
+            ("annualized_change_pct", "年率換算（%／年）"),
+        ]:
+            table = selected.pivot(
+                index="indicator",
+                columns="period",
+                values=value_column,
+            ).reindex(
+                index=ANALYSIS_INDICATORS,
+                columns=[
+                    f"{start}→{end}"
+                    for start, end in comparison_periods
+                ],
+            )
+
+            table.index = table.index.map(period_labels)
+            table.index.name = "指標"
+
+            st.caption(title)
+            st.dataframe(table.style.format("{:+.2f}"))
+
+    st.caption(
+        "各年12か月の月次値を単純平均して比較しています。"
+        "年率換算は（終了値÷開始値）"
+        "の経過年数乗根から1を引いて算出した値です。"
+        "各年の実際の変化率の平均ではありません。"
+        "2019→2025年は他の期間と重なる補足比較です。"
+    )
+
+    st.download_button(
+        "期間別比較のCSVをダウンロード",
+        data=period_comparison_df.to_csv(
+            index=False,
+            float_format="%.17g",
+        ).encode("utf-8-sig"),
+        file_name="employment_period_comparison.csv",
+        mime="text/csv",
+    )
 
     st.subheader("時系列推移")
 
@@ -1482,6 +1596,143 @@ def main() -> None:
     """
     )
 
+    st.subheader("再計算記録の保存")
+
+    st.caption(
+        "今回の計算に使用したデータ、丸め前の結果、保存済みのコードをZIPで保存します。"
+    )
+
+    # ダウンロード操作による不要な再実行を避ける。
+    @st.fragment
+    def render_snapshot_download():
+        if st.button("再計算記録のZIPを作成"):
+            captured_at = datetime.now(timezone.utc)
+            timestamp = captured_at.strftime("%Y%m%dT%H%M%SZ")
+            project_root = Path(__file__).resolve().parents[1]
+
+            files = {}
+
+            def add_dataframe(name, frame):
+                files[name] = frame.to_csv(
+                    index=False,
+                    float_format="%.17g",
+                ).encode("utf-8-sig")
+
+            # ディスク上のCSVではなく、実際に計算へ渡した
+            # 読込済みDataFrameを保存する。
+            add_dataframe("inputs/raw_wage_loaded.csv", raw_df)
+            add_dataframe("inputs/cpi_used.csv", cpi_df)
+
+            add_dataframe("outputs/general_monthly.csv", general_df)
+            add_dataframe("outputs/part_monthly.csv", part_df)
+            add_dataframe(
+                "outputs/yearly_comparison.csv",
+                comparison_summary_df,
+            )
+            add_dataframe(
+                "outputs/aggregation_sensitivity.csv",
+                pd.DataFrame(sensitivity_rows),
+            )
+
+            # 保存済みのソースと依存関係を収録する。
+            source_paths = sorted(
+                (project_root / "src").rglob("*.py")
+            )
+            source_paths.append(Path(__file__).resolve())
+
+            for filename in ["pyproject.toml", "uv.lock"]:
+                path = project_root / filename
+                if path.exists():
+                    source_paths.append(path)
+
+            for path in source_paths:
+                relative = path.relative_to(project_root).as_posix()
+                files[f"code/{relative}"] = path.read_bytes()
+
+            metadata = {
+                "snapshot_created_at_utc": captured_at.isoformat(),
+                "analysis_conditions": {
+                    "industry": "調査産業計",
+                    "establishment_size": establishment_size,
+                    "establishment_size_code": selected_size_code,
+                    "employment_types": {
+                        "1": "一般労働者",
+                        "2": "パートタイム労働者",
+                    },
+                    "wage_item": "きまって支給する給与",
+                    "working_hours_item": "総実労働時間",
+                    "start_year": ANALYSIS_START_YEAR,
+                    "end_year": ANALYSIS_END_YEAR,
+                    "index_base_year": WAGE_BASE_YEAR,
+                    "annual_aggregation": "monthly_arithmetic_mean",
+                },
+                "cpi": {
+                    "series": selected_series,
+                    "stats_data_id": CPI_STATS_DATA_ID,
+                    "filters": {
+                        **CPI_BASE_FILTERS,
+                        "cdCat01": selected_series_code,
+                    },
+                    "retrieved_at": None,
+                    "note": (
+                        "取得日時は未記録。保存日時とは区別する。"
+                        "実際に使用した整形済み月次データを収録。"
+                    ),
+                },
+                "wage_input": {
+                    "configured_path": str(WAGE_DATA_PATH),
+                    "retrieved_at": None,
+                    "note": (
+                        "原本CSVのバイト列ではなく、"
+                        "実際に使用した読込済みDataFrameを収録。"
+                    ),
+                },
+                "runtime": {
+                    "python": platform.python_version(),
+                    "packages": {
+                        name: version(name)
+                        for name in [
+                            "pandas",
+                            "numpy",
+                            "streamlit",
+                            "altair",
+                            "requests",
+                        ]
+                    },
+                },
+                "source_note": (
+                    "ZIP作成時の保存済みソースを収録。"
+                    "編集内容を保存し、アプリを再起動してから作成する。"
+                ),
+                "files": {
+                    name: {
+                        "sha256": hashlib.sha256(data).hexdigest(),
+                        "bytes": len(data),
+                    }
+                    for name, data in files.items()
+                },
+            }
+
+            files["metadata.json"] = json.dumps(
+                metadata,
+                ensure_ascii=False,
+                indent=2,
+            ).encode("utf-8")
+
+            buffer = io.BytesIO()
+            with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+                for name, data in files.items():
+                    archive.writestr(name, data)
+
+            st.download_button(
+                "再計算記録のZIPをダウンロード",
+                data=buffer.getvalue(),
+                file_name=f"employment_snapshot_{timestamp}.zip",
+                mime="application/zip",
+                on_click="ignore",
+            )
+
+    render_snapshot_download()
 
 if __name__ == "__main__":
     main()
