@@ -128,12 +128,12 @@ CORPORATE_ANALYSIS_START_YEAR = 2015
 CORPORATE_ANALYSIS_END_YEAR = 2024
 
 LFS_WORKING_HOURS_DISTRIBUTION_BASE_FILTERS = {
-    "cdTab": "01",       # 実数(人口)
-    "cdCat01": "0",      # 性別：総数
-    "cdCat03": "03",     # 就業状態：従業者
-    "cdCat05": "000",    # 産業：全産業
-    "cdCat06": "00",     # 従業上の地位：総数
-    "cdArea": "00000",   # 全国
+    "cdTab": "01",  # 実数(人口)
+    "cdCat01": "0",  # 性別：総数
+    "cdCat03": "03",  # 就業状態：従業者
+    "cdCat05": "000",  # 産業：全産業
+    "cdCat06": "00",  # 従業上の地位：総数
+    "cdArea": "00000",  # 全国
 }
 
 LFS_WORKING_HOURS_AGE_CODES = {

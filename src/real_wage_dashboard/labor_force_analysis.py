@@ -298,32 +298,20 @@ def create_working_hours_distribution_change(
         "unclassified_share",
     ]
 
-    start = (
-        df.loc[
-            df["year"] == start_year,
-            columns,
-        ]
-        .rename(
-            columns={
-                column: f"start_{column}"
-                for column in columns
-                if column != "age_group"
-            }
-        )
+    start = df.loc[
+        df["year"] == start_year,
+        columns,
+    ].rename(
+        columns={
+            column: f"start_{column}" for column in columns if column != "age_group"
+        }
     )
 
-    end = (
-        df.loc[
-            df["year"] == end_year,
-            columns,
-        ]
-        .rename(
-            columns={
-                column: f"end_{column}"
-                for column in columns
-                if column != "age_group"
-            }
-        )
+    end = df.loc[
+        df["year"] == end_year,
+        columns,
+    ].rename(
+        columns={column: f"end_{column}" for column in columns if column != "age_group"}
     )
 
     result = start.merge(
@@ -341,23 +329,19 @@ def create_working_hours_distribution_change(
         share_column = f"{name}_harmonized_share"
 
         result[f"{name}_share_change_pt"] = (
-            result[f"end_{share_column}"]
-            - result[f"start_{share_column}"]
+            result[f"end_{share_column}"] - result[f"start_{share_column}"]
         ) * 100
 
     result["persons_at_work_change"] = (
-        result["end_persons_at_work"]
-        - result["start_persons_at_work"]
+        result["end_persons_at_work"] - result["start_persons_at_work"]
     )
 
     result["hours_1_34_workers_change"] = (
-        result["end_hours_1_34_harmonized"]
-        - result["start_hours_1_34_harmonized"]
+        result["end_hours_1_34_harmonized"] - result["start_hours_1_34_harmonized"]
     )
 
     result["hours_35_48_workers_change"] = (
-        result["end_hours_35_48_harmonized"]
-        - result["start_hours_35_48_harmonized"]
+        result["end_hours_35_48_harmonized"] - result["start_hours_35_48_harmonized"]
     )
 
     result["hours_49_plus_workers_change"] = (
@@ -386,9 +370,7 @@ def create_working_hours_distribution_trend(
     missing = required_columns - set(df.columns)
 
     if missing:
-        raise ValueError(
-            f"必要な列がありません: {sorted(missing)}"
-        )
+        raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
     result = (
         df.loc[
@@ -424,14 +406,10 @@ def create_working_hours_distribution_period_summary(
             end_year=end_year,
         )
 
-        matched = result.loc[
-            result["age_group"] == age_group
-        ]
+        matched = result.loc[result["age_group"] == age_group]
 
         if len(matched) != 1:
-            raise ValueError(
-                f"年齢階級を一意に取得できません: {age_group}"
-            )
+            raise ValueError(f"年齢階級を一意に取得できません: {age_group}")
 
         row = matched.iloc[0]
 
@@ -439,15 +417,9 @@ def create_working_hours_distribution_period_summary(
             {
                 "start_year": start_year,
                 "end_year": end_year,
-                "hours_1_34_change_pt": (
-                    row["hours_1_34_share_change_pt"]
-                ),
-                "hours_35_48_change_pt": (
-                    row["hours_35_48_share_change_pt"]
-                ),
-                "hours_49_plus_change_pt": (
-                    row["hours_49_plus_share_change_pt"]
-                ),
+                "hours_1_34_change_pt": (row["hours_1_34_share_change_pt"]),
+                "hours_35_48_change_pt": (row["hours_35_48_share_change_pt"]),
+                "hours_49_plus_change_pt": (row["hours_49_plus_share_change_pt"]),
             }
         )
 
@@ -471,10 +443,7 @@ def create_detailed_working_hours_distribution_change(
         "hours_60_plus",
     ]
 
-    share_columns = [
-        f"{column}_share"
-        for column in detail_columns
-    ]
+    share_columns = [f"{column}_share" for column in detail_columns]
 
     columns = [
         "age_group",
@@ -484,32 +453,20 @@ def create_detailed_working_hours_distribution_change(
         "detailed_coverage",
     ]
 
-    start = (
-        df.loc[
-            df["year"] == start_year,
-            columns,
-        ]
-        .rename(
-            columns={
-                column: f"start_{column}"
-                for column in columns
-                if column != "age_group"
-            }
-        )
+    start = df.loc[
+        df["year"] == start_year,
+        columns,
+    ].rename(
+        columns={
+            column: f"start_{column}" for column in columns if column != "age_group"
+        }
     )
 
-    end = (
-        df.loc[
-            df["year"] == end_year,
-            columns,
-        ]
-        .rename(
-            columns={
-                column: f"end_{column}"
-                for column in columns
-                if column != "age_group"
-            }
-        )
+    end = df.loc[
+        df["year"] == end_year,
+        columns,
+    ].rename(
+        columns={column: f"end_{column}" for column in columns if column != "age_group"}
     )
 
     result = start.merge(
@@ -521,13 +478,11 @@ def create_detailed_working_hours_distribution_change(
 
     for column in detail_columns:
         result[f"{column}_share_change_pt"] = (
-            result[f"end_{column}_share"]
-            - result[f"start_{column}_share"]
+            result[f"end_{column}_share"] - result[f"start_{column}_share"]
         ) * 100
 
         result[f"{column}_workers_change"] = (
-            result[f"end_{column}"]
-            - result[f"start_{column}"]
+            result[f"end_{column}"] - result[f"start_{column}"]
         )
 
     return result
