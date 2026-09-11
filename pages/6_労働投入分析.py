@@ -9,6 +9,7 @@ from real_wage_dashboard.labor_input_analysis import (
     add_working_hours_decomposition,
     add_year_over_year_pct,
     create_labor_input_dataframe,
+    create_rolling_labor_input_decomposition,
     create_yearly_labor_input_summary,
     summarize_long_term_scheduled_hours_decomposition,
     summarize_long_term_wage_decomposition,
@@ -18,6 +19,8 @@ from real_wage_dashboard.wage_service import load_wage_csv
 
 ANALYSIS_START_YEAR = 2015
 ANALYSIS_END_YEAR = 2025
+LONG_TERM_START_YEAR = 1990
+ROLLING_WINDOW_YEARS = 10
 
 st.set_page_config(
     page_title="労働投入分析",
@@ -189,11 +192,12 @@ def create_working_hours_decomposition_chart(yearly_df: pd.DataFrame) -> alt.Cha
 def create_scheduled_hours_index_chart(
     yearly_df: pd.DataFrame,
     base_year: int = 2015,
+    end_year: int = 2025,
 ) -> alt.Chart:
     """所定内労働時間関連指標を基準年=100で比較する。"""
 
     chart_df = yearly_df.loc[
-        yearly_df["year"].between(base_year, 2025),
+        yearly_df["year"].between(base_year, end_year),
         [
             "year",
             "scheduled_hours",
@@ -412,6 +416,184 @@ def create_cumulative_working_hours_decomposition_chart(
     )
 
 
+def create_long_term_working_hours_chart(
+    yearly_df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+) -> alt.Chart:
+    """総実・所定内・所定外労働時間の長期推移を表示する。"""
+
+    chart_df = yearly_df.loc[
+        yearly_df["year"].between(start_year, end_year),
+        [
+            "year",
+            "total_hours",
+            "scheduled_hours",
+            "overtime_hours",
+        ],
+    ].copy()
+
+    chart_df = chart_df.melt(
+        id_vars="year",
+        value_vars=[
+            "total_hours",
+            "scheduled_hours",
+            "overtime_hours",
+        ],
+        var_name="指標",
+        value_name="時間",
+    )
+
+    chart_df["指標"] = chart_df["指標"].replace(
+        {
+            "total_hours": "総実労働時間",
+            "scheduled_hours": "所定内労働時間",
+            "overtime_hours": "所定外労働時間",
+        }
+    )
+
+    return (
+        alt.Chart(chart_df)
+        .mark_line(
+            point=True,
+        )
+        .encode(
+            x=alt.X(
+                "year:Q",
+                title="年",
+                axis=alt.Axis(format="d"),
+            ),
+            y=alt.Y(
+                "時間:Q",
+                title="月間労働時間",
+                scale=alt.Scale(zero=False),
+            ),
+            color=alt.Color(
+                "指標:N",
+                title="指標",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "year:Q",
+                    title="年",
+                    format="d",
+                ),
+                alt.Tooltip(
+                    "指標:N",
+                    title="指標",
+                ),
+                alt.Tooltip(
+                    "時間:Q",
+                    title="時間",
+                    format=".1f",
+                ),
+            ],
+        )
+        .properties(
+            height=400,
+        )
+    )
+
+
+def create_rolling_scheduled_hours_decomposition_chart(
+    rolling_df: pd.DataFrame,
+) -> alt.Chart:
+    """10年間の所定内労働時間変化を出勤日数と1日当たり時間へ分解する。"""
+
+    chart_df = rolling_df[
+        [
+            "start_year",
+            "end_year",
+            "working_days_log_contribution",
+            "hours_per_workday_log_contribution",
+        ]
+    ].copy()
+
+    chart_df = chart_df.melt(
+        id_vars=[
+            "start_year",
+            "end_year",
+        ],
+        value_vars=[
+            "working_days_log_contribution",
+            "hours_per_workday_log_contribution",
+        ],
+        var_name="要因",
+        value_name="寄与",
+    )
+
+    chart_df["要因"] = chart_df["要因"].replace(
+        {
+            "working_days_log_contribution": "出勤日数",
+            "hours_per_workday_log_contribution": ("1出勤日当たり所定内労働時間"),
+        }
+    )
+
+    lines = (
+        alt.Chart(chart_df)
+        .mark_line(
+            point=True,
+            strokeWidth=2.5,
+        )
+        .encode(
+            x=alt.X(
+                "end_year:Q",
+                title="10年間比較の終了年",
+                axis=alt.Axis(format="d"),
+            ),
+            y=alt.Y(
+                "寄与:Q",
+                title="所定内労働時間の対数変化への寄与",
+            ),
+            color=alt.Color(
+                "要因:N",
+                title="要因",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "start_year:Q",
+                    title="開始年",
+                    format="d",
+                ),
+                alt.Tooltip(
+                    "end_year:Q",
+                    title="終了年",
+                    format="d",
+                ),
+                alt.Tooltip(
+                    "要因:N",
+                    title="要因",
+                ),
+                alt.Tooltip(
+                    "寄与:Q",
+                    title="寄与",
+                    format="+.2f",
+                ),
+            ],
+        )
+    )
+
+    zero_line = (
+        alt.Chart(
+            pd.DataFrame(
+                {
+                    "y": [0],
+                }
+            )
+        )
+        .mark_rule(
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (lines + zero_line).properties(
+        height=400,
+    )
+
+
 st.title("労働投入分析")
 
 st.markdown(
@@ -471,6 +653,13 @@ labor_df = create_labor_input_dataframe(
 
 yearly_df = create_yearly_labor_input_summary(labor_df)
 
+long_term_end_year = int(yearly_df["year"].max())
+
+rolling_df = create_rolling_labor_input_decomposition(
+    yearly_df,
+    window_years=ROLLING_WINDOW_YEARS,
+)
+
 wage_summary = summarize_long_term_wage_decomposition(
     labor_df,
     start_year=ANALYSIS_START_YEAR,
@@ -521,6 +710,82 @@ st.markdown(
     さらに労働時間の減少を分解すると、
     主な要因は所定内労働時間、とりわけ**出勤日数の減少**でした。
     """
+)
+
+st.divider()
+
+st.subheader(f"{LONG_TERM_START_YEAR}年以降の長期推移")
+
+st.markdown(
+    f"""
+    直近10年間だけでなく、
+    **{LONG_TERM_START_YEAR}年から{long_term_end_year}年まで**
+    の変化を確認します。
+
+    長期的な労働時間短縮が、
+    同じ仕組みで一貫して進んできたのか、
+    時代によって要因が変化したのかを確認します。
+    """
+)
+
+st.markdown("#### 1人当たり労働時間の長期推移")
+
+st.altair_chart(
+    create_long_term_working_hours_chart(
+        yearly_df,
+        start_year=LONG_TERM_START_YEAR,
+        end_year=long_term_end_year,
+    ),
+    width="stretch",
+)
+
+st.caption(
+    "毎月勤労統計の調査産業計・事業所規模5人以上・就業形態計。"
+    "各年は月次の平均労働者数を重みとした加重年平均です。"
+)
+
+st.markdown("#### 所定内労働時間はなぜ減ったか")
+
+st.altair_chart(
+    create_scheduled_hours_index_chart(
+        yearly_df,
+        base_year=LONG_TERM_START_YEAR,
+        end_year=long_term_end_year,
+    ),
+    width="stretch",
+)
+
+st.markdown(
+    """
+    所定内労働時間の変化を、
+    **出勤日数**と
+    **1出勤日当たり所定内労働時間**
+    に分けて確認します。
+
+    1990年代には両方が低下していますが、
+    近年になるほど1日当たり時間の変化は小さくなり、
+    出勤日数の低下が中心になります。
+    """
+)
+
+st.markdown(f"#### {ROLLING_WINDOW_YEARS}年ローリングでみた変化要因")
+
+st.altair_chart(
+    create_rolling_scheduled_hours_decomposition_chart(
+        rolling_df,
+    ),
+    width="stretch",
+)
+
+st.caption(
+    "各点は、その年を終了年とする10年間の変化を示します。"
+    "例えば2025年は2015→2025年の変化です。"
+)
+
+st.info(
+    "2020年前後を終了年とする比較には、"
+    "新型コロナウイルス感染症による一時的な労働時間減少が含まれます。"
+    "ローリング系列の急変をそのまま長期構造変化とは解釈しません。"
 )
 
 st.divider()
