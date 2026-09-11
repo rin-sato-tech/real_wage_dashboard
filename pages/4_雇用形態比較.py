@@ -764,13 +764,7 @@ def main() -> None:
                 "「2020年価格換算」はCPIの2020年基準に対応した表記です。"
             )
 
-        st.markdown("#### 考察")
-
-        st.caption(
-            "記述日：2026年9月9日 ｜ "
-            "対象：5人以上・調査産業計・CPI総合 ｜ "
-            "比較：2015年平均→2025年平均"
-        )
+        st.markdown("#### 結果の要点")
 
         if (
             establishment_size == "5人以上"
@@ -778,104 +772,46 @@ def main() -> None:
             and ANALYSIS_START_YEAR == 2015
             and ANALYSIS_END_YEAR == 2025
         ):
+            st.caption(
+                "考察更新日：2026年9月11日 ｜ "
+                "対象：5人以上・調査産業計・CPI総合"
+            )
+
             st.markdown(
-                """
-                名目月額賃金は、一般労働者で10.6%、パートタイム労働者で15.5%
-                上昇した。一方、総実労働時間はそれぞれ4.8%、11.2%減少し、
-                時間当たり賃金は16.2%、30.1%上昇した。
-                両者とも、時間当たり賃金の上昇率が月額賃金の上昇率を上回り、
-                特にパートタイム労働者でその違いが大きかった。
-
-                物価を考慮すると、実質月額賃金は一般労働者で2.9%低下し、
-                パートタイム労働者では1.4%上昇した。
-                実質時間当たり賃金は、それぞれ2.0%、14.2%上昇した。
-                一般労働者では月額と時間当たりで増減方向が異なり、
-                パートタイム労働者でも、実質月額賃金の改善は小幅にとどまった。
-
-                月次で各比率を計算してから平均する方法と、
-                年平均の賃金・労働時間・CPIから比率を計算する方法を比較したところ、
-                対象とした6項目の変化率の差は、すべて絶対値
-                0.01パーセントポイント未満だった。
-                今回の対象・比較期間では、集計順序を変えても主な結論は維持された。
-                ただし、公式の労働者数加重平均との比較は含まれない。
-
-                これらは各就業形態の集団平均の変化であり、
-                同じ労働者の賃上げや勤務時間の短縮を示すものではない。
-                時間当たり賃金も、月額賃金を実労働時間で割った概算値であり、
-                契約上の時給とは異なる。
-                また、この比較だけでは、賃金や労働時間が変化した原因は特定できない。
-
-                以上から、賃金変化を評価する際には、
-                一般・パートの違いに加え、月額と時間当たり、
-                名目と実質を区別する必要がある。
-                """
+                "- **実質月額賃金**：2015→2025年では、"
+                "一般で2.9%低下、パートで1.4%上昇。\n"
+                "- **実質時間当たり賃金**：同期間では、"
+                "一般で2.0%、パートで14.2%上昇。\n"
+                "- **比較期間による違い**：一般の実質時間当たり賃金は、"
+                "2019→2025年では約1.0%低下。"
+                "改善の評価は開始年によって異なる。"
             )
+
+            with st.expander("考察の詳細", expanded=False):
+                st.markdown(
+                    "一般・パートともに、2015年から2025年にかけて"
+                    "名目月額賃金と時間当たり賃金が上昇し、"
+                    "総実労働時間は減少した。"
+                    "ただし、2020年から2025年の労働時間の変化は"
+                    "両者とも小幅であり、一様に減少し続けたとは言えない。\n\n"
+                    "物価を考慮すると、月額と時間当たりでは"
+                    "改善の程度が異なる。特に一般では、"
+                    "比較開始年によって実質時間当たり賃金の"
+                    "増減方向も変わる。\n\n"
+                    "集計順序を変えた比較では、対象6項目の変化率の差は"
+                    "すべて0.01パーセントポイント未満だった。"
+                    "この確認は公式の労働者数加重平均との比較ではない。\n\n"
+                    "これらは集団平均の変化であり、"
+                    "個人の賃上げや勤務時間の短縮を示すものではない。"
+                    "時間当たり賃金は給与と実労働時間の比率であり、"
+                    "契約上の時給とは異なる。"
+                    "賃金や労働時間が変化した原因も、この比較だけでは特定できない。"
+                )
         else:
-            st.info(
-                "この考察は、5人以上・CPI総合による"
-                "2015年平均から2025年平均の比較について記述したものです。"
-                "現在の選択条件に対応する考察は未掲載です。"
+            st.caption(
+                "現在の選択条件に対応する固定考察は未掲載です。"
+                "比較表と各タブで結果を確認してください。"
             )
-
-        general_wage_change = get_change_rate(
-            comparison_summary_df,
-            "一般労働者",
-            "nominal_wage_amount",
-        )
-
-        part_wage_change = get_change_rate(
-            comparison_summary_df,
-            "パートタイム労働者",
-            "nominal_wage_amount",
-        )
-
-        general_hours_change = get_change_rate(
-            comparison_summary_df,
-            "一般労働者",
-            "working_hours",
-        )
-
-        part_hours_change = get_change_rate(
-            comparison_summary_df,
-            "パートタイム労働者",
-            "working_hours",
-        )
-
-        general_hourly_change = get_change_rate(
-            comparison_summary_df,
-            "一般労働者",
-            "approx_hourly_wage",
-        )
-
-        part_hourly_change = get_change_rate(
-            comparison_summary_df,
-            "パートタイム労働者",
-            "approx_hourly_wage",
-        )
-
-        general_real_wage_change = get_change_rate(
-            comparison_summary_df,
-            "一般労働者",
-            "real_regular_wage",
-        )
-
-        part_real_wage_change = get_change_rate(
-            comparison_summary_df,
-            "パートタイム労働者",
-            "real_regular_wage",
-        )
-
-        general_real_hourly_change = get_change_rate(
-            comparison_summary_df,
-            "一般労働者",
-            "real_approx_hourly_wage",
-        )
-
-        part_real_hourly_change = get_change_rate(
-            comparison_summary_df,
-            "パートタイム労働者",
-            "real_approx_hourly_wage",
-        )
 
         st.divider()
 
@@ -1103,9 +1039,7 @@ def main() -> None:
             "全期間": None,
         }[period]
 
-        def filter_display_period(
-            df: pd.DataFrame,
-        ) -> pd.DataFrame:
+        def filter_display_period(df: pd.DataFrame) -> pd.DataFrame:
             if period_months is None:
                 return df.copy()
 
@@ -1120,12 +1054,12 @@ def main() -> None:
             "2020年平均を100として、月額賃金・労働時間・概算時間当たり賃金の変化を比較します。"
         )
 
+        # 月額賃金指数
         regular_wage_chart_df = create_comparison_chart_dataframe(
             general_display_df,
             part_display_df,
             "regular_wage_index",
         )
-
         st.altair_chart(
             create_index_chart(
                 regular_wage_chart_df,
@@ -1134,26 +1068,17 @@ def main() -> None:
             ),
             width="stretch",
         )
-
-        st.info(
-            f"""
-        **読み取れること：**
-        {ANALYSIS_START_YEAR}年平均から{ANALYSIS_END_YEAR}年平均にかけて、
-        月額賃金は一般労働者で **{general_wage_change:+.1f}%**、
-        パートタイム労働者で **{part_wage_change:+.1f}%** 変化しました。
-
-        **注意：**
-        指数は各就業形態をそれぞれ2020年平均=100としているため、
-        指数の高さから両者の実際の賃金額を比較することはできません。
-        """
+        st.caption(
+            "指数は各就業形態の2020年平均＝100。"
+            "指数の高さから一般・パートの賃金額の差は比較できません。"
         )
 
+        # 総実労働時間指数
         working_hours_chart_df = create_comparison_chart_dataframe(
             general_display_df,
             part_display_df,
             "working_hours_index",
         )
-
         st.altair_chart(
             create_index_chart(
                 working_hours_chart_df,
@@ -1162,25 +1087,17 @@ def main() -> None:
             ),
             width="stretch",
         )
-
-        st.info(
-            f"""
-        **読み取れること：**
-        総実労働時間は一般労働者で **{general_hours_change:+.1f}%**、
-        パートタイム労働者で **{part_hours_change:+.1f}%** 変化しました。
-        労働時間の増減は、月額賃金の変化を考える際の重要な要因です。
-
-        **注意：**
-        このデータだけでは、労働時間が変化した原因や本人の希望によるものかは判断できません。
-        """
+        st.caption(
+            "平均労働時間の変化を示します。"
+            "個人の勤務時間の変化や、減少の原因は特定できません。"
         )
 
+        # 時間当たり賃金指数
         hourly_wage_chart_df = create_comparison_chart_dataframe(
             general_display_df,
             part_display_df,
             "approx_hourly_wage_index",
         )
-
         st.altair_chart(
             create_index_chart(
                 hourly_wage_chart_df,
@@ -1189,44 +1106,20 @@ def main() -> None:
             ),
             width="stretch",
         )
-
-        hourly_difference = part_hourly_change - general_hourly_change
-
-        if hourly_difference > 0.1:
-            hourly_comparison_text = (
-                f"パートタイム労働者の伸びが一般労働者を"
-                f" **{hourly_difference:.1f}%ポイント** 上回りました。"
-            )
-        elif hourly_difference < -0.1:
-            hourly_comparison_text = (
-                f"一般労働者の伸びがパートタイム労働者を"
-                f" **{abs(hourly_difference):.1f}%ポイント** 上回りました。"
-            )
-        else:
-            hourly_comparison_text = "両者の変化率はほぼ同程度でした。"
-
-        st.info(
-            f"""
-        **読み取れること：**
-        概算時間当たり賃金は一般労働者で **{general_hourly_change:+.1f}%**、
-        パートタイム労働者で **{part_hourly_change:+.1f}%** 変化しました。
-        {hourly_comparison_text}
-
-        **注意：**
-        「きまって支給する給与 ÷ 総実労働時間」で算出した概算値であり、
-        公表された公式の時間当たり賃金ではありません。
-        """
+        st.caption(
+            "きまって支給する給与÷総実労働時間で算出した概算値です。"
+            "契約上の時給とは異なります。"
         )
 
         st.markdown("## 2. 物価を考えるとどうか")
         st.caption("名目賃金を消費者物価指数で実質化し、購買力の変化を比較します。")
 
+        # 実質月額賃金指数
         real_regular_wage_chart_df = create_comparison_chart_dataframe(
             general_display_df,
             part_display_df,
             "real_regular_wage_index",
         )
-
         st.altair_chart(
             create_index_chart(
                 real_regular_wage_chart_df,
@@ -1235,27 +1128,16 @@ def main() -> None:
             ),
             width="stretch",
         )
-
-        st.info(
-            f"""
-        **読み取れること：**
-        物価変動を考慮した実質月額賃金は、
-        一般労働者で **{general_real_wage_change:+.1f}%**、
-        パートタイム労働者で **{part_real_wage_change:+.1f}%** 変化しました。
-        名目月額賃金との差は、物価上昇による購買力への影響を示します。
-
-        **注意：**
-        本アプリで選択したCPIを用いて算出した実質値であり、
-        公式の実質賃金指数とは一致しない場合があります。
-        """
+        st.caption(
+            "選択したCPIで実質化した値です。公式の実質賃金指数とは区別します。"
         )
 
+        # 実質時間当たり賃金指数
         real_hourly_wage_chart_df = create_comparison_chart_dataframe(
             general_display_df,
             part_display_df,
             "real_approx_hourly_wage_index",
         )
-
         st.altair_chart(
             create_index_chart(
                 real_hourly_wage_chart_df,
@@ -1264,20 +1146,7 @@ def main() -> None:
             ),
             width="stretch",
         )
-
-        st.info(
-            f"""
-        **読み取れること：**
-        1時間当たりの購買力に相当する実質概算時間当たり賃金は、
-        一般労働者で **{general_real_hourly_change:+.1f}%**、
-        パートタイム労働者で **{part_real_hourly_change:+.1f}%** 変化しました。
-        実質月額賃金と比較することで、労働時間の変化が月単位の購買力に
-        どの程度影響しているかを考えることができます。
-
-        **注意：**
-        概算時間当たり賃金をCPIで実質化した本アプリ独自の分析指標です。
-        """
-        )
+        st.caption("時間当たり賃金を選択したCPIで実質化した値です。")
 
         st.markdown("## 3. 月額賃金の変化を分解")
 
