@@ -3,6 +3,7 @@ from pathlib import Path
 CPI_STATS_DATA_ID = "0003427113"
 LABOR_FORCE_STATS_DATA_ID = "0003005865"
 CORPORATE_STATS_DATA_ID = "0003060791"
+LFS_WORKING_HOURS_DISTRIBUTION_STATS_DATA_ID = "0003009700"
 
 CPI_BASE_FILTERS = {
     "cdTab": "1",
@@ -125,3 +126,38 @@ CORPORATE_INDUSTRY_NAMES = {
 
 CORPORATE_ANALYSIS_START_YEAR = 2015
 CORPORATE_ANALYSIS_END_YEAR = 2024
+
+LFS_WORKING_HOURS_DISTRIBUTION_BASE_FILTERS = {
+    "cdTab": "01",       # 実数(人口)
+    "cdCat01": "0",      # 性別：総数
+    "cdCat03": "03",     # 就業状態：従業者
+    "cdCat05": "000",    # 産業：全産業
+    "cdCat06": "00",     # 従業上の地位：総数
+    "cdArea": "00000",   # 全国
+}
+
+LFS_WORKING_HOURS_AGE_CODES = {
+    "15歳以上": "00",
+    "15～24歳": "01",
+    "25～34歳": "06",
+    "35～44歳": "09",
+    "45～54歳": "12",
+    "55～64歳": "15",
+    "65歳以上": "18",
+}
+
+LFS_WORKING_HOURS_CATEGORY_CODES = {
+    "persons_at_work": "03",
+    # 長期比較用
+    "hours_1_34": "95",
+    "hours_35_48": "17",
+    "hours_49_plus": "94",
+    # 詳細区分
+    "hours_1_14": "04",
+    "hours_15_29": "15",
+    "hours_30_34": "16",
+    "hours_35_39": "18",
+    "hours_40_48": "19",
+    "hours_49_59": "12",
+    "hours_60_plus": "13",
+}
