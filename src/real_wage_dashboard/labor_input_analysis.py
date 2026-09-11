@@ -155,6 +155,33 @@ def weighted_mean(
     return float(np.average(values, weights=weights))
 
 
+def create_yearly_weighted_means(
+    df: pd.DataFrame,
+    columns: list[str],
+) -> pd.DataFrame:
+    """12か月揃った年について平均労働者数加重の年平均を作成する。"""
+
+    data = df.copy()
+    data["year"] = data["date"].dt.year
+
+    records: list[dict[str, float | int]] = []
+
+    for year, group in data.groupby("year", sort=True):
+        if len(group) != 12:
+            continue
+
+        record: dict[str, float | int] = {
+            "year": int(year),
+        }
+
+        for column in columns:
+            record[column] = weighted_mean(group, column)
+
+        records.append(record)
+
+    return pd.DataFrame(records)
+
+
 def add_year_over_year_pct(
     df: pd.DataFrame,
     columns: list[str],
@@ -318,28 +345,19 @@ def summarize_long_term_wage_decomposition(
     }
 
 
-def create_yearly_wage_decomposition(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+def create_yearly_wage_decomposition(df: pd.DataFrame) -> pd.DataFrame:
     """年平均を用いて月額賃金の前年比変化を要因分解する。"""
 
-    yearly = (
-        df.assign(year=df["date"].dt.year)
-        .groupby("year", as_index=False)
-        .agg(
-            nominal_wage_amount=("nominal_wage_amount", "mean"),
-            total_hours=("total_hours", "mean"),
-            annual_wage_sum=("nominal_wage_amount", "sum"),
-            annual_hours_sum=("total_hours", "sum"),
-            month_count=("date", "count"),
-        )
+    yearly = create_yearly_weighted_means(
+        df,
+        columns=[
+            "nominal_wage_amount",
+            "total_hours",
+        ],
     )
 
-    # 12か月揃っている年だけ分析対象とする
-    yearly = yearly.loc[yearly["month_count"] == 12].copy()
-
     yearly["weighted_approx_hourly_wage"] = (
-        yearly["annual_wage_sum"] / yearly["annual_hours_sum"]
+        yearly["nominal_wage_amount"] / yearly["total_hours"]
     )
 
     yearly["wage_change_pct"] = yearly["nominal_wage_amount"].pct_change() * 100
@@ -629,35 +647,24 @@ def summarize_long_term_scheduled_hours_decomposition(
     }
 
 
-def create_yearly_labor_input_summary(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+def create_yearly_labor_input_summary(df: pd.DataFrame) -> pd.DataFrame:
     """労働投入分析の主要指標を年次で集計・分解する。"""
 
-    yearly = (
-        df.assign(year=df["date"].dt.year)
-        .groupby("year", as_index=False)
-        .agg(
-            nominal_wage_amount=("nominal_wage_amount", "mean"),
-            total_hours=("total_hours", "mean"),
-            scheduled_hours=("scheduled_hours", "mean"),
-            overtime_hours=("overtime_hours", "mean"),
-            working_days=("working_days", "mean"),
-            annual_wage_sum=("nominal_wage_amount", "sum"),
-            annual_total_hours_sum=("total_hours", "sum"),
-            month_count=("date", "count"),
-        )
+    yearly = create_yearly_weighted_means(
+        df,
+        columns=[
+            "nominal_wage_amount",
+            "total_hours",
+            "scheduled_hours",
+            "overtime_hours",
+            "working_days",
+        ],
     )
 
-    # 12か月揃っている年だけを年次比較に使用
-    yearly = yearly.loc[yearly["month_count"] == 12].copy()
-
-    # 年間加重概算時間当たり賃金
     yearly["weighted_approx_hourly_wage"] = (
-        yearly["annual_wage_sum"] / yearly["annual_total_hours_sum"]
+        yearly["nominal_wage_amount"] / yearly["total_hours"]
     )
 
-    # 年平均値同士で完全分解できる1出勤日当たり所定内労働時間
     yearly["scheduled_hours_per_workday"] = (
         yearly["scheduled_hours"] / yearly["working_days"]
     )

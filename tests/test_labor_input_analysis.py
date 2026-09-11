@@ -8,6 +8,8 @@ from real_wage_dashboard.labor_input_analysis import (
     add_wage_decomposition,
     add_working_hours_decomposition,
     create_labor_input_dataframe,
+    create_yearly_labor_input_summary,
+    create_yearly_weighted_means,
     summarize_long_term_scheduled_hours_decomposition,
     summarize_long_term_wage_decomposition,
     summarize_long_term_working_hours_decomposition,
@@ -210,3 +212,82 @@ def test_weighted_mean() -> None:
     result = weighted_mean(df, "value")
 
     assert np.isclose(result, 17.5)
+
+
+def test_create_yearly_weighted_means_uses_worker_weights() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "value": [10.0] * 6 + [20.0] * 6,
+            "worker_weight": [1.0] * 6 + [3.0] * 6,
+        }
+    )
+
+    result = create_yearly_weighted_means(
+        df,
+        columns=["value"],
+    )
+
+    assert len(result) == 1
+    assert np.isclose(result.loc[0, "value"], 17.5)
+
+
+def test_yearly_labor_input_summary_uses_weighted_annual_values() -> None:
+    df = load_analysis_df()
+
+    yearly = create_yearly_labor_input_summary(df)
+
+    row_2015 = yearly.loc[yearly["year"] == 2015].iloc[0]
+    row_2025 = yearly.loc[yearly["year"] == 2025].iloc[0]
+
+    assert np.isclose(
+        row_2015["nominal_wage_amount"],
+        260576.643006,
+        atol=1e-3,
+    )
+    assert np.isclose(
+        row_2025["nominal_wage_amount"],
+        287426.954126,
+        atol=1e-3,
+    )
+
+    assert np.isclose(
+        row_2015["total_hours"],
+        144.436968,
+        atol=1e-5,
+    )
+    assert np.isclose(
+        row_2025["total_hours"],
+        135.067115,
+        atol=1e-5,
+    )
+
+
+def test_yearly_labor_input_summary_identities() -> None:
+    df = load_analysis_df()
+
+    yearly = create_yearly_labor_input_summary(df)
+
+    hours_error = (
+        yearly["total_hours"] - yearly["scheduled_hours"] - yearly["overtime_hours"]
+    )
+
+    wage_error = (
+        yearly["wage_log_change"]
+        - yearly["hourly_wage_log_contribution"]
+        - yearly["total_hours_log_contribution"]
+    )
+
+    scheduled_error = (
+        yearly["scheduled_hours_log_change"]
+        - yearly["working_days_log_contribution"]
+        - yearly["hours_per_workday_log_contribution"]
+    )
+
+    assert hours_error.abs().max() < 1e-10
+    assert wage_error.dropna().abs().max() < 1e-10
+    assert scheduled_error.dropna().abs().max() < 1e-10
