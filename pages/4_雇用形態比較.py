@@ -1048,110 +1048,76 @@ def main() -> None:
         general_display_df = filter_display_period(general_df)
         part_display_df = filter_display_period(part_df)
 
-        st.markdown("## 1. 何が起きたか")
+        index_options = {
+            "名目月額賃金": {
+                "column": "regular_wage_index",
+                "note": "きまって支給する給与の変化を示します。",
+            },
+            "総実労働時間": {
+                "column": "working_hours_index",
+                "note": (
+                    "集団平均の労働時間の変化を示します。"
+                    "個人の勤務時間の変化や、その原因は特定できません。"
+                ),
+            },
+            "時間当たり賃金": {
+                "column": "approx_hourly_wage_index",
+                "note": (
+                    "きまって支給する給与÷総実労働時間で算出した"
+                    "概算値です。契約上の時給とは異なります。"
+                ),
+            },
+            "実質月額賃金": {
+                "column": "real_regular_wage_index",
+                "note": (
+                    "選択したCPIで実質化した月額賃金です。"
+                    "公式の実質賃金指数とは区別します。"
+                ),
+            },
+            "実質時間当たり賃金": {
+                "column": "real_approx_hourly_wage_index",
+                "note": (
+                    "時間当たり賃金を選択したCPIで実質化した値です。"
+                ),
+            },
+        }
 
-        st.caption(
-            "2020年平均を100として、月額賃金・労働時間・概算時間当たり賃金の変化を比較します。"
+        selected_indicator = st.selectbox(
+            "表示する指標",
+            options=list(index_options),
+            key="employment_index_indicator",
         )
 
-        # 月額賃金指数
-        regular_wage_chart_df = create_comparison_chart_dataframe(
+        selected_option = index_options[selected_indicator]
+
+        chart_df = create_comparison_chart_dataframe(
             general_display_df,
             part_display_df,
-            "regular_wage_index",
+            selected_option["column"],
         )
+
         st.altair_chart(
             create_index_chart(
-                regular_wage_chart_df,
-                title="月額賃金指数",
-                y_title="指数（2020年平均=100）",
+                chart_df,
+                title=f"{selected_indicator}指数",
+                y_title=f"指数（{WAGE_BASE_YEAR}年平均＝100）",
             ),
             width="stretch",
         )
-        st.caption(
-            "指数は各就業形態の2020年平均＝100。"
-            "指数の高さから一般・パートの賃金額の差は比較できません。"
-        )
-
-        # 総実労働時間指数
-        working_hours_chart_df = create_comparison_chart_dataframe(
-            general_display_df,
-            part_display_df,
-            "working_hours_index",
-        )
-        st.altair_chart(
-            create_index_chart(
-                working_hours_chart_df,
-                title="総実労働時間指数",
-                y_title="指数（2020年平均=100）",
-            ),
-            width="stretch",
-        )
-        st.caption(
-            "平均労働時間の変化を示します。"
-            "個人の勤務時間の変化や、減少の原因は特定できません。"
-        )
-
-        # 時間当たり賃金指数
-        hourly_wage_chart_df = create_comparison_chart_dataframe(
-            general_display_df,
-            part_display_df,
-            "approx_hourly_wage_index",
-        )
-        st.altair_chart(
-            create_index_chart(
-                hourly_wage_chart_df,
-                title="概算時間当たり賃金指数",
-                y_title="指数（2020年平均=100）",
-            ),
-            width="stretch",
-        )
-        st.caption(
-            "きまって支給する給与÷総実労働時間で算出した概算値です。"
-            "契約上の時給とは異なります。"
-        )
-
-        st.markdown("## 2. 物価を考えるとどうか")
-        st.caption("名目賃金を消費者物価指数で実質化し、購買力の変化を比較します。")
-
-        # 実質月額賃金指数
-        real_regular_wage_chart_df = create_comparison_chart_dataframe(
-            general_display_df,
-            part_display_df,
-            "real_regular_wage_index",
-        )
-        st.altair_chart(
-            create_index_chart(
-                real_regular_wage_chart_df,
-                title="実質月額賃金指数",
-                y_title="指数（2020年平均=100）",
-            ),
-            width="stretch",
-        )
-        st.caption(
-            "選択したCPIで実質化した値です。公式の実質賃金指数とは区別します。"
-        )
-
-        # 実質時間当たり賃金指数
-        real_hourly_wage_chart_df = create_comparison_chart_dataframe(
-            general_display_df,
-            part_display_df,
-            "real_approx_hourly_wage_index",
-        )
-        st.altair_chart(
-            create_index_chart(
-                real_hourly_wage_chart_df,
-                title="実質概算時間当たり賃金指数",
-                y_title="指数（2020年平均=100）",
-            ),
-            width="stretch",
-        )
-        st.caption("時間当たり賃金を選択したCPIで実質化した値です。")
-
-        st.markdown("## 3. 月額賃金の変化を分解")
 
         st.caption(
-            "月額賃金の前年同月変化を、概算時間当たり賃金の変化と労働時間の変化に分解します。"
+            f"一般・パートそれぞれの{WAGE_BASE_YEAR}年平均を100としています。"
+            "指数の高さから両者の実額の差は比較できません。"
+            "縦軸範囲は表示データに応じて変わります。"
+        )
+        st.caption(selected_option["note"])
+
+        st.divider()
+        st.subheader("月額賃金の変化を分解")
+
+        st.caption(
+            "月額賃金の前年同月からの対数変化を、"
+            "時間当たり賃金と労働時間の2項に分解します。"
         )
 
         # 各就業形態で、まず分解可能な月を確認する。
@@ -1189,105 +1155,114 @@ def main() -> None:
             target_months=common_months,
         )
 
-        n_expected = general_decomposition_summary["n_expected_months"]
-        excluded_months = general_decomposition_summary["excluded_months"]
+        st.markdown("#### 月次の推移")
 
         st.caption(
-            f"期間要約の対象：一般・パート共通の{len(common_months)}か月"
-            f"／対象期間の{n_expected}か月。"
-            "各値は前年同月との対数変化に基づきます。"
+            "グラフは上で選択した表示期間を使用します。"
+            "棒は時間当たり賃金・労働時間の各要因、"
+            "折れ線は月額賃金の対数変化です。"
+            "単位は前年同月からの自然対数差×100です。"
         )
-
-        if excluded_months:
-            with st.expander("期間要約から除外した月"):
-                st.write("、".join(excluded_months))
 
         st.altair_chart(
             create_decomposition_chart(
                 general_display_df,
-                "一般労働者：月額賃金変化の要因分解",
+                "一般労働者：月額賃金変化の分解",
             ),
             width="stretch",
-        )
-
-        st.info(
-            f"""
-        **一般労働者：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年の傾向**
-
-        - 時間当たり賃金要因の平均：\
-        **{general_decomposition_summary["mean_hourly_wage_contribution"]:+.2f}**
-        - 労働時間要因の平均：\
-        **{general_decomposition_summary["mean_working_hours_contribution"]:+.2f}**
-        - 時間当たり賃金要因がプラスだった月：\
-        **{general_decomposition_summary["hourly_positive_share_pct"]:.1f}%**
-        - 労働時間要因がマイナスだった月：\
-        **{general_decomposition_summary["hours_negative_share_pct"]:.1f}%**
-        - 時間当たり賃金要因の絶対値が大きかった月：\
-        **{general_decomposition_summary["hourly_dominant_share_pct"]:.1f}%**
-
-        期間中の前年同月変化を平均した記述統計です。
-        原因そのものを示すものではありません。
-        """
         )
 
         st.altair_chart(
             create_decomposition_chart(
                 part_display_df,
-                "パートタイム労働者：月額賃金変化の要因分解",
+                "パートタイム労働者：月額賃金変化の分解",
             ),
             width="stretch",
         )
 
-        st.info(
-            f"""
-        **パートタイム労働者：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年の傾向**
-
-        - 時間当たり賃金要因の平均：\
-        **{part_decomposition_summary["mean_hourly_wage_contribution"]:+.2f}**
-        - 労働時間要因の平均：\
-        **{part_decomposition_summary["mean_working_hours_contribution"]:+.2f}**
-        - 時間当たり賃金要因がプラスだった月：\
-        **{part_decomposition_summary["hourly_positive_share_pct"]:.1f}%**
-        - 労働時間要因がマイナスだった月：\
-        **{part_decomposition_summary["hours_negative_share_pct"]:.1f}%**
-        - 時間当たり賃金要因の絶対値が大きかった月：\
-        **{part_decomposition_summary["hourly_dominant_share_pct"]:.1f}%**
-
-        期間中の前年同月変化を平均した記述統計です。
-        原因そのものを示すものではありません。
-        """
+        st.markdown(
+            f"#### 期間要約："
+            f"{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年"
         )
 
-        general_hourly_dominant = general_decomposition_summary["hourly_dominant_share_pct"]
-        part_hourly_dominant = part_decomposition_summary["hourly_dominant_share_pct"]
-
-        st.markdown("#### 要因分解から見た違い")
-
-        if part_hourly_dominant > general_hourly_dominant + 0.1:
-            st.write(
-                "パートタイム労働者では、一般労働者よりも"
-                "時間当たり賃金要因の変動幅が労働時間要因を上回る月の割合が高く、"
-                "月額賃金の変化が時間当たり賃金の変化により強く結び付いていた"
-                "期間が多かったことが確認できます。"
-            )
-        elif general_hourly_dominant > part_hourly_dominant + 0.1:
-            st.write(
-                "一般労働者では、パートタイム労働者よりも"
-                "時間当たり賃金要因の変動幅が労働時間要因を上回る月の割合が高く、"
-                "月額賃金の変化が時間当たり賃金の変化により強く結び付いていた"
-                "期間が多かったことが確認できます。"
-            )
-        else:
-            st.write(
-                "時間当たり賃金要因が労働時間要因を上回る月の割合は、"
-                "一般労働者とパートタイム労働者でおおむね同程度でした。"
-            )
+        n_expected = general_decomposition_summary["n_expected_months"]
+        n_used = general_decomposition_summary["n_months"]
+        excluded_months = general_decomposition_summary["excluded_months"]
 
         st.caption(
-            "棒は前年同月からの月額賃金変化を、"
-            "時間当たり賃金要因と労働時間要因に分解したものです。"
-            "値は通常の前年比ではなく、対数変化を100倍した値です。"
+            f"一般・パート共通の有効月：{n_used}／{n_expected}か月。"
+            "この要約期間は、グラフの表示期間を変更しても変わりません。"
         )
+
+        summary_items = [
+            (
+                "月額賃金の対数変化の平均",
+                "mean_wage_log_change",
+                "対数差×100",
+            ),
+            (
+                "時間当たり賃金要因の平均",
+                "mean_hourly_wage_contribution",
+                "対数差×100",
+            ),
+            (
+                "労働時間要因の平均",
+                "mean_working_hours_contribution",
+                "対数差×100",
+            ),
+            (
+                "時間当たり賃金要因が正の月",
+                "hourly_positive_share_pct",
+                "%",
+            ),
+            (
+                "労働時間要因が負の月",
+                "hours_negative_share_pct",
+                "%",
+            ),
+            (
+                "時間当たり賃金要因の絶対値が労働時間要因を上回る月",
+                "hourly_dominant_share_pct",
+                "%",
+            ),
+        ]
+
+        decomposition_summary_df = pd.DataFrame(
+            [
+                {
+                    "指標": label,
+                    "単位": unit,
+                    "一般労働者": general_decomposition_summary[key],
+                    "パートタイム労働者": part_decomposition_summary[key],
+                }
+                for label, key, unit in summary_items
+            ]
+        )
+
+        st.dataframe(
+            decomposition_summary_df,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "一般労働者": st.column_config.NumberColumn(
+                    format="%.2f",
+                ),
+                "パートタイム労働者": st.column_config.NumberColumn(
+                    format="%.2f",
+                ),
+            },
+        )
+
+        st.caption(
+            "平均と割合は共通の有効月について計算しています。"
+            "対数差×100は通常の前年比（%）とは異なります。"
+            "各要因の平均は長期の累積変化への寄与ではなく、"
+            "絶対値を比較した月の割合も因果的な説明力を示しません。"
+        )
+
+        if excluded_months:
+            with st.expander("期間要約から除外した月", expanded=False):
+                st.write("、".join(excluded_months))
 
     with tab_data:
         comparison_output_df = create_comparison_output_dataframe(
