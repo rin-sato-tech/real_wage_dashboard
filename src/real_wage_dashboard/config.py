@@ -161,3 +161,11 @@ LFS_WORKING_HOURS_CATEGORY_CODES = {
     "hours_49_59": "12",
     "hours_60_plus": "13",
 }
+
+LFS_EMPLOYMENT_BY_AGE_PATH = Path(
+    "data/raw/labor_input/lfs_employment_by_age_annual.xlsx"
+)
+
+LFS_HOURS_BY_AGE_PATH = Path(
+    "data/raw/labor_input/lfs_hours_by_age_annual.csv"
+)

@@ -2,7 +2,24 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from real_wage_dashboard.config import WAGE_DATA_PATH
+from real_wage_dashboard.config import (
+    LFS_EMPLOYMENT_BY_AGE_PATH,
+    LFS_HOURS_BY_AGE_PATH,
+    WAGE_DATA_PATH,
+)
+from real_wage_dashboard.labor_force_analysis import (
+    add_centered_composition_effect,
+    create_age_hours_decomposition,
+    create_detailed_working_hours_distribution_change,
+    create_working_hours_distribution_change,
+    create_working_hours_distribution_trend,
+    summarize_age_hours_decomposition,
+)
+from real_wage_dashboard.labor_force_service import (
+    AGE_GROUPS,
+    create_lfs_age_dataframe,
+    load_lfs_working_hours_distribution_from_api,
+)
 from real_wage_dashboard.labor_input_analysis import (
     add_scheduled_hours_decomposition,
     add_wage_decomposition,
@@ -34,6 +51,27 @@ def load_raw_wage_data() -> pd.DataFrame:
     """毎月勤労統計の元CSVを読み込む。"""
 
     return load_wage_csv(WAGE_DATA_PATH)
+
+
+@st.cache_data
+def load_lfs_age_data() -> pd.DataFrame:
+    """年齢別就業構造・週間就業時間データを読み込む。"""
+
+    return create_lfs_age_dataframe(
+        employment_path=LFS_EMPLOYMENT_BY_AGE_PATH,
+        hours_path=LFS_HOURS_BY_AGE_PATH,
+    )
+
+
+@st.cache_data
+def load_lfs_working_hours_distribution(app_id: str) -> pd.DataFrame:
+    """e-Stat APIから年齢別就業時間分布を取得する。"""
+
+    return load_lfs_working_hours_distribution_from_api(
+        app_id=app_id,
+        start_year=2000,
+        end_year=2025,
+    )
 
 
 def create_wage_decomposition_chart(summary: dict[str, float]) -> alt.Chart:
@@ -594,6 +632,364 @@ def create_rolling_scheduled_hours_decomposition_chart(
     )
 
 
+def create_age_hours_effect_chart(
+    decomposition_df: pd.DataFrame,
+) -> alt.Chart:
+    """平均週間就業時間の変化要因を年齢階級別に表示する。"""
+
+    chart_df = decomposition_df[
+        [
+            "age_group",
+            "within_effect",
+            "centered_composition_effect",
+        ]
+    ].copy()
+
+    chart_df = chart_df.melt(
+        id_vars="age_group",
+        value_vars=[
+            "within_effect",
+            "centered_composition_effect",
+        ],
+        var_name="効果",
+        value_name="寄与時間",
+    )
+
+    chart_df["効果"] = chart_df["効果"].replace(
+        {
+            "within_effect": "年齢層内効果",
+            "centered_composition_effect": "年齢構成効果",
+        }
+    )
+
+    bars = (
+        alt.Chart(chart_df)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "age_group:N",
+                title="年齢階級",
+                sort=None,
+            ),
+            xOffset="効果:N",
+            y=alt.Y(
+                "寄与時間:Q",
+                title="平均週間就業時間への寄与（時間）",
+            ),
+            color=alt.Color(
+                "効果:N",
+                title="効果",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "age_group:N",
+                    title="年齢階級",
+                ),
+                alt.Tooltip(
+                    "効果:N",
+                    title="効果",
+                ),
+                alt.Tooltip(
+                    "寄与時間:Q",
+                    title="寄与",
+                    format="+.3f",
+                ),
+            ],
+        )
+    )
+
+    zero_line = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (bars + zero_line).properties(
+        height=400,
+    )
+
+
+def create_working_hours_distribution_trend_chart(
+    trend_df: pd.DataFrame,
+) -> alt.Chart:
+    """週間就業時間3区分の長期構成比を表示する。"""
+
+    chart_df = trend_df[
+        [
+            "year",
+            "hours_1_34_harmonized_share",
+            "hours_35_48_harmonized_share",
+            "hours_49_plus_harmonized_share",
+        ]
+    ].copy()
+
+    chart_df = chart_df.melt(
+        id_vars="year",
+        value_vars=[
+            "hours_1_34_harmonized_share",
+            "hours_35_48_harmonized_share",
+            "hours_49_plus_harmonized_share",
+        ],
+        var_name="就業時間",
+        value_name="構成比",
+    )
+
+    chart_df["就業時間"] = chart_df["就業時間"].replace(
+        {
+            "hours_1_34_harmonized_share": "1～34時間",
+            "hours_35_48_harmonized_share": "35～48時間",
+            "hours_49_plus_harmonized_share": "49時間以上",
+        }
+    )
+
+    chart_df["構成比"] *= 100
+
+    return (
+        alt.Chart(chart_df)
+        .mark_line(
+            point=True,
+            strokeWidth=2.5,
+        )
+        .encode(
+            x=alt.X(
+                "year:Q",
+                title="年",
+                axis=alt.Axis(format="d"),
+            ),
+            y=alt.Y(
+                "構成比:Q",
+                title="従業者に占める割合（%）",
+                scale=alt.Scale(zero=False),
+            ),
+            color=alt.Color(
+                "就業時間:N",
+                title="週間就業時間",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "year:Q",
+                    title="年",
+                    format="d",
+                ),
+                alt.Tooltip(
+                    "就業時間:N",
+                    title="週間就業時間",
+                ),
+                alt.Tooltip(
+                    "構成比:Q",
+                    title="割合",
+                    format=".2f",
+                ),
+            ],
+        )
+        .properties(
+            height=400,
+        )
+    )
+
+
+def create_detailed_hours_change_chart(
+    change_df: pd.DataFrame,
+) -> alt.Chart:
+    """詳細7区分の構成比変化を年齢階級別に表示する。"""
+
+    columns = {
+        "hours_1_14_share_change_pt": "1～14時間",
+        "hours_15_29_share_change_pt": "15～29時間",
+        "hours_30_34_share_change_pt": "30～34時間",
+        "hours_35_39_share_change_pt": "35～39時間",
+        "hours_40_48_share_change_pt": "40～48時間",
+        "hours_49_59_share_change_pt": "49～59時間",
+        "hours_60_plus_share_change_pt": "60時間以上",
+    }
+
+    chart_df = change_df[
+        [
+            "age_group",
+            *columns.keys(),
+        ]
+    ].melt(
+        id_vars="age_group",
+        value_vars=list(columns),
+        var_name="就業時間",
+        value_name="変化pt",
+    )
+
+    chart_df["就業時間"] = (
+        chart_df["就業時間"]
+        .replace(columns)
+    )
+
+    base = (
+        alt.Chart(chart_df)
+        .encode(
+            x=alt.X(
+                "age_group:N",
+                title="年齢階級",
+                sort=None,
+            ),
+            y=alt.Y(
+                "就業時間:N",
+                title="週間就業時間",
+                sort=[
+                    "1～14時間",
+                    "15～29時間",
+                    "30～34時間",
+                    "35～39時間",
+                    "40～48時間",
+                    "49～59時間",
+                    "60時間以上",
+                ],
+            ),
+        )
+    )
+
+    heatmap = base.mark_rect().encode(
+        color=alt.Color(
+            "変化pt:Q",
+            title="変化（pt）",
+            scale=alt.Scale(
+                scheme="redblue",
+                domainMid=0,
+                reverse=True,
+            ),
+        ),
+        tooltip=[
+            alt.Tooltip(
+                "age_group:N",
+                title="年齢階級",
+            ),
+            alt.Tooltip(
+                "就業時間:N",
+                title="週間就業時間",
+            ),
+            alt.Tooltip(
+                "変化pt:Q",
+                title="変化",
+                format="+.2f",
+            ),
+        ],
+    )
+
+    text = base.mark_text().encode(
+        text=alt.Text(
+            "変化pt:Q",
+            format="+.1f",
+        ),
+    )
+
+    return (heatmap + text).properties(
+        height=350,
+    )
+
+
+def create_age_working_hours_distribution_change_chart(
+    change_df: pd.DataFrame,
+) -> alt.Chart:
+    """2015→2025年の就業時間3区分の構成比変化を年齢階級別に表示する。"""
+
+    chart_df = change_df.loc[
+        change_df["age_group"].isin(AGE_GROUPS),
+        [
+            "age_group",
+            "hours_1_34_share_change_pt",
+            "hours_35_48_share_change_pt",
+            "hours_49_plus_share_change_pt",
+        ],
+    ].copy()
+
+    chart_df = chart_df.melt(
+        id_vars="age_group",
+        value_vars=[
+            "hours_1_34_share_change_pt",
+            "hours_35_48_share_change_pt",
+            "hours_49_plus_share_change_pt",
+        ],
+        var_name="就業時間",
+        value_name="変化pt",
+    )
+
+    chart_df["就業時間"] = chart_df["就業時間"].replace(
+        {
+            "hours_1_34_share_change_pt": "1～34時間",
+            "hours_35_48_share_change_pt": "35～48時間",
+            "hours_49_plus_share_change_pt": "49時間以上",
+        }
+    )
+
+    bars = (
+        alt.Chart(chart_df)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "age_group:N",
+                title="年齢階級",
+                sort=AGE_GROUPS,
+            ),
+            xOffset=alt.XOffset(
+                "就業時間:N",
+                sort=[
+                    "1～34時間",
+                    "35～48時間",
+                    "49時間以上",
+                ],
+            ),
+            y=alt.Y(
+                "変化pt:Q",
+                title="構成比の変化（pt）",
+            ),
+            color=alt.Color(
+                "就業時間:N",
+                title="週間就業時間",
+                sort=[
+                    "1～34時間",
+                    "35～48時間",
+                    "49時間以上",
+                ],
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "age_group:N",
+                    title="年齢階級",
+                ),
+                alt.Tooltip(
+                    "就業時間:N",
+                    title="週間就業時間",
+                ),
+                alt.Tooltip(
+                    "変化pt:Q",
+                    title="変化",
+                    format="+.2f",
+                ),
+            ],
+        )
+    )
+
+    zero_line = (
+        alt.Chart(
+            pd.DataFrame(
+                {
+                    "y": [0],
+                }
+            )
+        )
+        .mark_rule(
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (bars + zero_line).properties(
+        height=400,
+    )
+
+
 st.title("労働投入分析")
 
 st.markdown(
@@ -676,6 +1072,65 @@ scheduled_hours_summary = summarize_long_term_scheduled_hours_decomposition(
     labor_df,
     start_year=ANALYSIS_START_YEAR,
     end_year=ANALYSIS_END_YEAR,
+)
+
+lfs_age_df = load_lfs_age_data()
+
+age_hours_decomposition = create_age_hours_decomposition(
+    lfs_age_df,
+    start_year=ANALYSIS_START_YEAR,
+    end_year=ANALYSIS_END_YEAR,
+)
+
+age_hours_summary = summarize_age_hours_decomposition(
+    age_hours_decomposition
+)
+
+age_hours_decomposition = add_centered_composition_effect(
+    age_hours_decomposition
+)
+
+within_share_pct = (
+    age_hours_summary["within_effect_hours"]
+    / age_hours_summary["total_change_hours"]
+    * 100
+)
+
+composition_share_pct = (
+    age_hours_summary["composition_effect_hours"]
+    / age_hours_summary["total_change_hours"]
+    * 100
+)
+
+estat_app_id = st.secrets["ESTAT_APP_ID"]
+
+hours_distribution_df = (
+    load_lfs_working_hours_distribution(
+        estat_app_id
+    )
+)
+
+hours_distribution_trend = (
+    create_working_hours_distribution_trend(
+        hours_distribution_df,
+        age_group="15歳以上",
+    )
+)
+
+hours_distribution_change = (
+    create_working_hours_distribution_change(
+        hours_distribution_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+    )
+)
+
+detailed_hours_change = (
+    create_detailed_working_hours_distribution_change(
+        hours_distribution_df,
+        start_year=2018,
+        end_year=2025,
+    )
 )
 
 st.divider()
@@ -1054,6 +1509,252 @@ st.markdown(
     1日に働く時間の短縮よりも、月間の出勤日数減少による影響が大きいと考えられます。
     """
 )
+
+st.divider()
+
+st.subheader("労働力調査でみる労働時間減少の構造")
+
+st.markdown(
+    """
+    毎月勤労統計では、1人当たりの労働時間が長期的に減少していることを確認しました。
+
+    ここでは労働力調査を用いて、その低下が
+
+    - 短時間で働く年齢層が増えたという**年齢構成の変化**
+    - 同じ年齢層の中でも働く時間が短くなったという**年齢層内の変化**
+
+    のどちらによるものかを確認します。
+    """
+)
+
+st.markdown("#### 年齢構成の変化だけで説明できるか")
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        "平均週間就業時間",
+        (
+            f"{age_hours_summary['end_average_weekly_hours']:.1f}"
+            "時間"
+        ),
+        (
+            f"{age_hours_summary['total_change_hours']:+.2f}"
+            "時間"
+        ),
+    )
+
+with col2:
+    st.metric(
+        "年齢層内効果",
+        (
+            f"{age_hours_summary['within_effect_hours']:+.2f}"
+            "時間"
+        ),
+    )
+
+with col3:
+    st.metric(
+        "年齢構成効果",
+        (
+            f"{age_hours_summary['composition_effect_hours']:+.2f}"
+            "時間"
+        ),
+    )
+
+with col4:
+    st.metric(
+        "年齢層内効果の割合",
+        f"{within_share_pct:.1f}%",
+    )
+
+st.altair_chart(
+    create_age_hours_effect_chart(
+        age_hours_decomposition
+    ),
+    width="stretch",
+)
+
+st.markdown(
+    f"""
+    {ANALYSIS_START_YEAR}年から{ANALYSIS_END_YEAR}年にかけて、
+    平均週間就業時間は
+    **{age_hours_summary["total_change_hours"]:+.2f}時間**
+    変化しました。
+
+    このうち年齢層内効果は
+    **{age_hours_summary["within_effect_hours"]:+.2f}時間
+    （{within_share_pct:.1f}%）**、
+    年齢構成効果は
+    **{age_hours_summary["composition_effect_hours"]:+.2f}時間
+    （{composition_share_pct:.1f}%）**
+    です。
+
+    したがって、近年の平均労働時間低下の大部分は、
+    高齢者など短時間就業者の構成比が変化したためではなく、
+    **各年齢層の内部で就業時間が短くなったこと**
+    によって説明されます。
+    """
+)
+
+st.caption(
+    "平均週間就業時間は従業者ベース。"
+    "年齢階級別の延週間就業時間と平均週間就業時間から"
+    "従業者構成比を推計しています。"
+)
+
+st.markdown("#### 就業時間分布はどう変わったか")
+
+st.altair_chart(
+    create_working_hours_distribution_trend_chart(
+        hours_distribution_trend
+    ),
+    width="stretch",
+)
+
+total_distribution_change = (
+    hours_distribution_change.loc[
+        hours_distribution_change["age_group"]
+        == "15歳以上"
+    ].iloc[0]
+)
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "1～34時間",
+        (
+            f"{total_distribution_change[
+                'end_hours_1_34_harmonized_share'
+            ] * 100:.1f}%"
+        ),
+        (
+            f"{total_distribution_change[
+                'hours_1_34_share_change_pt'
+            ]:+.2f}pt"
+        ),
+    )
+
+with col2:
+    st.metric(
+        "35～48時間",
+        (
+            f"{total_distribution_change[
+                'end_hours_35_48_harmonized_share'
+            ] * 100:.1f}%"
+        ),
+        (
+            f"{total_distribution_change[
+                'hours_35_48_share_change_pt'
+            ]:+.2f}pt"
+        ),
+    )
+
+with col3:
+    st.metric(
+        "49時間以上",
+        (
+            f"{total_distribution_change[
+                'end_hours_49_plus_harmonized_share'
+            ] * 100:.1f}%"
+        ),
+        (
+            f"{total_distribution_change[
+                'hours_49_plus_share_change_pt'
+            ]:+.2f}pt"
+        ),
+    )
+
+st.caption(
+    f"表示値は{ANALYSIS_END_YEAR}年の構成比、"
+    f"増減は{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の変化です。"
+)
+
+st.markdown("#### 年齢層ごとに就業時間分布はどう変わったか")
+
+st.altair_chart(
+    create_age_working_hours_distribution_change_chart(
+        hours_distribution_change
+    ),
+    width="stretch",
+)
+
+st.markdown(
+    """
+    年齢別にみても、**49時間以上の割合はすべての年齢階級で低下**しています。
+
+    特に25～54歳では49時間以上の低下が大きく、
+    同時に35～48時間の割合が上昇しています。
+    これは、中核年齢層では単純な短時間就業の増加というより、
+    **長時間就業から標準的な時間帯への移動**
+    が進んだことを示しています。
+
+    一方、15～24歳と65歳以上では1～34時間の増加が大きく、
+    より明確な短時間化が確認できます。
+    """
+)
+
+st.markdown(
+    """
+    2000年から2025年にかけて、
+    **49時間以上の長時間就業者の割合は大幅に低下**し、
+    その一方で1～34時間の割合が上昇しています。
+
+    2015→2025年でも、49時間以上は約7.6ポイント低下しています。
+    この変化は若年層や高齢層だけではなく、
+    25～54歳の中核年齢層でも確認できます。
+    """
+)
+
+st.caption(
+    "2011年の全国値は東日本大震災の影響により欠測です。"
+    "また49時間以上は2017年までは公表上位区分、"
+    "2018年以降は49～59時間と60時間以上の合計で補完しています。"
+)
+
+with st.expander(
+    "詳細7区分で確認：長時間就業の減少はどの時間帯で起きたか"
+):
+    st.markdown(
+        """
+        2018年以降は週間就業時間をさらに細かい7区分に分けて確認できます。
+
+        ここでは、3区分で確認した変化が、
+        具体的にどの時間帯で生じているのかを確認します。
+        """
+    )
+
+    st.altair_chart(
+        create_detailed_hours_change_chart(
+            detailed_hours_change
+        ),
+        width="stretch",
+    )
+
+    st.markdown(
+        """
+        2018→2025年では、
+        **49～59時間と60時間以上の双方が縮小**しています。
+
+        特に25～54歳では、
+        49時間以上の長時間就業が減少する一方、
+        40～48時間帯の割合が上昇しています。
+
+        したがって中核年齢層では、
+        極端な短時間化だけではなく、
+        **長時間労働から40～48時間程度への移動**
+        が平均週間就業時間の低下に寄与したと考えられます。
+
+        一方、15～24歳と65歳以上では1～14時間の増加が大きく、
+        短時間就業そのものの拡大がより明確です。
+        """
+    )
+
+    st.caption(
+        "詳細7区分は2018年以降で利用可能な系列を用いています。"
+        "構成比の分母は従業者総数です。"
+    )
 
 general_df = create_labor_input_dataframe(
     raw_df,
