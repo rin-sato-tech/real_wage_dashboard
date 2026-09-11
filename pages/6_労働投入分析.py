@@ -819,33 +819,27 @@ def create_detailed_hours_change_chart(
         value_name="変化pt",
     )
 
-    chart_df["就業時間"] = (
-        chart_df["就業時間"]
-        .replace(columns)
-    )
+    chart_df["就業時間"] = chart_df["就業時間"].replace(columns)
 
-    base = (
-        alt.Chart(chart_df)
-        .encode(
-            x=alt.X(
-                "age_group:N",
-                title="年齢階級",
-                sort=None,
-            ),
-            y=alt.Y(
-                "就業時間:N",
-                title="週間就業時間",
-                sort=[
-                    "1～14時間",
-                    "15～29時間",
-                    "30～34時間",
-                    "35～39時間",
-                    "40～48時間",
-                    "49～59時間",
-                    "60時間以上",
-                ],
-            ),
-        )
+    base = alt.Chart(chart_df).encode(
+        x=alt.X(
+            "age_group:N",
+            title="年齢階級",
+            sort=None,
+        ),
+        y=alt.Y(
+            "就業時間:N",
+            title="週間就業時間",
+            sort=[
+                "1～14時間",
+                "15～29時間",
+                "30～34時間",
+                "35～39時間",
+                "40～48時間",
+                "49～59時間",
+                "60時間以上",
+            ],
+        ),
     )
 
     heatmap = base.mark_rect().encode(
@@ -1082,13 +1076,9 @@ age_hours_decomposition = create_age_hours_decomposition(
     end_year=ANALYSIS_END_YEAR,
 )
 
-age_hours_summary = summarize_age_hours_decomposition(
-    age_hours_decomposition
-)
+age_hours_summary = summarize_age_hours_decomposition(age_hours_decomposition)
 
-age_hours_decomposition = add_centered_composition_effect(
-    age_hours_decomposition
-)
+age_hours_decomposition = add_centered_composition_effect(age_hours_decomposition)
 
 within_share_pct = (
     age_hours_summary["within_effect_hours"]
@@ -1104,33 +1094,23 @@ composition_share_pct = (
 
 estat_app_id = st.secrets["ESTAT_APP_ID"]
 
-hours_distribution_df = (
-    load_lfs_working_hours_distribution(
-        estat_app_id
-    )
+hours_distribution_df = load_lfs_working_hours_distribution(estat_app_id)
+
+hours_distribution_trend = create_working_hours_distribution_trend(
+    hours_distribution_df,
+    age_group="15歳以上",
 )
 
-hours_distribution_trend = (
-    create_working_hours_distribution_trend(
-        hours_distribution_df,
-        age_group="15歳以上",
-    )
+hours_distribution_change = create_working_hours_distribution_change(
+    hours_distribution_df,
+    start_year=ANALYSIS_START_YEAR,
+    end_year=ANALYSIS_END_YEAR,
 )
 
-hours_distribution_change = (
-    create_working_hours_distribution_change(
-        hours_distribution_df,
-        start_year=ANALYSIS_START_YEAR,
-        end_year=ANALYSIS_END_YEAR,
-    )
-)
-
-detailed_hours_change = (
-    create_detailed_working_hours_distribution_change(
-        hours_distribution_df,
-        start_year=2018,
-        end_year=2025,
-    )
+detailed_hours_change = create_detailed_working_hours_distribution_change(
+    hours_distribution_df,
+    start_year=2018,
+    end_year=2025,
 )
 
 st.divider()
@@ -1534,32 +1514,20 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric(
         "平均週間就業時間",
-        (
-            f"{age_hours_summary['end_average_weekly_hours']:.1f}"
-            "時間"
-        ),
-        (
-            f"{age_hours_summary['total_change_hours']:+.2f}"
-            "時間"
-        ),
+        (f"{age_hours_summary['end_average_weekly_hours']:.1f}時間"),
+        (f"{age_hours_summary['total_change_hours']:+.2f}時間"),
     )
 
 with col2:
     st.metric(
         "年齢層内効果",
-        (
-            f"{age_hours_summary['within_effect_hours']:+.2f}"
-            "時間"
-        ),
+        (f"{age_hours_summary['within_effect_hours']:+.2f}時間"),
     )
 
 with col3:
     st.metric(
         "年齢構成効果",
-        (
-            f"{age_hours_summary['composition_effect_hours']:+.2f}"
-            "時間"
-        ),
+        (f"{age_hours_summary['composition_effect_hours']:+.2f}時間"),
     )
 
 with col4:
@@ -1569,9 +1537,7 @@ with col4:
     )
 
 st.altair_chart(
-    create_age_hours_effect_chart(
-        age_hours_decomposition
-    ),
+    create_age_hours_effect_chart(age_hours_decomposition),
     width="stretch",
 )
 
@@ -1606,64 +1572,39 @@ st.caption(
 st.markdown("#### 就業時間分布はどう変わったか")
 
 st.altair_chart(
-    create_working_hours_distribution_trend_chart(
-        hours_distribution_trend
-    ),
+    create_working_hours_distribution_trend_chart(hours_distribution_trend),
     width="stretch",
 )
 
-total_distribution_change = (
-    hours_distribution_change.loc[
-        hours_distribution_change["age_group"]
-        == "15歳以上"
-    ].iloc[0]
-)
+total_distribution_change = hours_distribution_change.loc[
+    hours_distribution_change["age_group"] == "15歳以上"
+].iloc[0]
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
         "1～34時間",
-        (
-            f"{total_distribution_change[
-                'end_hours_1_34_harmonized_share'
-            ] * 100:.1f}%"
-        ),
-        (
-            f"{total_distribution_change[
-                'hours_1_34_share_change_pt'
-            ]:+.2f}pt"
-        ),
+        (f"{total_distribution_change['end_hours_1_34_harmonized_share'] * 100:.1f}%"),
+        (f"{total_distribution_change['hours_1_34_share_change_pt']:+.2f}pt"),
     )
 
 with col2:
     st.metric(
         "35～48時間",
-        (
-            f"{total_distribution_change[
-                'end_hours_35_48_harmonized_share'
-            ] * 100:.1f}%"
-        ),
-        (
-            f"{total_distribution_change[
-                'hours_35_48_share_change_pt'
-            ]:+.2f}pt"
-        ),
+        (f"{total_distribution_change['end_hours_35_48_harmonized_share'] * 100:.1f}%"),
+        (f"{total_distribution_change['hours_35_48_share_change_pt']:+.2f}pt"),
     )
 
 with col3:
     st.metric(
         "49時間以上",
         (
-            f"{total_distribution_change[
-                'end_hours_49_plus_harmonized_share'
-            ] * 100:.1f}%"
+            f"{
+                total_distribution_change['end_hours_49_plus_harmonized_share']
+                * 100:.1f}%"
         ),
-        (
-            f"{total_distribution_change[
-                'hours_49_plus_share_change_pt'
-            ]:+.2f}pt"
-        ),
+        (f"{total_distribution_change['hours_49_plus_share_change_pt']:+.2f}pt"),
     )
 
 st.caption(
@@ -1674,9 +1615,7 @@ st.caption(
 st.markdown("#### 年齢層ごとに就業時間分布はどう変わったか")
 
 st.altair_chart(
-    create_age_working_hours_distribution_change_chart(
-        hours_distribution_change
-    ),
+    create_age_working_hours_distribution_change_chart(hours_distribution_change),
     width="stretch",
 )
 
@@ -1713,9 +1652,7 @@ st.caption(
     "2018年以降は49～59時間と60時間以上の合計で補完しています。"
 )
 
-with st.expander(
-    "詳細7区分で確認：長時間就業の減少はどの時間帯で起きたか"
-):
+with st.expander("詳細7区分で確認：長時間就業の減少はどの時間帯で起きたか"):
     st.markdown(
         """
         2018年以降は週間就業時間をさらに細かい7区分に分けて確認できます。
@@ -1726,9 +1663,7 @@ with st.expander(
     )
 
     st.altair_chart(
-        create_detailed_hours_change_chart(
-            detailed_hours_change
-        ),
+        create_detailed_hours_change_chart(detailed_hours_change),
         width="stretch",
     )
 

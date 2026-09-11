@@ -166,6 +166,4 @@ LFS_EMPLOYMENT_BY_AGE_PATH = Path(
     "data/raw/labor_input/lfs_employment_by_age_annual.xlsx"
 )
 
-LFS_HOURS_BY_AGE_PATH = Path(
-    "data/raw/labor_input/lfs_hours_by_age_annual.csv"
-)
+LFS_HOURS_BY_AGE_PATH = Path("data/raw/labor_input/lfs_hours_by_age_annual.csv")
