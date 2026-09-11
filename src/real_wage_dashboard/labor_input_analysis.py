@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from real_wage_dashboard.monthly_labor_service import extract_monthly_labor_series
 from real_wage_dashboard.wage_service import create_wage_dataframe
 from real_wage_dashboard.working_days_service import (
     create_working_days_dataframe,
@@ -63,6 +64,26 @@ def create_labor_input_dataframe(
         employment_type=employment_type,
     )
 
+    previous_workers_df = extract_monthly_labor_series(
+        raw_df,
+        item="前月末労働者数",
+        value_column="previous_month_workers",
+        label="前月末労働者数",
+        establishment_size=establishment_size,
+        employment_type=employment_type,
+        industry_code="TL",
+    )
+
+    end_workers_df = extract_monthly_labor_series(
+        raw_df,
+        item="本月末労働者数",
+        value_column="end_month_workers",
+        label="本月末労働者数",
+        establishment_size=establishment_size,
+        employment_type=employment_type,
+        industry_code="TL",
+    )
+
     result = (
         wage_df.merge(
             total_hours_df,
@@ -88,7 +109,23 @@ def create_labor_input_dataframe(
             how="inner",
             validate="one_to_one",
         )
+        .merge(
+            previous_workers_df,
+            on="date",
+            how="inner",
+            validate="one_to_one",
+        )
+        .merge(
+            end_workers_df,
+            on="date",
+            how="inner",
+            validate="one_to_one",
+        )
     )
+
+    result["worker_weight"] = (
+        result["previous_month_workers"] + result["end_month_workers"]
+    ) / 2
 
     result["approx_hourly_wage"] = result["nominal_wage_amount"] / result["total_hours"]
 
@@ -97,6 +134,25 @@ def create_labor_input_dataframe(
     )
 
     return result
+
+
+def weighted_mean(
+    df: pd.DataFrame,
+    value_column: str,
+    weight_column: str = "worker_weight",
+) -> float:
+    """月次値を平均労働者数で加重平均する。"""
+
+    values = df[value_column]
+    weights = df[weight_column]
+
+    if values.isna().any() or weights.isna().any():
+        raise ValueError("加重平均の対象に欠損値があります。")
+
+    if (weights <= 0).any():
+        raise ValueError("加重平均の重みは正である必要があります。")
+
+    return float(np.average(values, weights=weights))
 
 
 def add_year_over_year_pct(
@@ -209,17 +265,28 @@ def summarize_long_term_wage_decomposition(
     if len(start_df) != 12 or len(end_df) != 12:
         raise ValueError("長期比較には開始年・終了年ともに12か月分のデータが必要です。")
 
-    start_wage = start_df["nominal_wage_amount"].mean()
-    end_wage = end_df["nominal_wage_amount"].mean()
+    # start_wage = start_df["nominal_wage_amount"].mean()
+    # end_wage = end_df["nominal_wage_amount"].mean()
 
-    start_hours = start_df["total_hours"].mean()
-    end_hours = end_df["total_hours"].mean()
+    # start_hours = start_df["total_hours"].mean()
+    # end_hours = end_df["total_hours"].mean()
 
     # 年間の賃金総額 ÷ 年間の総実労働時間
     # 年平均月額賃金 = 加重概算時間当たり賃金 × 年平均労働時間
     # が厳密に成立するようにする。
-    start_hourly = start_df["nominal_wage_amount"].sum() / start_df["total_hours"].sum()
-    end_hourly = end_df["nominal_wage_amount"].sum() / end_df["total_hours"].sum()
+    # start_hourly = start_df["nominal_wage_amount"].sum() / start_df["total_hours"].sum()
+    # end_hourly = end_df["nominal_wage_amount"].sum() / end_df["total_hours"].sum()
+
+    start_wage = weighted_mean(start_df, "nominal_wage_amount")
+    end_wage = weighted_mean(end_df, "nominal_wage_amount")
+
+    start_hours = weighted_mean(start_df, "total_hours")
+    end_hours = weighted_mean(end_df, "total_hours")
+
+    # 年平均月額給与 = 年平均概算時間当たり給与 × 年平均労働時間
+    # が厳密に成立するようにする。
+    start_hourly = start_wage / start_hours
+    end_hourly = end_wage / end_hours
 
     wage_change_pct = ((end_wage / start_wage) - 1) * 100
 
@@ -401,14 +468,14 @@ def summarize_long_term_working_hours_decomposition(
     if len(start_df) != 12 or len(end_df) != 12:
         raise ValueError("長期比較には開始年・終了年ともに12か月分のデータが必要です。")
 
-    start_total = start_df["total_hours"].mean()
-    end_total = end_df["total_hours"].mean()
+    start_total = weighted_mean(start_df, "total_hours")
+    end_total = weighted_mean(end_df, "total_hours")
 
-    start_scheduled = start_df["scheduled_hours"].mean()
-    end_scheduled = end_df["scheduled_hours"].mean()
+    start_scheduled = weighted_mean(start_df, "scheduled_hours")
+    end_scheduled = weighted_mean(end_df, "scheduled_hours")
 
-    start_overtime = start_df["overtime_hours"].mean()
-    end_overtime = end_df["overtime_hours"].mean()
+    start_overtime = weighted_mean(start_df, "overtime_hours")
+    end_overtime = weighted_mean(end_df, "overtime_hours")
 
     total_diff = end_total - start_total
     scheduled_diff = end_scheduled - start_scheduled
@@ -517,11 +584,11 @@ def summarize_long_term_scheduled_hours_decomposition(
     if len(start_df) != 12 or len(end_df) != 12:
         raise ValueError("長期比較には開始年・終了年ともに12か月分のデータが必要です。")
 
-    start_scheduled = start_df["scheduled_hours"].mean()
-    end_scheduled = end_df["scheduled_hours"].mean()
+    start_scheduled = weighted_mean(start_df, "scheduled_hours")
+    end_scheduled = weighted_mean(end_df, "scheduled_hours")
 
-    start_days = start_df["working_days"].mean()
-    end_days = end_df["working_days"].mean()
+    start_days = weighted_mean(start_df, "working_days")
+    end_days = weighted_mean(end_df, "working_days")
 
     # 完全分解を維持するため、
     # 年平均所定内労働時間 ÷ 年平均出勤日数で算出する

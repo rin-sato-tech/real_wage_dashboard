@@ -11,6 +11,7 @@ from real_wage_dashboard.labor_input_analysis import (
     summarize_long_term_scheduled_hours_decomposition,
     summarize_long_term_wage_decomposition,
     summarize_long_term_working_hours_decomposition,
+    weighted_mean,
 )
 from real_wage_dashboard.wage_service import load_wage_csv
 from real_wage_dashboard.working_days_service import create_working_days_dataframe
@@ -42,6 +43,9 @@ def test_create_labor_input_dataframe() -> None:
         "working_days",
         "approx_hourly_wage",
         "scheduled_hours_per_workday",
+        "previous_month_workers",
+        "end_month_workers",
+        "worker_weight",
     }
 
     assert required_columns.issubset(df.columns)
@@ -181,3 +185,28 @@ def test_create_working_days_dataframe_raises_for_no_matching_data() -> None:
             establishment_size="INVALID",
             employment_type="0",
         )
+
+
+def test_worker_weight_is_average_of_month_end_workers() -> None:
+    df = load_analysis_df()
+
+    expected = (df["previous_month_workers"] + df["end_month_workers"]) / 2
+
+    assert np.allclose(
+        df["worker_weight"],
+        expected,
+        atol=1e-10,
+    )
+
+
+def test_weighted_mean() -> None:
+    df = pd.DataFrame(
+        {
+            "value": [10.0, 20.0],
+            "worker_weight": [1.0, 3.0],
+        }
+    )
+
+    result = weighted_mean(df, "value")
+
+    assert np.isclose(result, 17.5)
