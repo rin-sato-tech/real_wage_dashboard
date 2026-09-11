@@ -8,6 +8,7 @@ from real_wage_dashboard.labor_input_analysis import (
     add_wage_decomposition,
     add_working_hours_decomposition,
     create_labor_input_dataframe,
+    create_rolling_labor_input_decomposition,
     create_yearly_labor_input_summary,
     create_yearly_weighted_means,
     summarize_long_term_scheduled_hours_decomposition,
@@ -291,3 +292,39 @@ def test_yearly_labor_input_summary_identities() -> None:
     assert hours_error.abs().max() < 1e-10
     assert wage_error.dropna().abs().max() < 1e-10
     assert scheduled_error.dropna().abs().max() < 1e-10
+
+
+def test_rolling_labor_input_decomposition_identities() -> None:
+    df = load_analysis_df()
+    yearly = create_yearly_labor_input_summary(df)
+
+    rolling = create_rolling_labor_input_decomposition(
+        yearly,
+        window_years=10,
+    )
+
+    assert rolling["start_year"].min() == 1990
+    assert rolling["end_year"].max() == 2025
+    assert len(rolling) == 26
+
+    wage_error = (
+        rolling["wage_log_change"]
+        - rolling["hourly_wage_log_contribution"]
+        - rolling["total_hours_log_contribution"]
+    )
+
+    hours_error = (
+        rolling["total_hours_change_pct"]
+        - rolling["scheduled_hours_contribution_pct"]
+        - rolling["overtime_hours_contribution_pct"]
+    )
+
+    scheduled_error = (
+        rolling["scheduled_hours_log_change"]
+        - rolling["working_days_log_contribution"]
+        - rolling["hours_per_workday_log_contribution"]
+    )
+
+    assert wage_error.abs().max() < 1e-10
+    assert hours_error.abs().max() < 1e-10
+    assert scheduled_error.abs().max() < 1e-10

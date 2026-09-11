@@ -755,3 +755,99 @@ def create_yearly_labor_input_summary(df: pd.DataFrame) -> pd.DataFrame:
             "hours_per_workday_log_contribution",
         ]
     ]
+
+
+def create_rolling_labor_input_decomposition(
+    yearly_df: pd.DataFrame,
+    window_years: int = 10,
+) -> pd.DataFrame:
+    """年次系列からローリング長期分解を作成する。"""
+
+    if window_years <= 0:
+        raise ValueError("window_years は正の整数である必要があります。")
+
+    data = yearly_df.sort_values("year").reset_index(drop=True)
+
+    records: list[dict[str, float | int]] = []
+
+    indexed = data.set_index("year")
+
+    for start_year in indexed.index:
+        end_year = start_year + window_years
+
+        if end_year not in indexed.index:
+            continue
+
+        start = indexed.loc[start_year]
+        end = indexed.loc[end_year]
+
+        # 月額給与
+        wage_log_change = (
+            np.log(end["nominal_wage_amount"] / start["nominal_wage_amount"]) * 100
+        )
+
+        hourly_wage_log_contribution = (
+            np.log(
+                end["weighted_approx_hourly_wage"]
+                / start["weighted_approx_hourly_wage"]
+            )
+            * 100
+        )
+
+        total_hours_log_contribution = (
+            np.log(end["total_hours"] / start["total_hours"]) * 100
+        )
+
+        # 総実労働時間
+        total_hours_diff = end["total_hours"] - start["total_hours"]
+
+        scheduled_hours_diff = end["scheduled_hours"] - start["scheduled_hours"]
+
+        overtime_hours_diff = end["overtime_hours"] - start["overtime_hours"]
+
+        total_hours_change_pct = total_hours_diff / start["total_hours"] * 100
+
+        scheduled_hours_contribution_pct = (
+            scheduled_hours_diff / start["total_hours"] * 100
+        )
+
+        overtime_hours_contribution_pct = (
+            overtime_hours_diff / start["total_hours"] * 100
+        )
+
+        # 所定内労働時間
+        scheduled_hours_log_change = (
+            np.log(end["scheduled_hours"] / start["scheduled_hours"]) * 100
+        )
+
+        working_days_log_contribution = (
+            np.log(end["working_days"] / start["working_days"]) * 100
+        )
+
+        hours_per_workday_log_contribution = (
+            np.log(
+                end["scheduled_hours_per_workday"]
+                / start["scheduled_hours_per_workday"]
+            )
+            * 100
+        )
+
+        records.append(
+            {
+                "start_year": int(start_year),
+                "end_year": int(end_year),
+                "wage_log_change": wage_log_change,
+                "hourly_wage_log_contribution": (hourly_wage_log_contribution),
+                "total_hours_log_contribution": (total_hours_log_contribution),
+                "total_hours_change_pct": (total_hours_change_pct),
+                "scheduled_hours_contribution_pct": (scheduled_hours_contribution_pct),
+                "overtime_hours_contribution_pct": (overtime_hours_contribution_pct),
+                "scheduled_hours_log_change": (scheduled_hours_log_change),
+                "working_days_log_contribution": (working_days_log_contribution),
+                "hours_per_workday_log_contribution": (
+                    hours_per_workday_log_contribution
+                ),
+            }
+        )
+
+    return pd.DataFrame(records)
