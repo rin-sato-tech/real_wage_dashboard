@@ -9,6 +9,7 @@ from real_wage_dashboard.labor_input_analysis import (
     add_working_hours_decomposition,
     create_labor_input_dataframe,
     create_rolling_labor_input_decomposition,
+    create_working_hours_index_comparison,
     create_yearly_labor_input_summary,
     create_yearly_weighted_means,
     summarize_long_term_scheduled_hours_decomposition,
@@ -16,8 +17,15 @@ from real_wage_dashboard.labor_input_analysis import (
     summarize_long_term_working_hours_decomposition,
     weighted_mean,
 )
+from real_wage_dashboard.labor_input_index_service import (
+    create_official_working_hours_index_dataframe,
+)
 from real_wage_dashboard.wage_service import load_wage_csv
 from real_wage_dashboard.working_days_service import create_working_days_dataframe
+
+TOTAL_HOURS_INDEX_PATH = "data/raw/labor_input/total_hours_index_5plus.xls"
+SCHEDULED_HOURS_INDEX_PATH = "data/raw/labor_input/scheduled_hours_index_5plus.xls"
+OVERTIME_HOURS_INDEX_PATH = "data/raw/labor_input/overtime_hours_index_5plus.xls"
 
 
 def load_analysis_df() -> pd.DataFrame:
@@ -328,3 +336,36 @@ def test_rolling_labor_input_decomposition_identities() -> None:
     assert wage_error.abs().max() < 1e-10
     assert hours_error.abs().max() < 1e-10
     assert scheduled_error.abs().max() < 1e-10
+
+
+def test_working_hours_index_comparison_base_year() -> None:
+    yearly = create_yearly_labor_input_summary(load_analysis_df())
+
+    official = create_official_working_hours_index_dataframe(
+        TOTAL_HOURS_INDEX_PATH,
+        SCHEDULED_HOURS_INDEX_PATH,
+        OVERTIME_HOURS_INDEX_PATH,
+    )
+
+    comparison = create_working_hours_index_comparison(
+        yearly,
+        official,
+        base_year=2020,
+    )
+
+    base = comparison.loc[comparison["year"] == 2020].iloc[0]
+
+    assert np.isclose(
+        base["calculated_total_hours_index"],
+        100,
+    )
+    assert np.isclose(
+        base["calculated_scheduled_hours_index"],
+        100,
+    )
+    assert np.isclose(
+        base["calculated_overtime_hours_index"],
+        100,
+    )
+
+    assert comparison.loc[comparison["year"].between(1990, 2025)].shape[0] == 36

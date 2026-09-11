@@ -851,3 +851,59 @@ def create_rolling_labor_input_decomposition(
         )
 
     return pd.DataFrame(records)
+
+
+def create_working_hours_index_comparison(
+    yearly_df: pd.DataFrame,
+    official_df: pd.DataFrame,
+    base_year: int = 2020,
+) -> pd.DataFrame:
+    """実数から再構築した指数と公式労働時間指数を比較する。"""
+
+    result = yearly_df[
+        [
+            "year",
+            "total_hours",
+            "scheduled_hours",
+            "overtime_hours",
+        ]
+    ].copy()
+
+    base = result.loc[result["year"] == base_year]
+
+    if len(base) != 1:
+        raise ValueError(f"{base_year}年の基準値を一意に取得できません。")
+
+    for source, target in [
+        (
+            "total_hours",
+            "calculated_total_hours_index",
+        ),
+        (
+            "scheduled_hours",
+            "calculated_scheduled_hours_index",
+        ),
+        (
+            "overtime_hours",
+            "calculated_overtime_hours_index",
+        ),
+    ]:
+        result[target] = result[source] / base.iloc[0][source] * 100
+
+    result = result.merge(
+        official_df,
+        on="year",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    for name in [
+        "total_hours",
+        "scheduled_hours",
+        "overtime_hours",
+    ]:
+        result[f"{name}_index_diff"] = (
+            result[f"calculated_{name}_index"] - result[f"official_{name}_index"]
+        )
+
+    return result
