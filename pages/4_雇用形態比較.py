@@ -957,13 +957,36 @@ def main() -> None:
             st.error(f"期間別比較を作成できませんでした：{exc}")
             st.stop()
 
-        period_labels = {
-            "nominal_wage_amount": "名目月額賃金",
-            "working_hours": "総実労働時間",
-            "approx_hourly_wage": "時間当たり賃金",
-            "real_regular_wage": "実質月額賃金",
-            "real_approx_hourly_wage": "実質時間当たり賃金",
+        display_modes = {
+            "期間全体の変化率": "change_rate_pct",
+            "年率換算": "annualized_change_pct",
         }
+
+        selected_mode = st.radio(
+            "変化率の表示方法",
+            options=list(display_modes),
+            horizontal=True,
+            key="employment_period_display_mode",
+        )
+
+        value_column = display_modes[selected_mode]
+
+        if selected_mode == "期間全体の変化率":
+            st.caption(
+                "単位：%。各期間の開始年平均から終了年平均への変化率です。"
+                "期間の長さが異なるため、変化の速さは直接比較できません。"
+            )
+        else:
+            st.caption(
+                "単位：%／年。開始値と終了値から算出した年平均成長率です。"
+                "実際に毎年この率で変化したことや、"
+                "各年の変化率の単純平均を意味しません。"
+            )
+
+        period_order = [
+            f"{start}→{end}"
+            for start, end in comparison_periods
+        ]
 
         for employment_type in [
             "一般労働者",
@@ -974,35 +997,29 @@ def main() -> None:
                 == employment_type
             ]
 
-            st.markdown(f"#### {employment_type}")
-
-            for value_column, title in [
-                ("change_rate_pct", "期間全体の変化率（%）"),
-                ("annualized_change_pct", "年率換算（%／年）"),
-            ]:
-                table = selected.pivot(
+            table = (
+                selected.pivot(
                     index="indicator",
                     columns="period",
                     values=value_column,
-                ).reindex(
-                    index=ANALYSIS_INDICATORS,
-                    columns=[
-                        f"{start}→{end}"
-                        for start, end in comparison_periods
-                    ],
                 )
+                .reindex(
+                    index=ANALYSIS_INDICATORS,
+                    columns=period_order,
+                )
+                .rename(index=ANALYSIS_INDICATOR_LABELS)
+            )
+            table.index.name = "指標"
 
-                table.index = table.index.map(period_labels)
-                table.index.name = "指標"
+            st.markdown(f"#### {employment_type}")
 
-                st.caption(title)
-                st.dataframe(table.style.format("{:+.2f}"))
+            st.dataframe(
+                table.style.format("{:+.2f}"),
+                width="stretch",
+            )
 
         st.caption(
             "各年12か月の月次値を単純平均して比較しています。"
-            "年率換算は（終了値÷開始値）"
-            "の経過年数乗根から1を引いて算出した値です。"
-            "各年の実際の変化率の平均ではありません。"
             "2019→2025年は他の期間と重なる補足比較です。"
         )
 
@@ -1272,7 +1289,13 @@ def main() -> None:
             cpi_series=selected_series,
         )
 
-        st.subheader("分析データ")
+        st.subheader("現在の条件のデータ")
+
+        st.caption(
+            f"事業所規模：{establishment_size} ／ "
+            f"CPI：{selected_series} ／ "
+            f"年次比較：{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年"
+        )
 
         display_columns = [
             "date",
@@ -1310,11 +1333,12 @@ def main() -> None:
             ],
         )
 
-        st.dataframe(
-            display_df,
-            width="stretch",
-            hide_index=True,
-        )
+        with st.expander("月次データを確認", expanded=False):
+            st.dataframe(
+                display_df,
+                width="stretch",
+                hide_index=True,
+            )
 
         export_columns = [
             "date",
@@ -1352,55 +1376,88 @@ def main() -> None:
             .encode("utf-8-sig")
         )
 
-        st.download_button(
-            label="CSVをダウンロード",
-            data=csv_data,
-            file_name="employment_comparison.csv",
-            mime="text/csv",
-        )
+        monthly_col, yearly_col, period_col = st.columns(3)
 
-        st.markdown("#### Tableau用データ")
+        with monthly_col:
+            st.download_button(
+                label="月次データCSV",
+                data=csv_data,
+                file_name="employment_comparison.csv",
+                mime="text/csv",
+                key="employment_monthly_csv",
+            )
+
+        with yearly_col:
+            st.download_button(
+                label="年次比較CSV",
+                data=comparison_summary_df.to_csv(
+                    index=False,
+                    float_format="%.17g",
+                ).encode("utf-8-sig"),
+                file_name="employment_yearly_comparison.csv",
+                mime="text/csv",
+                key="employment_yearly_csv",
+            )
+
+        with period_col:
+            st.download_button(
+                label="期間別比較CSV",
+                data=period_comparison_df.to_csv(
+                    index=False,
+                    float_format="%.17g",
+                ).encode("utf-8-sig"),
+                file_name="employment_period_comparison.csv",
+                mime="text/csv",
+                key="employment_period_csv",
+            )
 
         st.caption(
-            "事業所規模・CPI系列・雇用形態の全条件を含むCSVを生成します。"
-            "Tableau側で各条件をフィルターして分析できます。"
+            "月次データは表示期間による絞り込み前の全期間を保存します。"
+            "期間別比較CSVには、期間全体の変化率と年率換算の両方を含みます。"
         )
 
-        if st.button("Tableau用CSVを生成"):
-            try:
-                cpi_dataframes = {
-                    series_name: load_cpi_data(
-                        app_id,
-                        series_code,
-                    )
-                    for series_name, series_code in CPI_SERIES.items()
-                }
-
-                tableau_df = create_tableau_export_dataframe(
-                    raw_df,
-                    cpi_dataframes,
-                )
-
-                st.session_state["tableau_export_csv"] = tableau_df.to_csv(
-                    index=False
-                ).encode("utf-8-sig")
-
-                st.session_state["tableau_export_rows"] = len(tableau_df)
-
-            except (EStatAPIError, ValueError) as exc:
-                st.error(str(exc))
-
-        if "tableau_export_csv" in st.session_state:
-            st.download_button(
-                label="Tableau用CSVをダウンロード",
-                data=st.session_state["tableau_export_csv"],
-                file_name="employment_comparison_tableau.csv",
-                mime="text/csv",
-            )
+        with st.expander("Tableau用：全条件のCSVを生成", expanded=False):
 
             st.caption(
-                f"{st.session_state['tableau_export_rows']:,}行のデータを生成しました。"
+                "事業所規模・CPI系列・雇用形態の全条件を含むCSVを生成します。"
+                "Tableau側で各条件をフィルターして分析できます。"
             )
+
+            if st.button("Tableau用CSVを生成"):
+                try:
+                    cpi_dataframes = {
+                        series_name: load_cpi_data(
+                            app_id,
+                            series_code,
+                        )
+                        for series_name, series_code in CPI_SERIES.items()
+                    }
+
+                    tableau_df = create_tableau_export_dataframe(
+                        raw_df,
+                        cpi_dataframes,
+                    )
+
+                    st.session_state["tableau_export_csv"] = tableau_df.to_csv(
+                        index=False
+                    ).encode("utf-8-sig")
+
+                    st.session_state["tableau_export_rows"] = len(tableau_df)
+
+                except (EStatAPIError, ValueError) as exc:
+                    st.error(str(exc))
+
+            if "tableau_export_csv" in st.session_state:
+                st.download_button(
+                    label="Tableau用CSVをダウンロード",
+                    data=st.session_state["tableau_export_csv"],
+                    file_name="employment_comparison_tableau.csv",
+                    mime="text/csv",
+                )
+
+                st.caption(
+                    f"{st.session_state['tableau_export_rows']:,}行のデータを生成しました。"
+                )
 
     with st.expander("分析方法・注意事項・出典", expanded=False):
         st.subheader("注意事項")
@@ -1438,6 +1495,7 @@ def main() -> None:
         )
 
     with tab_data:
+        st.divider()
         st.subheader("再計算記録の保存")
 
         st.caption(
@@ -1474,6 +1532,10 @@ def main() -> None:
                 add_dataframe(
                     "outputs/aggregation_sensitivity.csv",
                     pd.DataFrame(sensitivity_rows),
+                )
+                add_dataframe(
+                    "outputs/period_comparison.csv",
+                    period_comparison_df,
                 )
 
                 # 保存済みのソースと依存関係を収録する。
