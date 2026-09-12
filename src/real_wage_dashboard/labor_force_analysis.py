@@ -486,3 +486,385 @@ def create_detailed_working_hours_distribution_change(
         )
 
     return result
+
+
+def create_total_labor_input_decomposition(
+    df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+) -> pd.DataFrame:
+    """延週間就業時間の変化を従業者数効果と1人当たり時間効果に分解する。"""
+
+    required_columns = {
+        "year",
+        "age_group",
+        "aggregate_weekly_hours",
+        "average_weekly_hours",
+        "implied_persons_at_work",
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"必要な列がありません: {sorted(missing)}"
+        )
+
+    start = df.loc[
+        df["year"] == start_year,
+        [
+            "age_group",
+            "aggregate_weekly_hours",
+            "average_weekly_hours",
+            "implied_persons_at_work",
+        ],
+    ].rename(
+        columns={
+            "aggregate_weekly_hours": "start_aggregate_weekly_hours",
+            "average_weekly_hours": "start_average_weekly_hours",
+            "implied_persons_at_work": "start_persons_at_work",
+        }
+    )
+
+    end = df.loc[
+        df["year"] == end_year,
+        [
+            "age_group",
+            "aggregate_weekly_hours",
+            "average_weekly_hours",
+            "implied_persons_at_work",
+        ],
+    ].rename(
+        columns={
+            "aggregate_weekly_hours": "end_aggregate_weekly_hours",
+            "average_weekly_hours": "end_average_weekly_hours",
+            "implied_persons_at_work": "end_persons_at_work",
+        }
+    )
+
+    result = start.merge(
+        end,
+        on="age_group",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    if result.empty:
+        raise ValueError(
+            "比較対象となる年齢階級データがありません。"
+        )
+
+    value_columns = [
+        "start_aggregate_weekly_hours",
+        "start_average_weekly_hours",
+        "start_persons_at_work",
+        "end_aggregate_weekly_hours",
+        "end_average_weekly_hours",
+        "end_persons_at_work",
+    ]
+
+    if result[value_columns].isna().any().any():
+        raise ValueError(
+            "比較対象年に総労働時間・平均労働時間・従業者数の欠損があります。"
+        )
+
+    result["aggregate_weekly_hours_change"] = (
+        result["end_aggregate_weekly_hours"]
+        - result["start_aggregate_weekly_hours"]
+    )
+
+    result["persons_at_work_change"] = (
+        result["end_persons_at_work"]
+        - result["start_persons_at_work"]
+    )
+
+    result["average_weekly_hours_change"] = (
+        result["end_average_weekly_hours"]
+        - result["start_average_weekly_hours"]
+    )
+
+    # 対称分解
+    #
+    # Δ(NH)
+    # = ((H0 + H1) / 2) ΔN
+    # + ((N0 + N1) / 2) ΔH
+    result["persons_effect"] = (
+        (
+            result["start_average_weekly_hours"]
+            + result["end_average_weekly_hours"]
+        )
+        / 2
+        * result["persons_at_work_change"]
+    )
+
+    result["hours_effect"] = (
+        (
+            result["start_persons_at_work"]
+            + result["end_persons_at_work"]
+        )
+        / 2
+        * result["average_weekly_hours_change"]
+    )
+
+    result["decomposition_error"] = (
+        result["aggregate_weekly_hours_change"]
+        - result["persons_effect"]
+        - result["hours_effect"]
+    )
+
+    return result
+
+
+def summarize_total_labor_input_decomposition(
+    decomposition_df: pd.DataFrame,
+) -> dict[str, float]:
+    """総労働投入変化を人数・年齢層内時間・年齢構成へ分解する。"""
+
+    start_total_hours = float(
+        decomposition_df[
+            "start_aggregate_weekly_hours"
+        ].sum()
+    )
+
+    end_total_hours = float(
+        decomposition_df[
+            "end_aggregate_weekly_hours"
+        ].sum()
+    )
+
+    start_total_persons = float(
+        decomposition_df[
+            "start_persons_at_work"
+        ].sum()
+    )
+
+    end_total_persons = float(
+        decomposition_df[
+            "end_persons_at_work"
+        ].sum()
+    )
+
+    start_average_hours = (
+        start_total_hours
+        / start_total_persons
+    )
+
+    end_average_hours = (
+        end_total_hours
+        / end_total_persons
+    )
+
+    total_change = (
+        end_total_hours
+        - start_total_hours
+    )
+
+    average_persons = (
+        start_total_persons
+        + end_total_persons
+    ) / 2
+
+    average_hours = (
+        start_average_hours
+        + end_average_hours
+    ) / 2
+
+    # --------------------------------------------------------
+    # 1. 従業者総数効果
+    # --------------------------------------------------------
+
+    persons_effect = (
+        average_hours
+        * (
+            end_total_persons
+            - start_total_persons
+        )
+    )
+
+    # --------------------------------------------------------
+    # 2. 平均時間変化を
+    #    年齢層内効果と年齢構成効果へ分解
+    # --------------------------------------------------------
+
+    start_share = (
+        decomposition_df["start_persons_at_work"]
+        / start_total_persons
+    )
+
+    end_share = (
+        decomposition_df["end_persons_at_work"]
+        / end_total_persons
+    )
+
+    within_hours_change = (
+        (
+            start_share
+            + end_share
+        )
+        / 2
+        * (
+            decomposition_df[
+                "end_average_weekly_hours"
+            ]
+            - decomposition_df[
+                "start_average_weekly_hours"
+            ]
+        )
+    ).sum()
+
+    composition_hours_change = (
+        (
+            decomposition_df[
+                "start_average_weekly_hours"
+            ]
+            + decomposition_df[
+                "end_average_weekly_hours"
+            ]
+        )
+        / 2
+        * (
+            end_share
+            - start_share
+        )
+    ).sum()
+
+    within_effect = (
+        average_persons
+        * within_hours_change
+    )
+
+    composition_effect = (
+        average_persons
+        * composition_hours_change
+    )
+
+    average_hours_effect = (
+        within_effect
+        + composition_effect
+    )
+
+    decomposition_error = (
+        total_change
+        - persons_effect
+        - within_effect
+        - composition_effect
+    )
+
+    return {
+        "start_total_weekly_hours": start_total_hours,
+        "end_total_weekly_hours": end_total_hours,
+        "total_change_weekly_hours": total_change,
+        "total_change_pct": (
+            (end_total_hours / start_total_hours - 1)
+            * 100
+        ),
+        "start_total_persons_at_work": start_total_persons,
+        "end_total_persons_at_work": end_total_persons,
+        "start_average_weekly_hours": start_average_hours,
+        "end_average_weekly_hours": end_average_hours,
+        "persons_effect_weekly_hours": persons_effect,
+        "average_hours_effect_weekly_hours": (
+            average_hours_effect
+        ),
+        "within_age_hours_effect_weekly_hours": (
+            within_effect
+        ),
+        "age_composition_effect_weekly_hours": (
+            composition_effect
+        ),
+        "decomposition_error": decomposition_error,
+    }
+
+
+def create_total_labor_input_period_summary(
+    df: pd.DataFrame,
+    periods: list[tuple[int, int]],
+) -> pd.DataFrame:
+    """複数期間の総労働投入と人数・時間効果を要約する。"""
+
+    records = []
+
+    for start_year, end_year in periods:
+        decomposition = create_total_labor_input_decomposition(
+            df,
+            start_year=start_year,
+            end_year=end_year,
+        )
+
+        summary = summarize_total_labor_input_decomposition(
+            decomposition
+        )
+
+        records.append(
+            {
+                "start_year": start_year,
+                "end_year": end_year,
+                "start_total_weekly_hours": (
+                    summary["start_total_weekly_hours"]
+                ),
+                "end_total_weekly_hours": (
+                    summary["end_total_weekly_hours"]
+                ),
+                "total_change_weekly_hours": (
+                    summary["total_change_weekly_hours"]
+                ),
+                "total_change_pct": (
+                    summary["total_change_pct"]
+                ),
+                "persons_effect_weekly_hours": (
+                    summary["persons_effect_weekly_hours"]
+                ),
+                "within_age_hours_effect_weekly_hours": (
+                    summary[
+                        "within_age_hours_effect_weekly_hours"
+                    ]
+                ),
+                "age_composition_effect_weekly_hours": (
+                    summary[
+                        "age_composition_effect_weekly_hours"
+                    ]
+                ),
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def create_total_labor_input_trend(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """年次の総労働投入と従業者数・平均週間就業時間を集計する。"""
+
+    required_columns = {
+        "year",
+        "aggregate_weekly_hours",
+        "implied_persons_at_work",
+        "average_weekly_hours",
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"必要な列がありません: {sorted(missing)}"
+        )
+
+    yearly = (
+        df.groupby("year", as_index=False)
+        .agg(
+            total_weekly_hours=(
+                "aggregate_weekly_hours",
+                lambda x: x.sum(min_count=1),
+            ),
+            total_persons_at_work=(
+                "implied_persons_at_work",
+                lambda x: x.sum(min_count=1),
+            ),
+        )
+    )
+
+    yearly["average_weekly_hours"] = (
+        yearly["total_weekly_hours"]
+        / yearly["total_persons_at_work"]
+    )
+
+    return yearly.sort_values("year").reset_index(drop=True)

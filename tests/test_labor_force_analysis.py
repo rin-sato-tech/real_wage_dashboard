@@ -8,9 +8,11 @@ from real_wage_dashboard.labor_force_analysis import (
     create_age_hours_period_summary,
     create_employment_count_decomposition,
     create_employment_structure_summary,
+    create_total_labor_input_decomposition,
     create_working_hours_distribution_change,
     create_working_hours_distribution_period_summary,
     summarize_age_hours_decomposition,
+    summarize_total_labor_input_decomposition,
 )
 from real_wage_dashboard.labor_force_service import (
     create_lfs_age_dataframe,
@@ -282,3 +284,153 @@ def test_create_working_hours_distribution_period_summary() -> None:
     assert second["hours_1_34_change_pt"] == pytest.approx(5.0)
     assert second["hours_35_48_change_pt"] == pytest.approx(0.0)
     assert second["hours_49_plus_change_pt"] == pytest.approx(-5.0)
+
+
+def test_create_total_labor_input_decomposition() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2025,
+                2025,
+            ],
+            "age_group": [
+                "25～34歳",
+                "35～44歳",
+                "25～34歳",
+                "35～44歳",
+            ],
+            "average_weekly_hours": [
+                40.0,
+                42.0,
+                38.0,
+                39.0,
+            ],
+            "implied_persons_at_work": [
+                100.0,
+                200.0,
+                110.0,
+                180.0,
+            ],
+            "aggregate_weekly_hours": [
+                4000.0,
+                8400.0,
+                4180.0,
+                7020.0,
+            ],
+        }
+    )
+
+    result = create_total_labor_input_decomposition(
+        df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    assert len(result) == 2
+
+    row = result.loc[
+        result["age_group"] == "25～34歳"
+    ].iloc[0]
+
+    assert row[
+        "aggregate_weekly_hours_change"
+    ] == pytest.approx(180.0)
+
+    assert row[
+        "persons_effect"
+    ] == pytest.approx(390.0)
+
+    assert row[
+        "hours_effect"
+    ] == pytest.approx(-210.0)
+
+    assert row[
+        "decomposition_error"
+    ] == pytest.approx(0.0)
+
+
+def test_summarize_total_labor_input_decomposition() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2025,
+                2025,
+            ],
+            "age_group": [
+                "25～34歳",
+                "35～44歳",
+                "25～34歳",
+                "35～44歳",
+            ],
+            "average_weekly_hours": [
+                40.0,
+                42.0,
+                38.0,
+                39.0,
+            ],
+            "implied_persons_at_work": [
+                100.0,
+                200.0,
+                110.0,
+                180.0,
+            ],
+            "aggregate_weekly_hours": [
+                4000.0,
+                8400.0,
+                4180.0,
+                7020.0,
+            ],
+        }
+    )
+
+    decomposition = create_total_labor_input_decomposition(
+        df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    summary = summarize_total_labor_input_decomposition(
+        decomposition
+    )
+
+    assert summary[
+        "start_total_weekly_hours"
+    ] == pytest.approx(12400.0)
+
+    assert summary[
+        "end_total_weekly_hours"
+    ] == pytest.approx(11200.0)
+
+    assert summary[
+        "total_change_weekly_hours"
+    ] == pytest.approx(-1200.0)
+
+    assert summary[
+        "persons_effect_weekly_hours"
+    ] == pytest.approx(-399.7701149425287)
+
+    assert summary[
+        "within_age_hours_effect_weekly_hours"
+    ] == pytest.approx(-779.8850574712644)
+
+    assert summary[
+        "age_composition_effect_weekly_hours"
+    ] == pytest.approx(-20.344827586206897)
+
+    assert summary[
+        "average_hours_effect_weekly_hours"
+    ] == pytest.approx(-800.2298850574713)
+
+    assert (
+        summary["persons_effect_weekly_hours"]
+        + summary["within_age_hours_effect_weekly_hours"]
+        + summary["age_composition_effect_weekly_hours"]
+    ) == pytest.approx(-1200.0)
+
+    assert summary[
+        "decomposition_error"
+    ] == pytest.approx(0.0)
