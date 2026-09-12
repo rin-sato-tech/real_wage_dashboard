@@ -430,31 +430,22 @@ def test_create_total_labor_input_period_summary() -> None:
     assert len(result) == 2
 
     recent = result.loc[
-        (result["start_year"] == 2015)
-        & (result["end_year"] == 2025)
+        (result["start_year"] == 2015) & (result["end_year"] == 2025)
     ].iloc[0]
 
-    assert recent[
-        "total_change_weekly_hours"
-    ] == pytest.approx(-4985.0)
+    assert recent["total_change_weekly_hours"] == pytest.approx(-4985.0)
 
-    assert recent[
-        "persons_effect_weekly_hours"
-    ] == pytest.approx(
+    assert recent["persons_effect_weekly_hours"] == pytest.approx(
         15255.471935,
         abs=1e-6,
     )
 
-    assert recent[
-        "within_age_hours_effect_weekly_hours"
-    ] == pytest.approx(
+    assert recent["within_age_hours_effect_weekly_hours"] == pytest.approx(
         -18064.934705,
         abs=1e-6,
     )
 
-    assert recent[
-        "age_composition_effect_weekly_hours"
-    ] == pytest.approx(
+    assert recent["age_composition_effect_weekly_hours"] == pytest.approx(
         -2175.537231,
         abs=1e-6,
     )
@@ -474,46 +465,164 @@ def test_create_total_labor_input_trend() -> None:
 
     result = create_total_labor_input_trend(df)
 
-    row_2000 = result.loc[
-        result["year"] == 2000
-    ].iloc[0]
+    row_2000 = result.loc[result["year"] == 2000].iloc[0]
 
-    assert row_2000[
-        "total_weekly_hours"
-    ] == pytest.approx(270293.0)
+    assert row_2000["total_weekly_hours"] == pytest.approx(270293.0)
 
-    assert row_2000[
-        "average_weekly_hours"
-    ] == pytest.approx(
+    assert row_2000["average_weekly_hours"] == pytest.approx(
         42.734140,
         abs=1e-6,
     )
 
-    row_2011 = result.loc[
-        result["year"] == 2011
-    ].iloc[0]
+    row_2011 = result.loc[result["year"] == 2011].iloc[0]
 
-    assert pd.isna(
-        row_2011["total_weekly_hours"]
-    )
-    assert pd.isna(
-        row_2011["total_persons_at_work"]
-    )
-    assert pd.isna(
-        row_2011["average_weekly_hours"]
-    )
+    assert pd.isna(row_2011["total_weekly_hours"])
+    assert pd.isna(row_2011["total_persons_at_work"])
+    assert pd.isna(row_2011["average_weekly_hours"])
 
-    row_2025 = result.loc[
-        result["year"] == 2025
-    ].iloc[0]
+    row_2025 = result.loc[result["year"] == 2025].iloc[0]
 
-    assert row_2025[
-        "total_weekly_hours"
-    ] == pytest.approx(236287.0)
+    assert row_2025["total_weekly_hours"] == pytest.approx(236287.0)
 
-    assert row_2025[
-        "average_weekly_hours"
-    ] == pytest.approx(
+    assert row_2025["average_weekly_hours"] == pytest.approx(
         35.873024,
         abs=1e-6,
     )
+
+
+def test_create_employment_structure_summary_requires_columns() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2025],
+            "age_group": ["15～24歳"],
+            "employed_persons": [100.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        create_employment_structure_summary(
+            df,
+            start_year=2015,
+            end_year=2025,
+        )
+
+
+def test_age_hours_decomposition_requires_start_year() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2025],
+            "age_group": ["25～34歳"],
+            "average_weekly_hours": [38.0],
+            "worker_share": [1.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="開始年 2015 のデータがありません",
+    ):
+        create_age_hours_decomposition(
+            df,
+            start_year=2015,
+            end_year=2025,
+        )
+
+
+def test_age_hours_decomposition_requires_end_year() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015],
+            "age_group": ["25～34歳"],
+            "average_weekly_hours": [40.0],
+            "worker_share": [1.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="終了年 2025 のデータがありません",
+    ):
+        create_age_hours_decomposition(
+            df,
+            start_year=2015,
+            end_year=2025,
+        )
+
+
+def test_age_hours_decomposition_rejects_missing_values() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025],
+            "age_group": ["25～34歳", "25～34歳"],
+            "average_weekly_hours": [40.0, np.nan],
+            "worker_share": [1.0, 1.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="就業時間または構成比の欠損",
+    ):
+        create_age_hours_decomposition(
+            df,
+            start_year=2015,
+            end_year=2025,
+        )
+
+
+def test_employment_count_decomposition_rejects_zero_rate() -> None:
+    df = pd.DataFrame(
+        {
+            "start_employed_persons": [100.0],
+            "end_employed_persons": [110.0],
+            "start_employment_rate": [0.0],
+            "end_employment_rate": [50.0],
+            "employed_persons_change": [10.0],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="就業率は0より大きく100以下",
+    ):
+        create_employment_count_decomposition(df)
+
+
+def test_age_hours_decomposition_requires_same_age_groups() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2025,
+            ],
+            "age_group": [
+                "25～34歳",
+                "35～44歳",
+                "25～34歳",
+            ],
+            "average_weekly_hours": [
+                40.0,
+                42.0,
+                38.0,
+            ],
+            "worker_share": [
+                0.5,
+                0.5,
+                1.0,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="開始年と終了年で年齢階級が一致しません",
+    ):
+        create_age_hours_decomposition(
+            df,
+            start_year=2015,
+            end_year=2025,
+        )
