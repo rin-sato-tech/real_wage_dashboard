@@ -330,25 +330,15 @@ def test_create_total_labor_input_decomposition() -> None:
 
     assert len(result) == 2
 
-    row = result.loc[
-        result["age_group"] == "25～34歳"
-    ].iloc[0]
+    row = result.loc[result["age_group"] == "25～34歳"].iloc[0]
 
-    assert row[
-        "aggregate_weekly_hours_change"
-    ] == pytest.approx(180.0)
+    assert row["aggregate_weekly_hours_change"] == pytest.approx(180.0)
 
-    assert row[
-        "persons_effect"
-    ] == pytest.approx(390.0)
+    assert row["persons_effect"] == pytest.approx(390.0)
 
-    assert row[
-        "hours_effect"
-    ] == pytest.approx(-210.0)
+    assert row["hours_effect"] == pytest.approx(-210.0)
 
-    assert row[
-        "decomposition_error"
-    ] == pytest.approx(0.0)
+    assert row["decomposition_error"] == pytest.approx(0.0)
 
 
 def test_summarize_total_labor_input_decomposition() -> None:
@@ -393,37 +383,27 @@ def test_summarize_total_labor_input_decomposition() -> None:
         end_year=2025,
     )
 
-    summary = summarize_total_labor_input_decomposition(
-        decomposition
+    summary = summarize_total_labor_input_decomposition(decomposition)
+
+    assert summary["start_total_weekly_hours"] == pytest.approx(12400.0)
+
+    assert summary["end_total_weekly_hours"] == pytest.approx(11200.0)
+
+    assert summary["total_change_weekly_hours"] == pytest.approx(-1200.0)
+
+    assert summary["persons_effect_weekly_hours"] == pytest.approx(-399.7701149425287)
+
+    assert summary["within_age_hours_effect_weekly_hours"] == pytest.approx(
+        -779.8850574712644
     )
 
-    assert summary[
-        "start_total_weekly_hours"
-    ] == pytest.approx(12400.0)
+    assert summary["age_composition_effect_weekly_hours"] == pytest.approx(
+        -20.344827586206897
+    )
 
-    assert summary[
-        "end_total_weekly_hours"
-    ] == pytest.approx(11200.0)
-
-    assert summary[
-        "total_change_weekly_hours"
-    ] == pytest.approx(-1200.0)
-
-    assert summary[
-        "persons_effect_weekly_hours"
-    ] == pytest.approx(-399.7701149425287)
-
-    assert summary[
-        "within_age_hours_effect_weekly_hours"
-    ] == pytest.approx(-779.8850574712644)
-
-    assert summary[
-        "age_composition_effect_weekly_hours"
-    ] == pytest.approx(-20.344827586206897)
-
-    assert summary[
-        "average_hours_effect_weekly_hours"
-    ] == pytest.approx(-800.2298850574713)
+    assert summary["average_hours_effect_weekly_hours"] == pytest.approx(
+        -800.2298850574713
+    )
 
     assert (
         summary["persons_effect_weekly_hours"]
@@ -431,6 +411,4 @@ def test_summarize_total_labor_input_decomposition() -> None:
         + summary["age_composition_effect_weekly_hours"]
     ) == pytest.approx(-1200.0)
 
-    assert summary[
-        "decomposition_error"
-    ] == pytest.approx(0.0)
+    assert summary["decomposition_error"] == pytest.approx(0.0)

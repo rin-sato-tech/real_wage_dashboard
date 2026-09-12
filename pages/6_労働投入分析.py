@@ -995,14 +995,10 @@ def create_total_labor_input_index_chart(
 
     chart_df = trend_df.copy()
 
-    base = chart_df.loc[
-        chart_df["year"] == base_year
-    ]
+    base = chart_df.loc[chart_df["year"] == base_year]
 
     if len(base) != 1:
-        raise ValueError(
-            f"{base_year}年の基準値を一意に取得できません。"
-        )
+        raise ValueError(f"{base_year}年の基準値を一意に取得できません。")
 
     indicators = {
         "total_weekly_hours": "総労働投入",
@@ -1013,27 +1009,17 @@ def create_total_labor_input_index_chart(
     for column in indicators:
         base_value = base.iloc[0][column]
 
-        chart_df[f"{column}_index"] = (
-            chart_df[column]
-            / base_value
-            * 100
-        )
+        chart_df[f"{column}_index"] = chart_df[column] / base_value * 100
 
     long_df = chart_df.melt(
         id_vars="year",
-        value_vars=[
-            f"{column}_index"
-            for column in indicators
-        ],
+        value_vars=[f"{column}_index" for column in indicators],
         var_name="指標",
         value_name="指数",
     )
 
     long_df["指標"] = long_df["指標"].replace(
-        {
-            f"{column}_index": label
-            for column, label in indicators.items()
-        }
+        {f"{column}_index": label for column, label in indicators.items()}
     )
 
     lines = (
@@ -1079,9 +1065,7 @@ def create_total_labor_input_index_chart(
     )
 
     baseline = (
-        alt.Chart(
-            pd.DataFrame({"y": [100]})
-        )
+        alt.Chart(pd.DataFrame({"y": [100]}))
         .mark_rule(
             strokeDash=[5, 5],
         )
@@ -1108,15 +1092,9 @@ def create_total_labor_input_decomposition_chart(
                 "年齢構成",
             ],
             "寄与": [
-                summary[
-                    "persons_effect_weekly_hours"
-                ],
-                summary[
-                    "within_age_hours_effect_weekly_hours"
-                ],
-                summary[
-                    "age_composition_effect_weekly_hours"
-                ],
+                summary["persons_effect_weekly_hours"],
+                summary["within_age_hours_effect_weekly_hours"],
+                summary["age_composition_effect_weekly_hours"],
             ],
         }
     )
@@ -1176,9 +1154,7 @@ def create_total_labor_input_decomposition_chart(
     )
 
     zero_line = (
-        alt.Chart(
-            pd.DataFrame({"y": [0]})
-        )
+        alt.Chart(pd.DataFrame({"y": [0]}))
         .mark_rule(
             strokeDash=[4, 4],
         )
@@ -1187,11 +1163,7 @@ def create_total_labor_input_decomposition_chart(
         )
     )
 
-    return (
-        bars
-        + labels
-        + zero_line
-    ).properties(
+    return (bars + labels + zero_line).properties(
         height=350,
     )
 
@@ -1263,9 +1235,7 @@ def create_age_total_labor_input_decomposition_chart(
     )
 
     zero_line = (
-        alt.Chart(
-            pd.DataFrame({"y": [0]})
-        )
+        alt.Chart(pd.DataFrame({"y": [0]}))
         .mark_rule(
             strokeDash=[4, 4],
         )
@@ -1408,24 +1378,16 @@ detailed_hours_change = create_detailed_working_hours_distribution_change(
     end_year=2025,
 )
 
-total_labor_input_trend = (
-    create_total_labor_input_trend(
-        lfs_age_df
-    )
+total_labor_input_trend = create_total_labor_input_trend(lfs_age_df)
+
+total_labor_input_decomposition = create_total_labor_input_decomposition(
+    lfs_age_df,
+    start_year=ANALYSIS_START_YEAR,
+    end_year=ANALYSIS_END_YEAR,
 )
 
-total_labor_input_decomposition = (
-    create_total_labor_input_decomposition(
-        lfs_age_df,
-        start_year=ANALYSIS_START_YEAR,
-        end_year=ANALYSIS_END_YEAR,
-    )
-)
-
-total_labor_input_summary = (
-    summarize_total_labor_input_decomposition(
-        total_labor_input_decomposition
-    )
+total_labor_input_summary = summarize_total_labor_input_decomposition(
+    total_labor_input_decomposition
 )
 
 st.divider()
@@ -2019,50 +1981,23 @@ st.markdown(
     """
 )
 
-start_persons = (
-    total_labor_input_summary[
-        "start_total_persons_at_work"
-    ]
-)
-end_persons = (
-    total_labor_input_summary[
-        "end_total_persons_at_work"
-    ]
-)
+start_persons = total_labor_input_summary["start_total_persons_at_work"]
+end_persons = total_labor_input_summary["end_total_persons_at_work"]
 
-persons_change_pct = (
-    end_persons / start_persons - 1
-) * 100
+persons_change_pct = (end_persons / start_persons - 1) * 100
 
-start_average_hours = (
-    total_labor_input_summary[
-        "start_average_weekly_hours"
-    ]
-)
-end_average_hours = (
-    total_labor_input_summary[
-        "end_average_weekly_hours"
-    ]
-)
+start_average_hours = total_labor_input_summary["start_average_weekly_hours"]
+end_average_hours = total_labor_input_summary["end_average_weekly_hours"]
 
-average_hours_change_pct = (
-    end_average_hours
-    / start_average_hours
-    - 1
-) * 100
+average_hours_change_pct = (end_average_hours / start_average_hours - 1) * 100
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
         "総労働投入",
-        (
-            f"{total_labor_input_summary['end_total_weekly_hours']:,.0f}"
-            "万時間/週"
-        ),
-        (
-            f"{total_labor_input_summary['total_change_pct']:+.2f}%"
-        ),
+        (f"{total_labor_input_summary['end_total_weekly_hours']:,.0f}万時間/週"),
+        (f"{total_labor_input_summary['total_change_pct']:+.2f}%"),
     )
 
 with col2:
@@ -2092,17 +2027,13 @@ st.altair_chart(
     width="stretch",
 )
 
-st.markdown(
-    f"##### {ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の変化要因"
-)
+st.markdown(f"##### {ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の変化要因")
 
 left, center, right = st.columns([1, 2, 1])
 
 with center:
     st.altair_chart(
-        create_total_labor_input_decomposition_chart(
-            total_labor_input_summary
-        ),
+        create_total_labor_input_decomposition_chart(total_labor_input_summary),
         width="stretch",
     )
 
@@ -2132,9 +2063,7 @@ st.markdown(
 st.markdown("##### 年齢層ごとの総労働投入変化")
 
 st.altair_chart(
-    create_age_total_labor_input_decomposition_chart(
-        total_labor_input_decomposition
-    ),
+    create_age_total_labor_input_decomposition_chart(total_labor_input_decomposition),
     width="stretch",
 )
 
