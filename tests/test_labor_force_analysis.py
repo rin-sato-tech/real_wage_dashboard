@@ -9,6 +9,8 @@ from real_wage_dashboard.labor_force_analysis import (
     create_employment_count_decomposition,
     create_employment_structure_summary,
     create_total_labor_input_decomposition,
+    create_total_labor_input_period_summary,
+    create_total_labor_input_trend,
     create_working_hours_distribution_change,
     create_working_hours_distribution_period_summary,
     summarize_age_hours_decomposition,
@@ -412,3 +414,106 @@ def test_summarize_total_labor_input_decomposition() -> None:
     ) == pytest.approx(-1200.0)
 
     assert summary["decomposition_error"] == pytest.approx(0.0)
+
+
+def test_create_total_labor_input_period_summary() -> None:
+    df = load_lfs_age_df()
+
+    result = create_total_labor_input_period_summary(
+        df,
+        periods=[
+            (2015, 2025),
+            (2000, 2025),
+        ],
+    )
+
+    assert len(result) == 2
+
+    recent = result.loc[
+        (result["start_year"] == 2015)
+        & (result["end_year"] == 2025)
+    ].iloc[0]
+
+    assert recent[
+        "total_change_weekly_hours"
+    ] == pytest.approx(-4985.0)
+
+    assert recent[
+        "persons_effect_weekly_hours"
+    ] == pytest.approx(
+        15255.471935,
+        abs=1e-6,
+    )
+
+    assert recent[
+        "within_age_hours_effect_weekly_hours"
+    ] == pytest.approx(
+        -18064.934705,
+        abs=1e-6,
+    )
+
+    assert recent[
+        "age_composition_effect_weekly_hours"
+    ] == pytest.approx(
+        -2175.537231,
+        abs=1e-6,
+    )
+
+    assert (
+        recent["persons_effect_weekly_hours"]
+        + recent["within_age_hours_effect_weekly_hours"]
+        + recent["age_composition_effect_weekly_hours"]
+    ) == pytest.approx(
+        recent["total_change_weekly_hours"],
+        abs=1e-6,
+    )
+
+
+def test_create_total_labor_input_trend() -> None:
+    df = load_lfs_age_df()
+
+    result = create_total_labor_input_trend(df)
+
+    row_2000 = result.loc[
+        result["year"] == 2000
+    ].iloc[0]
+
+    assert row_2000[
+        "total_weekly_hours"
+    ] == pytest.approx(270293.0)
+
+    assert row_2000[
+        "average_weekly_hours"
+    ] == pytest.approx(
+        42.734140,
+        abs=1e-6,
+    )
+
+    row_2011 = result.loc[
+        result["year"] == 2011
+    ].iloc[0]
+
+    assert pd.isna(
+        row_2011["total_weekly_hours"]
+    )
+    assert pd.isna(
+        row_2011["total_persons_at_work"]
+    )
+    assert pd.isna(
+        row_2011["average_weekly_hours"]
+    )
+
+    row_2025 = result.loc[
+        result["year"] == 2025
+    ].iloc[0]
+
+    assert row_2025[
+        "total_weekly_hours"
+    ] == pytest.approx(236287.0)
+
+    assert row_2025[
+        "average_weekly_hours"
+    ] == pytest.approx(
+        35.873024,
+        abs=1e-6,
+    )
