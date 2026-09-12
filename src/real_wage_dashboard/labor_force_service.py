@@ -14,55 +14,61 @@ from real_wage_dashboard.estat_response import (
     ensure_list,
 )
 
-AGE_GROUPS = [
-    "15～24歳",
-    "25～34歳",
-    "35～44歳",
-    "45～54歳",
-    "55～64歳",
-    "65歳以上",
-]
+EMPLOYMENT_AGE_COLUMNS = (
+    ("15～24歳", 4, 15),
+    ("25～34歳", 5, 16),
+    ("35～44歳", 6, 17),
+    ("45～54歳", 7, 18),
+    ("55～64歳", 8, 19),
+    ("65歳以上", 9, 20),
+)
 
-EMPLOYMENT_COUNT_COLUMNS = {
-    4: "15～24歳",
-    5: "25～34歳",
-    6: "35～44歳",
-    7: "45～54歳",
-    8: "55～64歳",
-    9: "65歳以上",
+AGE_GROUPS = [age_group for age_group, _, _ in EMPLOYMENT_AGE_COLUMNS]
+
+LFS_HOURS_METRICS = {
+    "平均週間就業時間【時間】": "average_weekly_hours",
+    "延週間就業時間【万時間】": "aggregate_weekly_hours",
 }
 
-EMPLOYMENT_RATE_COLUMNS = {
-    15: "15～24歳",
-    16: "25～34歳",
-    17: "35～44歳",
-    18: "45～54歳",
-    19: "55～64歳",
-    20: "65歳以上",
+LFS_HOURS_RECONSTRUCTION_COMPONENTS = {
+    "hours_1_34": (
+        "hours_1_14",
+        "hours_15_29",
+        "hours_30_34",
+    ),
+    "hours_35_48": (
+        "hours_35_39",
+        "hours_40_48",
+    ),
+    "hours_49_plus": (
+        "hours_49_59",
+        "hours_60_plus",
+    ),
 }
 
-HOURS_AGE_COLUMNS = {
-    "15～24歳": "15～24歳",
-    "25～34歳": "25～34歳",
-    "35～44歳": "35～44歳",
-    "45～54歳": "45～54歳",
-    "55～64歳": "55～64歳",
-    "65歳以上": "65歳以上",
-}
+LFS_DETAILED_HOURS_COLUMNS = (
+    "hours_1_14",
+    "hours_15_29",
+    "hours_30_34",
+    "hours_35_39",
+    "hours_40_48",
+    "hours_49_59",
+    "hours_60_plus",
+)
+
+LFS_DISTRIBUTION_METRIC_COLUMNS = (
+    "persons_at_work",
+    *LFS_HOURS_RECONSTRUCTION_COMPONENTS,
+    *LFS_DETAILED_HOURS_COLUMNS,
+)
 
 
-def load_lfs_employment_by_age(
-    file_path: str | Path,
-    start_year: int = 2000,
-    end_year: int = 2025,
+def _reshape_lfs_employment_by_age(
+    raw: pd.DataFrame,
+    start_year: int,
+    end_year: int,
 ) -> pd.DataFrame:
-    """労働力調査の年齢別就業者数・就業率をlong形式で読み込む。"""
-
-    raw = pd.read_excel(
-        file_path,
-        sheet_name="総数",
-        header=None,
-    )
+    """労働力調査の年齢別就業者数・就業率を分析用DataFrameへ整形する。"""
 
     years = pd.to_numeric(
         raw.iloc[:, 1],
@@ -81,13 +87,7 @@ def load_lfs_employment_by_age(
     for _, row in data.iterrows():
         year = int(row["year"])
 
-        for count_col, age_group in EMPLOYMENT_COUNT_COLUMNS.items():
-            rate_col = next(
-                column
-                for column, group in EMPLOYMENT_RATE_COLUMNS.items()
-                if group == age_group
-            )
-
+        for age_group, count_col, rate_col in EMPLOYMENT_AGE_COLUMNS:
             records.append(
                 {
                     "year": year,
@@ -115,42 +115,48 @@ def load_lfs_employment_by_age(
         errors="coerce",
     )
 
+    return result
+
+
+def load_lfs_employment_by_age(
+    file_path: str | Path,
+    start_year: int = 2000,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """年齢別就業者数・就業率を分析用DataFrameとして読み込む。"""
+
+    raw = pd.read_excel(
+        file_path,
+        sheet_name="総数",
+        header=None,
+    )
+
+    result = _reshape_lfs_employment_by_age(
+        raw,
+        start_year=start_year,
+        end_year=end_year,
+    )
+
     return result.sort_values(["year", "age_group"]).reset_index(drop=True)
 
 
-def load_lfs_hours_by_age(
-    file_path: str | Path,
-) -> pd.DataFrame:
-    """年齢別の平均週間就業時間・延週間就業時間をlong形式で読み込む。"""
+def _reshape_lfs_hours_by_age(raw: pd.DataFrame) -> pd.DataFrame:
+    """労働力調査の年齢別就業時間データを分析用のwide形式に整形する。"""
 
-    raw = pd.read_csv(
-        file_path,
-        encoding="utf-8-sig",
-        skiprows=13,
-    )
+    data = raw.copy()
 
-    raw["year"] = raw["時間軸（年次）"].astype(str).str.extract(r"(\d{4})")[0]
+    data["year"] = data["時間軸（年次）"].astype(str).str.extract(r"(\d{4})")[0]
 
-    raw["year"] = pd.to_numeric(
-        raw["year"],
+    data["year"] = pd.to_numeric(
+        data["year"],
         errors="coerce",
     )
 
-    data = raw.loc[
-        raw["表章項目"].isin(
-            [
-                "平均週間就業時間【時間】",
-                "延週間就業時間【万時間】",
-            ]
-        )
-    ].copy()
+    data = data.loc[data["表章項目"].isin(LFS_HOURS_METRICS)].copy()
 
     long = data.melt(
-        id_vars=[
-            "year",
-            "表章項目",
-        ],
-        value_vars=list(HOURS_AGE_COLUMNS),
+        id_vars=["year", "表章項目"],
+        value_vars=AGE_GROUPS,
         var_name="age_group",
         value_name="value",
     )
@@ -160,12 +166,7 @@ def load_lfs_hours_by_age(
         errors="coerce",
     )
 
-    long["metric"] = long["表章項目"].replace(
-        {
-            "平均週間就業時間【時間】": "average_weekly_hours",
-            "延週間就業時間【万時間】": "aggregate_weekly_hours",
-        }
-    )
+    long["metric"] = long["表章項目"].replace(LFS_HOURS_METRICS)
 
     result = (
         long[
@@ -177,19 +178,23 @@ def load_lfs_hours_by_age(
             ]
         ]
         .pivot(
-            index=[
-                "year",
-                "age_group",
-            ],
+            index=["year", "age_group"],
             columns="metric",
             values="value",
         )
         .reset_index()
+        .rename_axis(columns=None)
     )
 
-    result.columns.name = None
-
     result["year"] = result["year"].astype(int)
+
+    return result
+
+
+def _add_lfs_hours_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """年齢別就業時間データに従業者数推計と構成比を追加する。"""
+
+    result = df.copy()
 
     result["implied_persons_at_work"] = (
         result["aggregate_weekly_hours"] / result["average_weekly_hours"]
@@ -201,6 +206,21 @@ def load_lfs_hours_by_age(
 
     result["worker_share"] = result["implied_persons_at_work"] / yearly_total
 
+    return result
+
+
+def load_lfs_hours_by_age(file_path: str | Path) -> pd.DataFrame:
+    """年齢別の平均・延週間就業時間を分析用DataFrameとして読み込む。"""
+
+    raw = pd.read_csv(
+        file_path,
+        encoding="utf-8-sig",
+        skiprows=13,
+    )
+
+    result = _reshape_lfs_hours_by_age(raw)
+    result = _add_lfs_hours_derived_metrics(result)
+
     return result.sort_values(["year", "age_group"]).reset_index(drop=True)
 
 
@@ -210,20 +230,13 @@ def create_lfs_age_dataframe(
 ) -> pd.DataFrame:
     """年齢別就業構造と就業時間を結合する。"""
 
-    employment = load_lfs_employment_by_age(
-        employment_path,
-    )
+    employment = load_lfs_employment_by_age(employment_path)
 
-    hours = load_lfs_hours_by_age(
-        hours_path,
-    )
+    hours = load_lfs_hours_by_age(hours_path)
 
     return employment.merge(
         hours,
-        on=[
-            "year",
-            "age_group",
-        ],
+        on=["year", "age_group"],
         how="left",
         validate="one_to_one",
     )
@@ -241,12 +254,13 @@ def create_lfs_working_hours_time_codes(
     return [f"{year}000000" for year in range(start_year, end_year + 1)]
 
 
-def create_lfs_working_hours_distribution_dataframe(
-    response: dict[str, Any],
-) -> pd.DataFrame:
-    """e-Stat表3-3レスポンスを年齢別就業時間分布に変換する。"""
+def _create_lfs_distribution_long_dataframe(response: dict[str, Any]) -> pd.DataFrame:
+    """e-Statレスポンスを年・年齢階級・就業時間区分のlong形式へ変換する。"""
 
-    values = response["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
+    try:
+        values = response["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
+    except (KeyError, TypeError):
+        raise ValueError("e-StatレスポンスからVALUEを取得できません。") from None
 
     age_mapping = {code: name for name, code in LFS_WORKING_HOURS_AGE_CODES.items()}
 
@@ -254,7 +268,7 @@ def create_lfs_working_hours_distribution_dataframe(
         code: name for name, code in LFS_WORKING_HOURS_CATEGORY_CODES.items()
     }
 
-    rows = []
+    rows: list[dict[str, int | float | str]] = []
 
     for item in ensure_list(values):
         age_code = item.get("@cat02")
@@ -267,6 +281,11 @@ def create_lfs_working_hours_distribution_dataframe(
         if age_group is None or metric is None or time_code is None:
             continue
 
+        time_code = str(time_code)
+
+        if len(time_code) < 4 or not time_code[:4].isdigit():
+            raise ValueError(f"不正な時間コードです: {time_code}")
+
         rows.append(
             {
                 "year": int(time_code[:4]),
@@ -276,15 +295,29 @@ def create_lfs_working_hours_distribution_dataframe(
             }
         )
 
-    long_df = pd.DataFrame(rows)
+    result = pd.DataFrame(
+        rows,
+        columns=[
+            "year",
+            "age_group",
+            "metric",
+            "value",
+        ],
+    )
 
-    if long_df.empty:
-        return pd.DataFrame()
+    if result.empty:
+        return result
 
-    long_df["value"] = pd.to_numeric(
-        long_df["value"],
+    result["value"] = pd.to_numeric(
+        result["value"],
         errors="coerce",
     )
+
+    return result
+
+
+def _pivot_lfs_distribution(long_df: pd.DataFrame) -> pd.DataFrame:
+    """long形式の就業時間分布を年・年齢階級単位のwide形式へ変換する。"""
 
     duplicate = long_df.duplicated(
         subset=[
@@ -299,10 +332,7 @@ def create_lfs_working_hours_distribution_dataframe(
 
     result = (
         long_df.pivot(
-            index=[
-                "year",
-                "age_group",
-            ],
+            index=["year", "age_group"],
             columns="metric",
             values="value",
         )
@@ -310,91 +340,62 @@ def create_lfs_working_hours_distribution_dataframe(
         .rename_axis(columns=None)
     )
 
-    # --------------------------------------------------------
-    # 必要な指標列を保証する
-    # --------------------------------------------------------
-
-    metric_columns = [
-        "persons_at_work",
-        "hours_1_34",
-        "hours_35_48",
-        "hours_49_plus",
-        "hours_1_14",
-        "hours_15_29",
-        "hours_30_34",
-        "hours_35_39",
-        "hours_40_48",
-        "hours_49_59",
-        "hours_60_plus",
-    ]
-
-    for column in metric_columns:
+    for column in LFS_DISTRIBUTION_METRIC_COLUMNS:
         if column not in result.columns:
             result[column] = float("nan")
 
-    # --------------------------------------------------------
-    # 細区分から上位区分を再構成
-    # --------------------------------------------------------
+    return result
 
-    result["hours_1_34_reconstructed"] = result[
-        [
-            "hours_1_14",
-            "hours_15_29",
-            "hours_30_34",
-        ]
-    ].sum(
-        axis=1,
-        min_count=3,
-    )
 
-    result["hours_35_48_reconstructed"] = result[
-        [
-            "hours_35_39",
-            "hours_40_48",
-        ]
-    ].sum(
-        axis=1,
-        min_count=2,
-    )
+def _add_reconstructed_hours_bands(df: pd.DataFrame) -> pd.DataFrame:
+    """詳細就業時間区分から長期比較用3区分を再構成する。"""
 
-    result["hours_49_plus_reconstructed"] = result[
-        [
-            "hours_49_59",
-            "hours_60_plus",
-        ]
-    ].sum(
-        axis=1,
-        min_count=2,
-    )
+    result = df.copy()
 
-    # --------------------------------------------------------
-    # 長期比較用3区分を調和
-    #
-    # 公式上位区分がある場合は公式値を優先。
-    # 欠測している年のみ細区分合計で補完する。
-    # --------------------------------------------------------
+    for band, components in LFS_HOURS_RECONSTRUCTION_COMPONENTS.items():
+        result[f"{band}_reconstructed"] = result[list(components)].sum(
+            axis=1,
+            min_count=len(components),
+        )
 
-    result["hours_1_34_harmonized"] = result["hours_1_34"].combine_first(
-        result["hours_1_34_reconstructed"]
-    )
+    return result
 
-    result["hours_35_48_harmonized"] = result["hours_35_48"].combine_first(
-        result["hours_35_48_reconstructed"]
-    )
 
-    result["hours_49_plus_harmonized"] = result["hours_49_plus"].combine_first(
-        result["hours_49_plus_reconstructed"]
-    )
+def _add_harmonized_hours_bands(df: pd.DataFrame) -> pd.DataFrame:
+    """公式上位区分を優先し、欠測時のみ再構成値で補完する。"""
+
+    result = df.copy()
+
+    for band in LFS_HOURS_RECONSTRUCTION_COMPONENTS:
+        result[f"{band}_harmonized"] = result[band].combine_first(
+            result[f"{band}_reconstructed"]
+        )
+
+    return result
+
+
+def _validate_persons_at_work(
+    df: pd.DataFrame,
+) -> None:
+    """構成比計算の分母となる従業者総数を検証する。"""
+
+    if df["persons_at_work"].isna().any():
+        raise ValueError("従業者総数に欠損があります。")
+
+    if df["persons_at_work"].le(0).any():
+        raise ValueError("従業者総数は0より大きい必要があります。")
+
+
+def _add_harmonized_distribution_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """調和済み3区分についてカバレッジと構成比を追加する。"""
+
+    result = df.copy()
+
+    _validate_persons_at_work(result)
 
     harmonized_columns = [
-        "hours_1_34_harmonized",
-        "hours_35_48_harmonized",
-        "hours_49_plus_harmonized",
+        f"{band}_harmonized" for band in LFS_HOURS_RECONSTRUCTION_COMPONENTS
     ]
-
-    # --------------------------------------------------------
-    # 長期3区分のカバレッジ
-    # --------------------------------------------------------
 
     result["classified_workers"] = result[harmonized_columns].sum(
         axis=1,
@@ -411,43 +412,59 @@ def create_lfs_working_hours_distribution_dataframe(
         result["unclassified_workers"] / result["persons_at_work"]
     )
 
-    # 構成比は「従業者総数」を分母にする。
     for column in harmonized_columns:
         result[f"{column}_share"] = result[column] / result["persons_at_work"]
 
-    # --------------------------------------------------------
-    # 詳細7区分
-    # --------------------------------------------------------
+    return result
 
-    detail_columns = [
-        "hours_1_14",
-        "hours_15_29",
-        "hours_30_34",
-        "hours_35_39",
-        "hours_40_48",
-        "hours_49_59",
-        "hours_60_plus",
-    ]
 
-    result["detailed_classified_workers"] = result[detail_columns].sum(
+def _add_detailed_distribution_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """詳細7区分についてカバレッジと構成比を追加する。"""
+
+    result = df.copy()
+
+    _validate_persons_at_work(result)
+
+    result["detailed_classified_workers"] = result[
+        list(LFS_DETAILED_HOURS_COLUMNS)
+    ].sum(
         axis=1,
-        min_count=len(detail_columns),
+        min_count=len(LFS_DETAILED_HOURS_COLUMNS),
     )
 
     result["detailed_coverage"] = (
         result["detailed_classified_workers"] / result["persons_at_work"]
     )
 
-    # 詳細区分も従業者総数を分母にする。
-    for column in detail_columns:
+    for column in LFS_DETAILED_HOURS_COLUMNS:
         result[f"{column}_share"] = result[column] / result["persons_at_work"]
 
-    return result.sort_values(
-        [
-            "year",
-            "age_group",
-        ]
-    ).reset_index(drop=True)
+    return result
+
+
+def create_lfs_working_hours_distribution_dataframe(
+    response: dict[str, Any],
+) -> pd.DataFrame:
+    """e-Stat表3-3レスポンスを年齢別就業時間分布に変換する。"""
+
+    long_df = _create_lfs_distribution_long_dataframe(response)
+
+    if long_df.empty:
+        return pd.DataFrame()
+
+    long_df["value"] = pd.to_numeric(
+        long_df["value"],
+        errors="coerce",
+    )
+
+    result = _pivot_lfs_distribution(long_df)
+
+    result = _add_reconstructed_hours_bands(result)
+    result = _add_harmonized_hours_bands(result)
+    result = _add_harmonized_distribution_metrics(result)
+    result = _add_detailed_distribution_metrics(result)
+
+    return result.sort_values(["year", "age_group"]).reset_index(drop=True)
 
 
 def load_lfs_working_hours_distribution_from_api(
