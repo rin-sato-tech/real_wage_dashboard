@@ -11,9 +11,12 @@ from real_wage_dashboard.labor_force_analysis import (
     add_centered_composition_effect,
     create_age_hours_decomposition,
     create_detailed_working_hours_distribution_change,
+    create_total_labor_input_decomposition,
+    create_total_labor_input_trend,
     create_working_hours_distribution_change,
     create_working_hours_distribution_trend,
     summarize_age_hours_decomposition,
+    summarize_total_labor_input_decomposition,
 )
 from real_wage_dashboard.labor_force_service import (
     AGE_GROUPS,
@@ -984,6 +987,298 @@ def create_age_working_hours_distribution_change_chart(
     )
 
 
+def create_total_labor_input_index_chart(
+    trend_df: pd.DataFrame,
+    base_year: int = 2000,
+) -> alt.Chart:
+    """総労働投入・従業者数・平均週間就業時間を指数化して比較する。"""
+
+    chart_df = trend_df.copy()
+
+    base = chart_df.loc[
+        chart_df["year"] == base_year
+    ]
+
+    if len(base) != 1:
+        raise ValueError(
+            f"{base_year}年の基準値を一意に取得できません。"
+        )
+
+    indicators = {
+        "total_weekly_hours": "総労働投入",
+        "total_persons_at_work": "従業者数",
+        "average_weekly_hours": "平均週間就業時間",
+    }
+
+    for column in indicators:
+        base_value = base.iloc[0][column]
+
+        chart_df[f"{column}_index"] = (
+            chart_df[column]
+            / base_value
+            * 100
+        )
+
+    long_df = chart_df.melt(
+        id_vars="year",
+        value_vars=[
+            f"{column}_index"
+            for column in indicators
+        ],
+        var_name="指標",
+        value_name="指数",
+    )
+
+    long_df["指標"] = long_df["指標"].replace(
+        {
+            f"{column}_index": label
+            for column, label in indicators.items()
+        }
+    )
+
+    lines = (
+        alt.Chart(long_df)
+        .mark_line(
+            point=True,
+            strokeWidth=2.5,
+        )
+        .encode(
+            x=alt.X(
+                "year:Q",
+                title="年",
+                axis=alt.Axis(format="d"),
+            ),
+            y=alt.Y(
+                "指数:Q",
+                title=f"指数（{base_year}年=100）",
+                scale=alt.Scale(
+                    zero=False,
+                ),
+            ),
+            color=alt.Color(
+                "指標:N",
+                title="指標",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "year:Q",
+                    title="年",
+                    format="d",
+                ),
+                alt.Tooltip(
+                    "指標:N",
+                    title="指標",
+                ),
+                alt.Tooltip(
+                    "指数:Q",
+                    title="指数",
+                    format=".1f",
+                ),
+            ],
+        )
+    )
+
+    baseline = (
+        alt.Chart(
+            pd.DataFrame({"y": [100]})
+        )
+        .mark_rule(
+            strokeDash=[5, 5],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (lines + baseline).properties(
+        height=400,
+    )
+
+
+def create_total_labor_input_decomposition_chart(
+    summary: dict[str, float],
+) -> alt.Chart:
+    """総労働投入変化を人数・層内時間・年齢構成へ分解する。"""
+
+    chart_df = pd.DataFrame(
+        {
+            "要因": [
+                "従業者総数",
+                "年齢層内の就業時間",
+                "年齢構成",
+            ],
+            "寄与": [
+                summary[
+                    "persons_effect_weekly_hours"
+                ],
+                summary[
+                    "within_age_hours_effect_weekly_hours"
+                ],
+                summary[
+                    "age_composition_effect_weekly_hours"
+                ],
+            ],
+        }
+    )
+
+    bars = (
+        alt.Chart(chart_df)
+        .mark_bar(size=55)
+        .encode(
+            x=alt.X(
+                "要因:N",
+                title=None,
+                sort=None,
+                axis=alt.Axis(
+                    labelAngle=0,
+                ),
+            ),
+            y=alt.Y(
+                "寄与:Q",
+                title="総労働投入への寄与（万時間/週）",
+            ),
+            color=alt.condition(
+                alt.datum.寄与 >= 0,
+                alt.value("#4c78a8"),
+                alt.value("#f58518"),
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "要因:N",
+                    title="要因",
+                ),
+                alt.Tooltip(
+                    "寄与:Q",
+                    title="寄与",
+                    format="+,.0f",
+                ),
+            ],
+        )
+    )
+
+    labels = (
+        alt.Chart(chart_df)
+        .mark_text(
+            dy=-10,
+            fontSize=13,
+        )
+        .encode(
+            x=alt.X(
+                "要因:N",
+                sort=None,
+            ),
+            y="寄与:Q",
+            text=alt.Text(
+                "寄与:Q",
+                format="+,.0f",
+            ),
+        )
+    )
+
+    zero_line = (
+        alt.Chart(
+            pd.DataFrame({"y": [0]})
+        )
+        .mark_rule(
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (
+        bars
+        + labels
+        + zero_line
+    ).properties(
+        height=350,
+    )
+
+
+def create_age_total_labor_input_decomposition_chart(
+    decomposition_df: pd.DataFrame,
+) -> alt.Chart:
+    """年齢階級別の総労働投入変化を人数効果と時間効果に分解する。"""
+
+    chart_df = decomposition_df[
+        [
+            "age_group",
+            "persons_effect",
+            "hours_effect",
+        ]
+    ].copy()
+
+    chart_df = chart_df.melt(
+        id_vars="age_group",
+        value_vars=[
+            "persons_effect",
+            "hours_effect",
+        ],
+        var_name="要因",
+        value_name="寄与",
+    )
+
+    chart_df["要因"] = chart_df["要因"].replace(
+        {
+            "persons_effect": "従業者数",
+            "hours_effect": "平均週間就業時間",
+        }
+    )
+
+    bars = (
+        alt.Chart(chart_df)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "age_group:N",
+                title="年齢階級",
+                sort=AGE_GROUPS,
+            ),
+            xOffset="要因:N",
+            y=alt.Y(
+                "寄与:Q",
+                title="総労働投入への寄与（万時間/週）",
+            ),
+            color=alt.Color(
+                "要因:N",
+                title="要因",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "age_group:N",
+                    title="年齢階級",
+                ),
+                alt.Tooltip(
+                    "要因:N",
+                    title="要因",
+                ),
+                alt.Tooltip(
+                    "寄与:Q",
+                    title="寄与",
+                    format="+,.0f",
+                ),
+            ],
+        )
+    )
+
+    zero_line = (
+        alt.Chart(
+            pd.DataFrame({"y": [0]})
+        )
+        .mark_rule(
+            strokeDash=[4, 4],
+        )
+        .encode(
+            y="y:Q",
+        )
+    )
+
+    return (bars + zero_line).properties(
+        height=400,
+    )
+
+
 st.title("労働投入分析")
 
 st.markdown(
@@ -1111,6 +1406,26 @@ detailed_hours_change = create_detailed_working_hours_distribution_change(
     hours_distribution_df,
     start_year=2018,
     end_year=2025,
+)
+
+total_labor_input_trend = (
+    create_total_labor_input_trend(
+        lfs_age_df
+    )
+)
+
+total_labor_input_decomposition = (
+    create_total_labor_input_decomposition(
+        lfs_age_df,
+        start_year=ANALYSIS_START_YEAR,
+        end_year=ANALYSIS_END_YEAR,
+    )
+)
+
+total_labor_input_summary = (
+    summarize_total_labor_input_decomposition(
+        total_labor_input_decomposition
+    )
 )
 
 st.divider()
@@ -1690,6 +2005,156 @@ with st.expander("詳細7区分で確認：長時間就業の減少はどの時�
         "詳細7区分は2018年以降で利用可能な系列を用いています。"
         "構成比の分母は従業者総数です。"
     )
+
+st.markdown("#### 働く人数を含めた総労働投入")
+
+st.markdown(
+    """
+    1人当たりの就業時間が短くなっても、
+    働く人数が増えれば経済全体の総労働時間は維持される可能性があります。
+
+    そこで、労働力調査の延週間就業時間を用いて、
+    **従業者全体が1週間に投入した総労働時間**
+    を確認します。
+    """
+)
+
+start_persons = (
+    total_labor_input_summary[
+        "start_total_persons_at_work"
+    ]
+)
+end_persons = (
+    total_labor_input_summary[
+        "end_total_persons_at_work"
+    ]
+)
+
+persons_change_pct = (
+    end_persons / start_persons - 1
+) * 100
+
+start_average_hours = (
+    total_labor_input_summary[
+        "start_average_weekly_hours"
+    ]
+)
+end_average_hours = (
+    total_labor_input_summary[
+        "end_average_weekly_hours"
+    ]
+)
+
+average_hours_change_pct = (
+    end_average_hours
+    / start_average_hours
+    - 1
+) * 100
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "総労働投入",
+        (
+            f"{total_labor_input_summary['end_total_weekly_hours']:,.0f}"
+            "万時間/週"
+        ),
+        (
+            f"{total_labor_input_summary['total_change_pct']:+.2f}%"
+        ),
+    )
+
+with col2:
+    st.metric(
+        "従業者数",
+        f"{end_persons:,.0f}万人",
+        f"{persons_change_pct:+.2f}%",
+    )
+
+with col3:
+    st.metric(
+        "平均週間就業時間",
+        f"{end_average_hours:.1f}時間",
+        f"{average_hours_change_pct:+.2f}%",
+    )
+
+st.caption(
+    f"表示値は{ANALYSIS_END_YEAR}年。"
+    f"増減は{ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年。"
+)
+
+st.altair_chart(
+    create_total_labor_input_index_chart(
+        total_labor_input_trend,
+        base_year=2000,
+    ),
+    width="stretch",
+)
+
+st.markdown(
+    f"##### {ANALYSIS_START_YEAR}→{ANALYSIS_END_YEAR}年の変化要因"
+)
+
+left, center, right = st.columns([1, 2, 1])
+
+with center:
+    st.altair_chart(
+        create_total_labor_input_decomposition_chart(
+            total_labor_input_summary
+        ),
+        width="stretch",
+    )
+
+st.markdown(
+    f"""
+    {ANALYSIS_START_YEAR}年から{ANALYSIS_END_YEAR}年にかけて、
+    総労働投入は
+    **{total_labor_input_summary["total_change_pct"]:+.2f}%**
+    変化しました。
+
+    従業者総数の増加は総労働投入を
+    **{total_labor_input_summary["persons_effect_weekly_hours"]:+,.0f}万時間**
+    押し上げました。
+
+    一方、各年齢層内部の就業時間短縮は
+    **{total_labor_input_summary["within_age_hours_effect_weekly_hours"]:+,.0f}万時間**、
+    年齢構成変化は
+    **{total_labor_input_summary["age_composition_effect_weekly_hours"]:+,.0f}万時間**
+    の押下げ要因となりました。
+
+    したがって、働く人数の増加によって
+    1人当たり就業時間短縮の影響はかなり相殺されたものの、
+    完全には相殺されず、総労働投入は小幅に減少しました。
+    """
+)
+
+st.markdown("##### 年齢層ごとの総労働投入変化")
+
+st.altair_chart(
+    create_age_total_labor_input_decomposition_chart(
+        total_labor_input_decomposition
+    ),
+    width="stretch",
+)
+
+st.markdown(
+    """
+    年齢別では構造が大きく異なります。
+
+    35～44歳では従業者数と1人当たり就業時間の双方が減少し、
+    総労働投入が大きく縮小しています。
+
+    一方、45～54歳、55～64歳、65歳以上では
+    1人当たり就業時間は短縮しているものの、
+    従業者数の増加がそれを上回り、
+    年齢層全体の総労働投入は増加しています。
+
+    25～34歳では従業者数がほぼ変わらず、
+    総労働投入減少のほぼ全てが
+    1人当たり就業時間の短縮によるものです。
+    """
+)
 
 general_df = create_labor_input_dataframe(
     raw_df,
