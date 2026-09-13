@@ -254,3 +254,20 @@ def test_create_lfs_age_dataframe_preserves_missing_hours(
     assert len(result) == 1
     assert pd.isna(result.loc[0, "average_weekly_hours"])
     assert pd.isna(result.loc[0, "aggregate_weekly_hours"])
+
+
+def test_add_harmonized_distribution_metrics_preserves_missing_persons() -> None:
+    df = pd.DataFrame(
+        {
+            "persons_at_work": [np.nan],
+            "hours_1_34_harmonized": [30.0],
+            "hours_35_48_harmonized": [50.0],
+            "hours_49_plus_harmonized": [20.0],
+        }
+    )
+
+    result = _add_harmonized_distribution_metrics(df)
+
+    assert pd.isna(result.loc[0, "coverage"])
+    assert pd.isna(result.loc[0, "unclassified_share"])
+    assert pd.isna(result.loc[0, "hours_1_34_harmonized_share"])

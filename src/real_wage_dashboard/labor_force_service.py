@@ -374,15 +374,12 @@ def _add_harmonized_hours_bands(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def _validate_persons_at_work(
-    df: pd.DataFrame,
-) -> None:
-    """構成比計算の分母となる従業者総数を検証する。"""
+def _validate_persons_at_work(df: pd.DataFrame) -> None:
+    """値が存在する従業者総数が正であることを確認する。"""
 
-    if df["persons_at_work"].isna().any():
-        raise ValueError("従業者総数に欠損があります。")
+    persons = df["persons_at_work"].dropna()
 
-    if df["persons_at_work"].le(0).any():
+    if persons.le(0).any():
         raise ValueError("従業者総数は0より大きい必要があります。")
 
 
@@ -451,11 +448,6 @@ def create_lfs_working_hours_distribution_dataframe(
 
     if long_df.empty:
         return pd.DataFrame()
-
-    long_df["value"] = pd.to_numeric(
-        long_df["value"],
-        errors="coerce",
-    )
 
     result = _pivot_lfs_distribution(long_df)
 
