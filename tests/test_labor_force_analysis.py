@@ -6,14 +6,19 @@ from real_wage_dashboard.labor_force_analysis import (
     add_centered_composition_effect,
     create_age_hours_decomposition,
     create_age_hours_period_summary,
+    create_age_sex_hours_decomposition,
+    create_age_sex_hours_period_summary,
     create_employment_count_decomposition,
     create_employment_structure_summary,
+    create_employment_type_hours_period_summary,
+    create_employment_type_hours_share_decomposition,
     create_total_labor_input_decomposition,
     create_total_labor_input_period_summary,
     create_total_labor_input_trend,
     create_working_hours_distribution_change,
     create_working_hours_distribution_period_summary,
     summarize_age_hours_decomposition,
+    summarize_age_sex_hours_decomposition,
     summarize_total_labor_input_decomposition,
 )
 from real_wage_dashboard.labor_force_service import (
@@ -30,6 +35,96 @@ def load_lfs_age_df():
         EMPLOYMENT_PATH,
         HOURS_PATH,
     )
+
+
+def _make_age_sex_test_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    age_df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2025,
+                2025,
+            ],
+            "age_group": [
+                "25～34歳",
+                "35～44歳",
+                "25～34歳",
+                "35～44歳",
+            ],
+            "average_weekly_hours": [
+                36.0,
+                29.0,
+                33.5,
+                28.4,
+            ],
+            "worker_share": [
+                0.5,
+                0.5,
+                0.4,
+                0.6,
+            ],
+        }
+    )
+
+    sex_df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2015,
+                2015,
+                2025,
+                2025,
+                2025,
+                2025,
+            ],
+            "age_group": [
+                "25～34歳",
+                "25～34歳",
+                "35～44歳",
+                "35～44歳",
+                "25～34歳",
+                "25～34歳",
+                "35～44歳",
+                "35～44歳",
+            ],
+            "sex": [
+                "male",
+                "female",
+                "male",
+                "female",
+                "male",
+                "female",
+                "male",
+                "female",
+            ],
+            "average_weekly_hours": [
+                40.0,
+                30.0,
+                35.0,
+                25.0,
+                38.0,
+                29.0,
+                34.0,
+                26.0,
+            ],
+            "sex_share_within_age": [
+                0.6,
+                0.4,
+                0.4,
+                0.6,
+                0.5,
+                0.5,
+                0.3,
+                0.7,
+            ],
+            "aggregate_weekly_hours": [1.0] * 8,
+            "implied_persons_at_work": [1.0] * 8,
+        }
+    )
+
+    return age_df, sex_df
 
 
 def test_age_hours_decomposition_identity() -> None:
@@ -626,3 +721,223 @@ def test_age_hours_decomposition_requires_same_age_groups() -> None:
             start_year=2015,
             end_year=2025,
         )
+
+
+def test_age_sex_hours_decomposition_identity() -> None:
+    age_df, sex_df = _make_age_sex_test_data()
+
+    result = create_age_sex_hours_decomposition(
+        age_df,
+        sex_df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    summary = summarize_age_sex_hours_decomposition(result)
+
+    assert summary["sex_within_effect_hours"] == pytest.approx(-0.5325)
+
+    assert summary["sex_composition_effect_hours"] == pytest.approx(-0.9225)
+
+    assert summary["reconstruction_residual_hours"] == pytest.approx(0.0)
+
+    assert summary["within_age_effect_hours"] == pytest.approx(-1.455)
+
+
+def test_age_sex_decomposition_matches_age_within_effect() -> None:
+    age_df, sex_df = _make_age_sex_test_data()
+
+    age_result = create_age_hours_decomposition(
+        age_df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    age_summary = summarize_age_hours_decomposition(age_result)
+
+    sex_result = create_age_sex_hours_decomposition(
+        age_df,
+        sex_df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    sex_summary = summarize_age_sex_hours_decomposition(sex_result)
+
+    assert sex_summary["within_age_effect_hours"] == pytest.approx(
+        age_summary["within_effect_hours"],
+        abs=1e-10,
+    )
+
+
+def test_age_sex_hours_period_summary() -> None:
+    age_df, sex_df = _make_age_sex_test_data()
+
+    result = create_age_sex_hours_period_summary(
+        age_df,
+        sex_df,
+        periods=[
+            (2015, 2025),
+        ],
+    )
+
+    assert len(result) == 1
+
+    row = result.iloc[0]
+
+    assert row["start_year"] == 2015
+    assert row["end_year"] == 2025
+
+    assert row["sex_within_effect_hours"] == pytest.approx(-0.5325)
+
+    assert row["sex_composition_effect_hours"] == pytest.approx(-0.9225)
+
+    assert row["reconstruction_residual_hours"] == pytest.approx(0.0)
+
+    assert row["within_age_effect_hours"] == pytest.approx(-1.455)
+
+    assert row["within_age_effect_hours"] == pytest.approx(
+        row["sex_within_effect_hours"]
+        + row["sex_composition_effect_hours"]
+        + row["reconstruction_residual_hours"],
+        abs=1e-10,
+    )
+
+
+def test_employment_type_hours_share_decomposition_identity() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2015,
+                2025,
+                2025,
+                2025,
+            ],
+            "age_group": ["25～34歳"] * 6,
+            "employment_type": [
+                "regular",
+                "nonregular",
+                "total_excluding_executives",
+                "regular",
+                "nonregular",
+                "total_excluding_executives",
+            ],
+            "persons_at_work": [
+                80,
+                20,
+                100,
+                70,
+                30,
+                100,
+            ],
+            "employment_share_within_age": [
+                0.8,
+                0.2,
+                np.nan,
+                0.7,
+                0.3,
+                np.nan,
+            ],
+            "hours_1_34_share": [
+                0.10,
+                0.60,
+                0.20,
+                0.20,
+                0.70,
+                0.35,
+            ],
+        }
+    )
+
+    result = create_employment_type_hours_share_decomposition(
+        df,
+        start_year=2015,
+        end_year=2025,
+        share_column="hours_1_34_share",
+    )
+
+    row = result.iloc[0]
+
+    assert row["published_change"] == pytest.approx(0.15)
+
+    assert row["published_change"] == pytest.approx(
+        row["within_employment_type_effect"]
+        + row["employment_composition_effect"]
+        + row["reconstruction_residual"],
+        abs=1e-10,
+    )
+
+
+def test_employment_type_hours_period_summary() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [
+                2015,
+                2015,
+                2015,
+                2025,
+                2025,
+                2025,
+            ],
+            "age_group": ["25～34歳"] * 6,
+            "employment_type": [
+                "regular",
+                "nonregular",
+                "total_excluding_executives",
+                "regular",
+                "nonregular",
+                "total_excluding_executives",
+            ],
+            "persons_at_work": [
+                80,
+                20,
+                100,
+                70,
+                30,
+                100,
+            ],
+            "employment_share_within_age": [
+                0.8,
+                0.2,
+                np.nan,
+                0.7,
+                0.3,
+                np.nan,
+            ],
+            "hours_1_34_share": [
+                0.10,
+                0.60,
+                0.20,
+                0.20,
+                0.70,
+                0.35,
+            ],
+        }
+    )
+
+    result = create_employment_type_hours_period_summary(
+        df,
+        periods=[
+            (2015, 2025),
+        ],
+        share_column="hours_1_34_share",
+    )
+
+    assert len(result) == 1
+
+    row = result.iloc[0]
+
+    assert row["start_year"] == 2015
+    assert row["end_year"] == 2025
+    assert row["age_group"] == "25～34歳"
+
+    assert row["published_change"] == pytest.approx(0.15)
+
+    assert row["published_change"] == pytest.approx(
+        row["within_employment_type_effect"]
+        + row["employment_composition_effect"]
+        + row["reconstruction_residual"],
+        abs=1e-10,
+    )

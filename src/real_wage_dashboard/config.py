@@ -4,6 +4,8 @@ CPI_STATS_DATA_ID = "0003427113"
 LABOR_FORCE_STATS_DATA_ID = "0003005865"
 CORPORATE_STATS_DATA_ID = "0003060791"
 LFS_WORKING_HOURS_DISTRIBUTION_STATS_DATA_ID = "0003009700"
+LFS_HOURS_BY_AGE_SEX_STATS_DATA_ID = "0003009701"
+LFS_EMPLOYMENT_TYPE_HOURS_STATS_DATA_ID = "0003006654"
 
 CPI_BASE_FILTERS = {
     "cdTab": "1",
@@ -167,3 +169,49 @@ LFS_EMPLOYMENT_BY_AGE_PATH = Path(
 )
 
 LFS_HOURS_BY_AGE_PATH = Path("data/raw/labor_input/lfs_hours_by_age_annual.csv")
+
+LFS_HOURS_BY_AGE_SEX_BASE_FILTERS = {
+    "cdCat03": "00",  # 従業上の地位：総数
+    "cdCat04": "000",  # 産業：全産業
+    "cdArea": "00000",  # 全国
+}
+
+LFS_HOURS_BY_AGE_SEX_TAB_CODES = {
+    "average_weekly_hours": "03",
+    "aggregate_weekly_hours": "13",
+}
+
+LFS_HOURS_BY_AGE_SEX_CODES = {
+    "total": "0",
+    "male": "1",
+    "female": "2",
+}
+
+LFS_EMPLOYMENT_TYPE_HOURS_BASE_FILTERS = {
+    "cdTab": "07",  # 就業者
+    "cdCat03": "0",  # 性別：総数
+    "cdArea": "00000",  # 全国
+}
+
+LFS_EMPLOYMENT_TYPE_CODES = {
+    "total_excluding_executives": "02",
+    "regular": "03",
+    "nonregular": "10",
+}
+
+LFS_EMPLOYMENT_TYPE_AGE_CODES = {
+    "15～24歳": "01",
+    "25～34歳": "03",
+    "35～44歳": "04",
+    "45～54歳": "05",
+    "55～64歳": "06",
+    "65歳以上": "07",
+}
+
+LFS_EMPLOYMENT_TYPE_HOURS_CODES = {
+    "persons_at_work": "06",
+    "hours_1_34": "01",
+    "hours_1_29": "02",
+    "hours_35_plus": "03",
+    "hours_49_plus": "04",
+}

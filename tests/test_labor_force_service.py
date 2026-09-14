@@ -13,8 +13,10 @@ from real_wage_dashboard.labor_force_service import (
     _create_lfs_distribution_long_dataframe,
     _pivot_lfs_distribution,
     create_lfs_age_dataframe,
+    create_lfs_hours_by_age_sex_dataframe,
     create_lfs_working_hours_distribution_dataframe,
     create_lfs_working_hours_time_codes,
+    load_lfs_hours_by_age_sex_from_api,
 )
 
 
@@ -271,3 +273,152 @@ def test_add_harmonized_distribution_metrics_preserves_missing_persons() -> None
     assert pd.isna(result.loc[0, "coverage"])
     assert pd.isna(result.loc[0, "unclassified_share"])
     assert pd.isna(result.loc[0, "hours_1_34_harmonized_share"])
+
+
+def test_create_lfs_hours_by_age_sex_dataframe() -> None:
+    response = {
+        "GET_STATS_DATA": {
+            "STATISTICAL_DATA": {
+                "DATA_INF": {
+                    "VALUE": [
+                        # 総数
+                        {
+                            "@tab": "03",
+                            "@cat01": "0",
+                            "@cat02": "06",
+                            "@time": "2015000000",
+                            "$": "42.2",
+                        },
+                        {
+                            "@tab": "13",
+                            "@cat01": "0",
+                            "@cat02": "06",
+                            "@time": "2015000000",
+                            "$": "45666",
+                        },
+                        # 男
+                        {
+                            "@tab": "03",
+                            "@cat01": "1",
+                            "@cat02": "06",
+                            "@time": "2015000000",
+                            "$": "45.8",
+                        },
+                        {
+                            "@tab": "13",
+                            "@cat01": "1",
+                            "@cat02": "06",
+                            "@time": "2015000000",
+                            "$": "28676",
+                        },
+                        # 女
+                        {
+                            "@tab": "03",
+                            "@cat01": "2",
+                            "@cat02": "06",
+                            "@time": "2015000000",
+                            "$": "37.2",
+                        },
+                        {
+                            "@tab": "13",
+                            "@cat01": "2",
+                            "@cat02": "06",
+                            "@time": "2015000000",
+                            "$": "16990",
+                        },
+                    ]
+                }
+            }
+        }
+    }
+
+    result = create_lfs_hours_by_age_sex_dataframe(response)
+
+    assert len(result) == 3
+
+    male = result.loc[result["sex"] == "male"].iloc[0]
+    female = result.loc[result["sex"] == "female"].iloc[0]
+    total = result.loc[result["sex"] == "total"].iloc[0]
+
+    assert male["average_weekly_hours"] == pytest.approx(45.8)
+    assert male["aggregate_weekly_hours"] == pytest.approx(28676.0)
+
+    assert female["average_weekly_hours"] == pytest.approx(37.2)
+    assert female["aggregate_weekly_hours"] == pytest.approx(16990.0)
+
+    assert (
+        male["sex_share_within_age"] + female["sex_share_within_age"]
+    ) == pytest.approx(1.0)
+
+    assert pd.isna(total["sex_share_within_age"])
+
+
+def test_create_lfs_hours_by_age_sex_dataframe_rejects_invalid_time_code() -> None:
+    response = {
+        "GET_STATS_DATA": {
+            "STATISTICAL_DATA": {
+                "DATA_INF": {
+                    "VALUE": [
+                        {
+                            "@tab": "03",
+                            "@cat01": "1",
+                            "@cat02": "06",
+                            "@time": "invalid",
+                            "$": "45.8",
+                        }
+                    ]
+                }
+            }
+        }
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="不正な時間コード",
+    ):
+        create_lfs_hours_by_age_sex_dataframe(response)
+
+
+def test_load_lfs_hours_by_age_sex_from_api_builds_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    response = {"GET_STATS_DATA": {"STATISTICAL_DATA": {"DATA_INF": {"VALUE": []}}}}
+
+    def fake_get_stats_data(
+        app_id,
+        stats_data_id,
+        filters,
+    ):
+        captured["app_id"] = app_id
+        captured["stats_data_id"] = stats_data_id
+        captured["filters"] = filters
+
+        return response
+
+    monkeypatch.setattr(
+        "real_wage_dashboard.labor_force_service.get_stats_data",
+        fake_get_stats_data,
+    )
+
+    load_lfs_hours_by_age_sex_from_api(
+        app_id="dummy",
+        start_year=2015,
+        end_year=2016,
+    )
+
+    assert captured["app_id"] == "dummy"
+    assert captured["stats_data_id"] == "0003009701"
+
+    filters = captured["filters"]
+
+    assert filters["cdTab"] == "03,13"
+    assert filters["cdCat01"] == "0,1,2"
+    assert filters["cdCat02"] == "01,06,09,12,15,18"
+
+    assert filters["cdCat03"] == "00"
+    assert filters["cdCat04"] == "000"
+    assert filters["cdArea"] == "00000"
+
+    assert filters["cdTime"] == ("2015000000,2016000000")

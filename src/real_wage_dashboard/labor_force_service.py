@@ -4,6 +4,15 @@ from typing import Any
 import pandas as pd
 
 from real_wage_dashboard.config import (
+    LFS_EMPLOYMENT_TYPE_AGE_CODES,
+    LFS_EMPLOYMENT_TYPE_CODES,
+    LFS_EMPLOYMENT_TYPE_HOURS_BASE_FILTERS,
+    LFS_EMPLOYMENT_TYPE_HOURS_CODES,
+    LFS_EMPLOYMENT_TYPE_HOURS_STATS_DATA_ID,
+    LFS_HOURS_BY_AGE_SEX_BASE_FILTERS,
+    LFS_HOURS_BY_AGE_SEX_CODES,
+    LFS_HOURS_BY_AGE_SEX_STATS_DATA_ID,
+    LFS_HOURS_BY_AGE_SEX_TAB_CODES,
     LFS_WORKING_HOURS_AGE_CODES,
     LFS_WORKING_HOURS_CATEGORY_CODES,
     LFS_WORKING_HOURS_DISTRIBUTION_BASE_FILTERS,
@@ -300,6 +309,227 @@ def create_lfs_age_dataframe(
         how="left",
         validate="one_to_one",
     )
+
+
+# ============================================================
+# 4. 男女・年齢別就業時間
+# ============================================================
+
+
+def _create_lfs_hours_by_age_sex_long_dataframe(
+    response: dict[str, Any],
+) -> pd.DataFrame:
+    """表3-5のAPIレスポンスを男女・年齢別就業時間のlong形式へ変換する。"""
+
+    try:
+        values = response["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
+    except (KeyError, TypeError):
+        raise ValueError("e-StatレスポンスからVALUEを取得できません。") from None
+
+    age_mapping = {
+        code: name
+        for name, code in LFS_WORKING_HOURS_AGE_CODES.items()
+        if name in AGE_GROUPS
+    }
+
+    sex_mapping = {code: name for name, code in LFS_HOURS_BY_AGE_SEX_CODES.items()}
+
+    metric_mapping = {
+        code: name for name, code in LFS_HOURS_BY_AGE_SEX_TAB_CODES.items()
+    }
+
+    rows: list[dict[str, int | float | str]] = []
+
+    for item in ensure_list(values):
+        metric = metric_mapping.get(item.get("@tab"))
+        sex = sex_mapping.get(item.get("@cat01"))
+        age_group = age_mapping.get(item.get("@cat02"))
+        time_code = item.get("@time")
+
+        if metric is None or sex is None or age_group is None or time_code is None:
+            continue
+
+        time_code = str(time_code)
+
+        if len(time_code) < 4 or not time_code[:4].isdigit():
+            raise ValueError(f"不正な時間コードです: {time_code}")
+
+        rows.append(
+            {
+                "year": int(time_code[:4]),
+                "age_group": age_group,
+                "sex": sex,
+                "metric": metric,
+                "value": item.get("$"),
+            }
+        )
+
+    result = pd.DataFrame(
+        rows,
+        columns=[
+            "year",
+            "age_group",
+            "sex",
+            "metric",
+            "value",
+        ],
+    )
+
+    if result.empty:
+        return result
+
+    result["value"] = pd.to_numeric(
+        result["value"],
+        errors="coerce",
+    )
+
+    return result
+
+
+def _pivot_lfs_hours_by_age_sex(
+    long_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """男女・年齢別就業時間をwide形式へ変換する。"""
+
+    duplicate = long_df.duplicated(
+        subset=[
+            "year",
+            "age_group",
+            "sex",
+            "metric",
+        ]
+    )
+
+    if duplicate.any():
+        raise ValueError("同じ年・年齢階級・性別・表章項目のデータが重複しています。")
+
+    result = (
+        long_df.pivot(
+            index=[
+                "year",
+                "age_group",
+                "sex",
+            ],
+            columns="metric",
+            values="value",
+        )
+        .reset_index()
+        .rename_axis(columns=None)
+    )
+
+    for column in LFS_HOURS_BY_AGE_SEX_TAB_CODES:
+        if column not in result.columns:
+            result[column] = float("nan")
+
+    return result
+
+
+def _add_lfs_hours_by_age_sex_derived_metrics(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """男女・年齢別就業時間に逆算従業者数と性別構成比を追加する。"""
+
+    result = df.copy()
+
+    valid_hours = result["average_weekly_hours"].dropna()
+
+    if valid_hours.le(0).any():
+        raise ValueError("平均週間就業時間は0より大きい必要があります。")
+
+    result["implied_persons_at_work"] = (
+        result["aggregate_weekly_hours"] / result["average_weekly_hours"]
+    )
+
+    # 性別構成比は男・女だけを分母にする。
+    sex_mask = result["sex"].isin(["male", "female"])
+
+    result["sex_share_within_age"] = float("nan")
+
+    sex_totals = (
+        result.loc[sex_mask]
+        .groupby(
+            [
+                "year",
+                "age_group",
+            ]
+        )["implied_persons_at_work"]
+        .transform(lambda x: x.sum(min_count=1))
+    )
+
+    result.loc[
+        sex_mask,
+        "sex_share_within_age",
+    ] = (
+        result.loc[
+            sex_mask,
+            "implied_persons_at_work",
+        ]
+        / sex_totals
+    )
+
+    return result
+
+
+def create_lfs_hours_by_age_sex_dataframe(
+    response: dict[str, Any],
+) -> pd.DataFrame:
+    """e-Stat表3-5を男女・年齢別就業時間DataFrameへ変換する。"""
+
+    long_df = _create_lfs_hours_by_age_sex_long_dataframe(response)
+
+    if long_df.empty:
+        return pd.DataFrame()
+
+    result = _pivot_lfs_hours_by_age_sex(long_df)
+
+    result = _add_lfs_hours_by_age_sex_derived_metrics(result)
+
+    return result.sort_values(
+        [
+            "year",
+            "age_group",
+            "sex",
+        ]
+    ).reset_index(drop=True)
+
+
+def load_lfs_hours_by_age_sex_from_api(
+    app_id: str,
+    start_year: int = 2000,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """e-Stat APIから表3-5の男女・年齢別就業時間を取得する。"""
+
+    age_codes = ",".join(
+        LFS_WORKING_HOURS_AGE_CODES[age_group] for age_group in AGE_GROUPS
+    )
+
+    sex_codes = ",".join(LFS_HOURS_BY_AGE_SEX_CODES.values())
+
+    tab_codes = ",".join(LFS_HOURS_BY_AGE_SEX_TAB_CODES.values())
+
+    time_codes = ",".join(
+        create_lfs_working_hours_time_codes(
+            start_year=start_year,
+            end_year=end_year,
+        )
+    )
+
+    filters = {
+        **LFS_HOURS_BY_AGE_SEX_BASE_FILTERS,
+        "cdTab": tab_codes,
+        "cdCat01": sex_codes,
+        "cdCat02": age_codes,
+        "cdTime": time_codes,
+    }
+
+    response = get_stats_data(
+        app_id=app_id,
+        stats_data_id=LFS_HOURS_BY_AGE_SEX_STATS_DATA_ID,
+        filters=filters,
+    )
+
+    return create_lfs_hours_by_age_sex_dataframe(response)
 
 
 # ============================================================
@@ -602,3 +832,231 @@ def load_lfs_working_hours_distribution_from_api(
 
     # API固有のレスポンス構造を、このモジュール内で分析用DataFrameへ変換して返す。
     return create_lfs_working_hours_distribution_dataframe(response)
+
+
+def _create_lfs_employment_type_hours_long_dataframe(
+    response: dict[str, Any],
+) -> pd.DataFrame:
+    """表2-10-1を年齢・雇用形態・就業時間区分のlong形式へ変換する。"""
+
+    try:
+        values = response["GET_STATS_DATA"]["STATISTICAL_DATA"]["DATA_INF"]["VALUE"]
+    except (KeyError, TypeError):
+        raise ValueError("e-StatレスポンスからVALUEを取得できません。") from None
+
+    employment_mapping = {
+        code: name for name, code in LFS_EMPLOYMENT_TYPE_CODES.items()
+    }
+
+    age_mapping = {code: name for name, code in LFS_EMPLOYMENT_TYPE_AGE_CODES.items()}
+
+    hours_mapping = {
+        code: name for name, code in LFS_EMPLOYMENT_TYPE_HOURS_CODES.items()
+    }
+
+    rows: list[dict[str, int | float | str]] = []
+
+    for item in ensure_list(values):
+        employment_type = employment_mapping.get(item.get("@cat01"))
+        age_group = age_mapping.get(item.get("@cat02"))
+        metric = hours_mapping.get(item.get("@cat04"))
+        time_code = item.get("@time")
+
+        if (
+            employment_type is None
+            or age_group is None
+            or metric is None
+            or time_code is None
+        ):
+            continue
+
+        time_code = str(time_code)
+
+        if len(time_code) < 4 or not time_code[:4].isdigit():
+            raise ValueError(f"不正な時間コードです: {time_code}")
+
+        rows.append(
+            {
+                "year": int(time_code[:4]),
+                "age_group": age_group,
+                "employment_type": employment_type,
+                "metric": metric,
+                "value": item.get("$"),
+            }
+        )
+
+    result = pd.DataFrame(
+        rows,
+        columns=[
+            "year",
+            "age_group",
+            "employment_type",
+            "metric",
+            "value",
+        ],
+    )
+
+    if result.empty:
+        return result
+
+    result["value"] = pd.to_numeric(
+        result["value"],
+        errors="coerce",
+    )
+
+    return result
+
+
+def _pivot_lfs_employment_type_hours(
+    long_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """雇用形態別就業時間データをwide形式へ変換する。"""
+
+    duplicate = long_df.duplicated(
+        subset=[
+            "year",
+            "age_group",
+            "employment_type",
+            "metric",
+        ]
+    )
+
+    if duplicate.any():
+        raise ValueError(
+            "同じ年・年齢階級・雇用形態・就業時間区分のデータが重複しています。"
+        )
+
+    result = (
+        long_df.pivot(
+            index=[
+                "year",
+                "age_group",
+                "employment_type",
+            ],
+            columns="metric",
+            values="value",
+        )
+        .reset_index()
+        .rename_axis(columns=None)
+    )
+
+    for column in LFS_EMPLOYMENT_TYPE_HOURS_CODES:
+        if column not in result.columns:
+            result[column] = float("nan")
+
+    return result
+
+
+def _add_lfs_employment_type_hours_metrics(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """雇用形態別就業時間に構成比と時間区分割合を追加する。"""
+
+    result = df.copy()
+
+    persons = result["persons_at_work"].dropna()
+
+    if persons.le(0).any():
+        raise ValueError("従業者数は0より大きい必要があります。")
+
+    # 追加の時間区分
+    result["hours_30_34"] = result["hours_1_34"] - result["hours_1_29"]
+
+    result["hours_35_48"] = result["hours_35_plus"] - result["hours_49_plus"]
+
+    # 雇用形態別の短時間・長時間割合
+    result["hours_1_34_share"] = result["hours_1_34"] / result["persons_at_work"]
+
+    result["hours_49_plus_share"] = result["hours_49_plus"] / result["persons_at_work"]
+
+    # 正規・非正規だけで年齢階級内構成比を計算
+    employment_mask = result["employment_type"].isin(["regular", "nonregular"])
+
+    result["employment_share_within_age"] = float("nan")
+
+    totals = (
+        result.loc[employment_mask]
+        .groupby(
+            [
+                "year",
+                "age_group",
+            ]
+        )["persons_at_work"]
+        .transform(lambda x: x.sum(min_count=1))
+    )
+
+    result.loc[
+        employment_mask,
+        "employment_share_within_age",
+    ] = (
+        result.loc[
+            employment_mask,
+            "persons_at_work",
+        ]
+        / totals
+    )
+
+    return result
+
+
+def create_lfs_employment_type_hours_dataframe(
+    response: dict[str, Any],
+) -> pd.DataFrame:
+    """表2-10-1を雇用形態別就業時間DataFrameへ変換する。"""
+
+    long_df = _create_lfs_employment_type_hours_long_dataframe(response)
+
+    if long_df.empty:
+        return pd.DataFrame()
+
+    result = _pivot_lfs_employment_type_hours(long_df)
+
+    result = _add_lfs_employment_type_hours_metrics(result)
+
+    return result.sort_values(
+        [
+            "year",
+            "age_group",
+            "employment_type",
+        ]
+    ).reset_index(drop=True)
+
+
+def load_lfs_employment_type_hours_from_api(
+    app_id: str,
+    start_year: int = 2012,
+    end_year: int = 2025,
+) -> pd.DataFrame:
+    """e-Stat APIから表2-10-1を取得する。"""
+
+    if start_year > end_year:
+        raise ValueError("開始年は終了年以下である必要があります。")
+
+    employment_codes = ",".join(LFS_EMPLOYMENT_TYPE_CODES.values())
+
+    age_codes = ",".join(LFS_EMPLOYMENT_TYPE_AGE_CODES.values())
+
+    hours_codes = ",".join(LFS_EMPLOYMENT_TYPE_HOURS_CODES.values())
+
+    time_codes = ",".join(
+        create_lfs_working_hours_time_codes(
+            start_year=start_year,
+            end_year=end_year,
+        )
+    )
+
+    filters = {
+        **LFS_EMPLOYMENT_TYPE_HOURS_BASE_FILTERS,
+        "cdCat01": employment_codes,
+        "cdCat02": age_codes,
+        "cdCat04": hours_codes,
+        "cdTime": time_codes,
+    }
+
+    response = get_stats_data(
+        app_id=app_id,
+        stats_data_id=LFS_EMPLOYMENT_TYPE_HOURS_STATS_DATA_ID,
+        filters=filters,
+    )
+
+    return create_lfs_employment_type_hours_dataframe(response)

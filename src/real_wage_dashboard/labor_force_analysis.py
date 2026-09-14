@@ -202,6 +202,232 @@ def create_age_hours_decomposition(
     return result
 
 
+def create_age_sex_hours_decomposition(
+    age_df: pd.DataFrame,
+    sex_df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+) -> pd.DataFrame:
+    """年齢層内の就業時間変化を性別内時間効果と性別構成効果に分解する。"""
+
+    _validate_required_columns(
+        age_df,
+        {
+            "year",
+            "age_group",
+            "average_weekly_hours",
+            "worker_share",
+        },
+    )
+
+    _validate_required_columns(
+        sex_df,
+        {
+            "year",
+            "age_group",
+            "sex",
+            "average_weekly_hours",
+            "sex_share_within_age",
+            "aggregate_weekly_hours",
+            "implied_persons_at_work",
+        },
+    )
+
+    # 年齢層全体の公表値・年齢構成比
+    age_comparison = _create_start_end_comparison(
+        age_df,
+        start_year=start_year,
+        end_year=end_year,
+        columns=[
+            "average_weekly_hours",
+            "worker_share",
+        ],
+        aliases={
+            "average_weekly_hours": "published_hours",
+            "worker_share": "age_share",
+        },
+    )
+
+    _validate_no_missing(
+        age_comparison,
+        [
+            "start_published_hours",
+            "end_published_hours",
+            "start_age_share",
+            "end_age_share",
+        ],
+        "比較対象年に年齢別就業時間または構成比の欠損があります。",
+    )
+
+    # 男女だけを使う。total は公表総数との照合用なので分解には含めない。
+    sex_data = sex_df.loc[sex_df["sex"].isin(["male", "female"])].copy()
+
+    start = sex_data.loc[
+        sex_data["year"] == start_year,
+        [
+            "age_group",
+            "sex",
+            "average_weekly_hours",
+            "sex_share_within_age",
+        ],
+    ].rename(
+        columns={
+            "average_weekly_hours": "start_hours",
+            "sex_share_within_age": "start_sex_share",
+        }
+    )
+
+    end = sex_data.loc[
+        sex_data["year"] == end_year,
+        [
+            "age_group",
+            "sex",
+            "average_weekly_hours",
+            "sex_share_within_age",
+        ],
+    ].rename(
+        columns={
+            "average_weekly_hours": "end_hours",
+            "sex_share_within_age": "end_sex_share",
+        }
+    )
+
+    if start.empty:
+        raise ValueError(f"開始年 {start_year} の男女別データがありません。")
+
+    if end.empty:
+        raise ValueError(f"終了年 {end_year} の男女別データがありません。")
+
+    result = start.merge(
+        end,
+        on=["age_group", "sex"],
+        how="inner",
+        validate="one_to_one",
+    )
+
+    _validate_no_missing(
+        result,
+        [
+            "start_hours",
+            "end_hours",
+            "start_sex_share",
+            "end_sex_share",
+        ],
+        "比較対象年に男女別就業時間または性別構成比の欠損があります。",
+    )
+
+    # 性別内時間効果
+    result["sex_within_effect"] = (
+        (result["start_sex_share"] + result["end_sex_share"])
+        / 2
+        * (result["end_hours"] - result["start_hours"])
+    )
+
+    # 性別構成効果
+    result["sex_composition_effect"] = (
+        (result["start_hours"] + result["end_hours"])
+        / 2
+        * (result["end_sex_share"] - result["start_sex_share"])
+    )
+
+    # 年齢階級単位へ集約
+    result = result.groupby("age_group", as_index=False).agg(
+        sex_within_effect=("sex_within_effect", "sum"),
+        sex_composition_effect=("sex_composition_effect", "sum"),
+    )
+
+    result = result.merge(
+        age_comparison,
+        on="age_group",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    # 男女から再構成された年齢層内の変化
+    result["reconstructed_age_change"] = (
+        result["sex_within_effect"] + result["sex_composition_effect"]
+    )
+
+    # 公表総数との差。
+    # 男女別値・延週間就業時間の丸めによる微小差を吸収する。
+    result["published_age_change"] = (
+        result["end_published_hours"] - result["start_published_hours"]
+    )
+
+    result["reconstruction_residual"] = (
+        result["published_age_change"] - result["reconstructed_age_change"]
+    )
+
+    # 元の年齢層内効果で使っている中間年齢構成比
+    result["mid_age_share"] = (result["start_age_share"] + result["end_age_share"]) / 2
+
+    # 全体平均への寄与
+    result["weighted_sex_within_effect"] = (
+        result["mid_age_share"] * result["sex_within_effect"]
+    )
+
+    result["weighted_sex_composition_effect"] = (
+        result["mid_age_share"] * result["sex_composition_effect"]
+    )
+
+    result["weighted_reconstruction_residual"] = (
+        result["mid_age_share"] * result["reconstruction_residual"]
+    )
+
+    return result
+
+
+def create_age_sex_hours_period_summary(
+    age_df: pd.DataFrame,
+    sex_df: pd.DataFrame,
+    periods: Sequence[tuple[int, int]],
+) -> pd.DataFrame:
+    """年齢層内効果の性別追加分解を複数期間について集約する。"""
+
+    rows: list[dict[str, int | float]] = []
+
+    for start_year, end_year in periods:
+        decomposition = create_age_sex_hours_decomposition(
+            age_df,
+            sex_df,
+            start_year=start_year,
+            end_year=end_year,
+        )
+
+        summary = summarize_age_sex_hours_decomposition(decomposition)
+
+        rows.append(
+            {
+                "start_year": start_year,
+                "end_year": end_year,
+                **summary,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def summarize_age_sex_hours_decomposition(
+    decomposition_df: pd.DataFrame,
+) -> dict[str, float]:
+    """男女による年齢層内効果の追加分解を集約する。"""
+
+    sex_within = float(decomposition_df["weighted_sex_within_effect"].sum())
+
+    sex_composition = float(decomposition_df["weighted_sex_composition_effect"].sum())
+
+    residual = float(decomposition_df["weighted_reconstruction_residual"].sum())
+
+    total = sex_within + sex_composition + residual
+
+    return {
+        "sex_within_effect_hours": sex_within,
+        "sex_composition_effect_hours": sex_composition,
+        "reconstruction_residual_hours": residual,
+        "within_age_effect_hours": total,
+    }
+
+
 # 1-2
 def summarize_age_hours_decomposition(
     decomposition_df: pd.DataFrame,
@@ -940,3 +1166,206 @@ def create_total_labor_input_trend(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return yearly.sort_values("year").reset_index(drop=True)
+
+
+def create_employment_type_hours_share_decomposition(
+    df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+    share_column: str,
+) -> pd.DataFrame:
+    """就業時間割合の変化を雇用形態内効果と雇用形態構成効果に分解する。"""
+
+    _validate_required_columns(
+        df,
+        {
+            "year",
+            "age_group",
+            "employment_type",
+            "persons_at_work",
+            "employment_share_within_age",
+            share_column,
+        },
+    )
+
+    employment_types = ["regular", "nonregular"]
+
+    data = df.loc[
+        df["employment_type"].isin([*employment_types, "total_excluding_executives"])
+    ].copy()
+
+    start = data.loc[data["year"] == start_year].copy()
+
+    end = data.loc[data["year"] == end_year].copy()
+
+    if start.empty:
+        raise ValueError(f"開始年 {start_year} のデータがありません。")
+
+    if end.empty:
+        raise ValueError(f"終了年 {end_year} のデータがありません。")
+
+    # 正規・非正規だけを分解に使用
+    start_emp = start.loc[
+        start["employment_type"].isin(employment_types),
+        [
+            "age_group",
+            "employment_type",
+            share_column,
+            "employment_share_within_age",
+        ],
+    ].rename(
+        columns={
+            share_column: "start_share",
+            "employment_share_within_age": "start_employment_share",
+        }
+    )
+
+    end_emp = end.loc[
+        end["employment_type"].isin(employment_types),
+        [
+            "age_group",
+            "employment_type",
+            share_column,
+            "employment_share_within_age",
+        ],
+    ].rename(
+        columns={
+            share_column: "end_share",
+            "employment_share_within_age": "end_employment_share",
+        }
+    )
+
+    result = start_emp.merge(
+        end_emp,
+        on=[
+            "age_group",
+            "employment_type",
+        ],
+        how="inner",
+        validate="one_to_one",
+    )
+
+    _validate_no_missing(
+        result,
+        [
+            "start_share",
+            "end_share",
+            "start_employment_share",
+            "end_employment_share",
+        ],
+        "比較対象年に雇用形態別割合または構成比の欠損があります。",
+    )
+
+    # 雇用形態内効果
+    result["within_employment_type_effect"] = (
+        (result["start_employment_share"] + result["end_employment_share"])
+        / 2
+        * (result["end_share"] - result["start_share"])
+    )
+
+    # 雇用形態構成効果
+    result["employment_composition_effect"] = (
+        (result["start_share"] + result["end_share"])
+        / 2
+        * (result["end_employment_share"] - result["start_employment_share"])
+    )
+
+    result = result.groupby(
+        "age_group",
+        as_index=False,
+    ).agg(
+        within_employment_type_effect=(
+            "within_employment_type_effect",
+            "sum",
+        ),
+        employment_composition_effect=(
+            "employment_composition_effect",
+            "sum",
+        ),
+    )
+
+    # 公表総数
+    start_total = start.loc[
+        start["employment_type"] == "total_excluding_executives",
+        [
+            "age_group",
+            share_column,
+        ],
+    ].rename(columns={share_column: "start_published_share"})
+
+    end_total = end.loc[
+        end["employment_type"] == "total_excluding_executives",
+        [
+            "age_group",
+            share_column,
+        ],
+    ].rename(columns={share_column: "end_published_share"})
+
+    totals = start_total.merge(
+        end_total,
+        on="age_group",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    result = result.merge(
+        totals,
+        on="age_group",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    result["published_change"] = (
+        result["end_published_share"] - result["start_published_share"]
+    )
+
+    result["reconstructed_change"] = (
+        result["within_employment_type_effect"]
+        + result["employment_composition_effect"]
+    )
+
+    result["reconstruction_residual"] = (
+        result["published_change"] - result["reconstructed_change"]
+    )
+
+    return result
+
+
+def create_employment_type_hours_period_summary(
+    df: pd.DataFrame,
+    periods: Sequence[tuple[int, int]],
+    share_column: str,
+) -> pd.DataFrame:
+    """雇用形態別就業時間割合の分解を複数期間について整理する。"""
+
+    results: list[pd.DataFrame] = []
+
+    for start_year, end_year in periods:
+        decomposition = create_employment_type_hours_share_decomposition(
+            df,
+            start_year=start_year,
+            end_year=end_year,
+            share_column=share_column,
+        ).copy()
+
+        decomposition.insert(
+            0,
+            "end_year",
+            end_year,
+        )
+
+        decomposition.insert(
+            0,
+            "start_year",
+            start_year,
+        )
+
+        results.append(decomposition)
+
+    if not results:
+        return pd.DataFrame()
+
+    return pd.concat(
+        results,
+        ignore_index=True,
+    )
