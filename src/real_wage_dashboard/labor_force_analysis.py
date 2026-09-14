@@ -2,12 +2,14 @@ from collections.abc import Sequence
 
 import pandas as pd
 
+# 長期比較に使用する調和済みの週間就業時間3区分。
 HARMONIZED_HOURS_BANDS = (
     "hours_1_34",
     "hours_35_48",
     "hours_49_plus",
 )
 
+# より細かな就業時間分布を見るための週間就業時間7区分。
 DETAILED_HOURS_BANDS = (
     "hours_1_14",
     "hours_15_29",
@@ -19,6 +21,7 @@ DETAILED_HOURS_BANDS = (
 )
 
 
+# 0-1
 def _validate_required_columns(
     df: pd.DataFrame,
     required_columns: set[str],
@@ -31,6 +34,7 @@ def _validate_required_columns(
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
 
+# 0-2
 def _validate_no_missing(
     df: pd.DataFrame,
     columns: Sequence[str],
@@ -38,10 +42,13 @@ def _validate_no_missing(
 ) -> None:
     """指定した列に欠損値がないことを確認する。"""
 
+    # isna()でNaNがbooleanに変換
+    # 一つ目のanyが列ごとにTF判定、二つ目のanyで全体でTF判定
     if df[list(columns)].isna().any().any():
         raise ValueError(message)
 
 
+# 0-3
 def _create_start_end_comparison(
     df: pd.DataFrame,
     start_year: int,
@@ -53,11 +60,14 @@ def _create_start_end_comparison(
 
     aliases = aliases or {}
 
+    # 比較対象の指標に、結合キーとなる年齢階級を加える。
     selected_columns = [
         "age_group",
         *columns,
     ]
 
+    # 開始年・終了年をそれぞれ抽出し、
+    # 後で同じ年齢階級同士を横方向に結合する。
     start = df.loc[
         df["year"] == start_year,
         selected_columns,
@@ -77,6 +87,8 @@ def _create_start_end_comparison(
     start_age_groups = set(start["age_group"])
     end_age_groups = set(end["age_group"])
 
+    # 片方の年にしか存在しない年齢階級があると、
+    # 年齢階級ごとの変化を正しく比較できないためエラーにする。
     if start_age_groups != end_age_groups:
         only_start = sorted(start_age_groups - end_age_groups)
         only_end = sorted(end_age_groups - start_age_groups)
@@ -86,6 +98,8 @@ def _create_start_end_comparison(
             f" 開始年のみ: {only_start}, 終了年のみ: {only_end}"
         )
 
+    # 同じ指標を2時点分保持できるよう
+    # start_* / end_* という列名に変更する。
     start = start.rename(
         columns={column: f"start_{aliases.get(column, column)}" for column in columns}
     )
@@ -94,6 +108,7 @@ def _create_start_end_comparison(
         columns={column: f"end_{aliases.get(column, column)}" for column in columns}
     )
 
+    # 1年齢階級につき1行であることを保証しながら2時点を横結合する。
     result = start.merge(
         end,
         on="age_group",
@@ -105,8 +120,11 @@ def _create_start_end_comparison(
 
 
 # --------------------
-# 年齢別平均就業時間
+# 1. 年齢別平均就業時間
 # --------------------
+
+
+# 1-1
 def create_age_hours_decomposition(
     df: pd.DataFrame,
     start_year: int,
@@ -124,6 +142,12 @@ def create_age_hours_decomposition(
         },
     )
 
+    # 比較対象を
+    # start_hours / end_hours と
+    # start_share / end_share の形にそろえる。
+    #
+    # shareには employed_persons ではなく、
+    # implied_persons_at_work ベースの worker_share を使用する。
     result = _create_start_end_comparison(
         df,
         start_year=start_year,
@@ -149,12 +173,26 @@ def create_age_hours_decomposition(
         "比較対象年に就業時間または構成比の欠損があります。",
     )
 
+    # 平均週間就業時間の変化を対称分解する。
+    #
+    # H: 年齢階級別の平均週間就業時間
+    # S: 年齢階級別の従業者構成比
+    #
+    # 年齢層内効果
+    # = ((S0 + S1) / 2) × (H1 - H0)
+    #
+    # 同じ年齢階級の中で就業時間が変化した効果。
     result["within_effect"] = (
         (result["start_share"] + result["end_share"])
         / 2
         * (result["end_hours"] - result["start_hours"])
     )
 
+    # 年齢構成効果
+    # = ((H0 + H1) / 2) × (S1 - S0)
+    #
+    # 就業時間水準の異なる年齢階級間で
+    # 従業者構成比が変化した効果。
     result["composition_effect"] = (
         (result["start_hours"] + result["end_hours"])
         / 2
@@ -164,11 +202,14 @@ def create_age_hours_decomposition(
     return result
 
 
+# 1-2
 def summarize_age_hours_decomposition(
     decomposition_df: pd.DataFrame,
 ) -> dict[str, float]:
     """年齢別分解結果を全体効果へ集約する。"""
 
+    # 年齢階級別時間 × 従業者構成比を合計し、
+    # 全年齢の加重平均週間就業時間を求める。
     start_average = float(
         (decomposition_df["start_hours"] * decomposition_df["start_share"]).sum()
     )
@@ -177,12 +218,14 @@ def summarize_age_hours_decomposition(
         (decomposition_df["end_hours"] * decomposition_df["end_share"]).sum()
     )
 
+    # 年齢階級別の効果を合計して全体効果へ集約する。
     within_effect = float(decomposition_df["within_effect"].sum())
-
     composition_effect = float(decomposition_df["composition_effect"].sum())
 
     total_change = end_average - start_average
 
+    # 理論上はほぼ0になる。
+    # 浮動小数点誤差や入力データ上の不整合確認のため残す。
     decomposition_error = total_change - within_effect - composition_effect
 
     return {
@@ -195,6 +238,7 @@ def summarize_age_hours_decomposition(
     }
 
 
+# 1-3
 def add_centered_composition_effect(decomposition_df: pd.DataFrame) -> pd.DataFrame:
     """年齢別構成効果を全体平均時間を基準に中心化する。"""
 
@@ -204,12 +248,16 @@ def add_centered_composition_effect(decomposition_df: pd.DataFrame) -> pd.DataFr
 
     end_average = (result["end_hours"] * result["end_share"]).sum()
 
+    # 開始年・終了年の全体平均の中点を基準時間とする。
     reference_hours = (start_average + end_average) / 2
 
+    # 各年齢階級について2時点の平均的な就業時間水準を求める。
     result["average_hours"] = (result["start_hours"] + result["end_hours"]) / 2
 
     result["share_change"] = result["end_share"] - result["start_share"]
 
+    # 全体平均より長時間働く年齢階級のシェア増加はプラス、
+    # 短時間の年齢階級のシェア増加はマイナスとして解釈できる。
     result["centered_composition_effect"] = (
         result["average_hours"] - reference_hours
     ) * result["share_change"]
@@ -217,6 +265,7 @@ def add_centered_composition_effect(decomposition_df: pd.DataFrame) -> pd.DataFr
     return result
 
 
+# 1-4
 def create_age_hours_period_summary(
     df: pd.DataFrame,
     periods: list[tuple[int, int]],
@@ -250,8 +299,11 @@ def create_age_hours_period_summary(
 
 
 # --------------------
-# 年齢別就業構造
+# 2. 年齢別就業構造
 # --------------------
+
+
+# 2-1
 def create_employment_structure_summary(
     df: pd.DataFrame,
     start_year: int,
@@ -282,6 +334,8 @@ def create_employment_structure_summary(
         "比較対象年に就業者数または就業率の欠損があります。",
     )
 
+    # 比較対象年について、シェア計算の分母となる
+    # 全年齢階級の就業者数を求める。
     yearly_employed = data.groupby("year")["employed_persons"].transform("sum")
 
     comparison_mask = data["year"].isin([start_year, end_year])
@@ -289,6 +343,9 @@ def create_employment_structure_summary(
     if yearly_employed.loc[comparison_mask].le(0).any():
         raise ValueError("比較対象年の就業者総数は0より大きい必要があります。")
 
+    # employed_persons ベースの年齢構成比。
+    # 就業時間分析で使用する worker_share
+    # （implied_persons_at_work ベース）とは別の指標。
     data["employed_share"] = data["employed_persons"] / yearly_employed
 
     result = _create_start_end_comparison(
@@ -306,10 +363,12 @@ def create_employment_structure_summary(
         result["end_employed_persons"] - result["start_employed_persons"]
     )
 
+    # 就業率は元データが%単位なので、差をそのまま%ポイントとして扱う。
     result["employment_rate_change_pt"] = (
         result["end_employment_rate"] - result["start_employment_rate"]
     )
 
+    # employed_share は0～1の比率なので100倍して%ポイントへ変換する。
     result["employed_share_change_pt"] = (
         result["end_employed_share"] - result["start_employed_share"]
     ) * 100
@@ -317,6 +376,7 @@ def create_employment_structure_summary(
     return result
 
 
+# 2-2
 def create_employment_count_decomposition(structure_df: pd.DataFrame) -> pd.DataFrame:
     """就業者数変化を人口要因と就業率要因に分解する。"""
 
@@ -356,27 +416,36 @@ def create_employment_count_decomposition(structure_df: pd.DataFrame) -> pd.Data
 
     result = structure_df.copy()
 
+    # 就業率は元データでは%表記なので、0～1の割合へ変換する。
     start_rate = result["start_employment_rate"] / 100
     end_rate = result["end_employment_rate"] / 100
 
-    # 就業者数 / 就業率から人口を逆算
+    # 就業者数 = 人口 × 就業率
+    # より、人口 = 就業者数 / 就業率 として逆算する。
     result["start_population"] = result["start_employed_persons"] / start_rate
 
     result["end_population"] = result["end_employed_persons"] / end_rate
 
     result["population_change"] = result["end_population"] - result["start_population"]
 
-    # 対称分解
+    # 就業者数 N = 人口 P × 就業率 R を対称分解する。
+    #
+    # 人口効果
+    # = ((R0 + R1) / 2) × (P1 - P0)
     result["population_effect"] = (
         (start_rate + end_rate) / 2 * result["population_change"]
     )
 
+    # 就業率効果
+    # = ((P0 + P1) / 2) × (R1 - R0)
     result["employment_rate_effect"] = (
         (result["start_population"] + result["end_population"])
         / 2
         * (end_rate - start_rate)
     )
 
+    # 元の就業者数変化と2効果の差。
+    # 対称分解が正しく成立しているか確認するため保持する。
     result["decomposition_error"] = (
         result["employed_persons_change"]
         - result["population_effect"]
@@ -387,7 +456,7 @@ def create_employment_count_decomposition(structure_df: pd.DataFrame) -> pd.Data
 
 
 # --------------------
-# 就業時間分布
+# 3. 就業時間分布
 # --------------------
 def create_working_hours_distribution_change(
     df: pd.DataFrame,
@@ -408,6 +477,8 @@ def create_working_hours_distribution_change(
         },
     )
 
+    # 3区分それぞれについて、
+    # 人数列と persons_at_work を分母にした構成比列を比較対象にする。
     columns = [
         "persons_at_work",
         *(f"{band}_harmonized" for band in HARMONIZED_HOURS_BANDS),
@@ -422,6 +493,8 @@ def create_working_hours_distribution_change(
         columns=columns,
     )
 
+    # 開始年・終了年 × 3区分について、
+    # 人数と構成比に欠損がないことをまとめて確認する。
     calculation_columns = [
         "start_persons_at_work",
         "end_persons_at_work",
@@ -446,6 +519,8 @@ def create_working_hours_distribution_change(
     for band in HARMONIZED_HOURS_BANDS:
         share_column = f"{band}_harmonized_share"
 
+        # 構成比は0～1で保持されているため、
+        # 差を100倍して%ポイント変化にする。
         result[f"{band}_share_change_pt"] = (
             result[f"end_{share_column}"] - result[f"start_{share_column}"]
         ) * 100
@@ -480,6 +555,8 @@ def create_working_hours_distribution_trend(
 
     share_columns = [f"{band}_harmonized_share" for band in HARMONIZED_HOURS_BANDS]
 
+    # 指定した年齢階級だけを取り出し、
+    # 長期比較用3区分と未分類割合の年次推移を作る。
     result = (
         df.loc[
             df["age_group"] == age_group,
@@ -567,6 +644,8 @@ def create_detailed_working_hours_distribution_change(
         columns=columns,
     )
 
+    # 詳細7区分それぞれについて、
+    # 開始年・終了年の人数と構成比を検証する列名を生成する。
     calculation_columns = [
         *(
             f"{prefix}_{band}"
@@ -587,10 +666,12 @@ def create_detailed_working_hours_distribution_change(
     )
 
     for band in DETAILED_HOURS_BANDS:
+        # 構成比変化は%ポイントで表す。
         result[f"{band}_share_change_pt"] = (
             result[f"end_{band}_share"] - result[f"start_{band}_share"]
         ) * 100
 
+        # 各就業時間区分に属する従業者数そのものの増減。
         result[f"{band}_workers_change"] = (
             result[f"end_{band}"] - result[f"start_{band}"]
         )
@@ -599,7 +680,7 @@ def create_detailed_working_hours_distribution_change(
 
 
 # --------------------
-# 総労働投入
+# 4. 総労働投入
 # --------------------
 def create_total_labor_input_decomposition(
     df: pd.DataFrame,
@@ -628,6 +709,9 @@ def create_total_labor_input_decomposition(
             "average_weekly_hours",
             "implied_persons_at_work",
         ],
+        # service側の implied_persons_at_work は、
+        # この分析では従業者数 N として扱うため
+        # start_persons_at_work / end_persons_at_work に名前をそろえる。
         aliases={
             "implied_persons_at_work": "persons_at_work",
         },
@@ -689,10 +773,13 @@ def summarize_total_labor_input_decomposition(
 ) -> dict[str, float]:
     """総労働投入変化を人数・年齢層内時間・年齢構成へ分解する。"""
 
+    # 年齢階級別の延週間就業時間を合計して、
+    # 全年齢の総労働投入を求める。
     start_total_hours = float(decomposition_df["start_aggregate_weekly_hours"].sum())
 
     end_total_hours = float(decomposition_df["end_aggregate_weekly_hours"].sum())
 
+    # implied_persons_at_work を年齢階級間で合計した従業者総数。
     start_total_persons = float(decomposition_df["start_persons_at_work"].sum())
 
     end_total_persons = float(decomposition_df["end_persons_at_work"].sum())
@@ -700,8 +787,8 @@ def summarize_total_labor_input_decomposition(
     if start_total_persons <= 0 or end_total_persons <= 0:
         raise ValueError("総労働投入の集計には従業者数が0より大きい必要があります。")
 
+    # 総労働投入 / 従業者総数から、全年齢の加重平均週間就業時間を求める。
     start_average_hours = start_total_hours / start_total_persons
-
     end_average_hours = end_total_hours / end_total_persons
 
     total_change = end_total_hours - start_total_hours
@@ -714,6 +801,8 @@ def summarize_total_labor_input_decomposition(
     # 1. 従業者総数効果
     # --------------------------------------------------------
 
+    # 総労働投入 L = N × H のうち、
+    # 全体の平均就業時間を固定して従業者総数Nが変化した効果。
     persons_effect = average_hours * (end_total_persons - start_total_persons)
 
     # --------------------------------------------------------
@@ -721,10 +810,13 @@ def summarize_total_labor_input_decomposition(
     #    年齢層内効果と年齢構成効果へ分解
     # --------------------------------------------------------
 
+    # 各年齢階級の従業者数から、
+    # 開始年・終了年それぞれの年齢構成比を作る。
     start_share = decomposition_df["start_persons_at_work"] / start_total_persons
-
     end_share = decomposition_df["end_persons_at_work"] / end_total_persons
 
+    # 全体平均時間の変化のうち、
+    # 各年齢階級内部で平均週間就業時間が変わった部分。
     within_hours_change = (
         (start_share + end_share)
         / 2
@@ -734,6 +826,9 @@ def summarize_total_labor_input_decomposition(
         )
     ).sum()
 
+    # 全体平均時間の変化のうち、
+    # 就業時間水準の異なる年齢階級間で
+    # 従業者構成比が変化した部分。
     composition_hours_change = (
         (
             decomposition_df["start_average_weekly_hours"]
@@ -743,8 +838,9 @@ def summarize_total_labor_input_decomposition(
         * (end_share - start_share)
     ).sum()
 
+    # 「1人当たり時間の変化」を総労働時間単位の効果へ戻すため、
+    # 2時点平均の従業者総数を掛ける。
     within_effect = average_persons * within_hours_change
-
     composition_effect = average_persons * composition_hours_change
 
     average_hours_effect = within_effect + composition_effect
@@ -820,6 +916,9 @@ def create_total_labor_input_trend(df: pd.DataFrame) -> pd.DataFrame:
         },
     )
 
+    # 年齢階級別データを年単位で合計する。
+    # 一部だけ値がある場合に不完全な合計を作ることは許容しているが、
+    # 全区分が欠損なら min_count=1 により結果もNaNとなる。
     yearly = df.groupby("year", as_index=False).agg(
         total_weekly_hours=(
             "aggregate_weekly_hours",
@@ -834,6 +933,8 @@ def create_total_labor_input_trend(df: pd.DataFrame) -> pd.DataFrame:
     if yearly["total_persons_at_work"].le(0).any():
         raise ValueError("年間の従業者数は0より大きい必要があります。")
 
+    # 年齢階級別平均の単純平均ではなく、
+    # 総延週間就業時間 ÷ 総従業者数で全年齢の平均時間を求める。
     yearly["average_weekly_hours"] = (
         yearly["total_weekly_hours"] / yearly["total_persons_at_work"]
     )
