@@ -1,14 +1,15 @@
-import altair as alt
-import pandas as pd
-import streamlit as st
 import hashlib
 import io
 import json
 import platform
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
+
+import altair as alt
+import pandas as pd
+import streamlit as st
 
 from real_wage_dashboard.config import (
     CPI_BASE_FILTERS,
@@ -172,16 +173,18 @@ def create_comparison_chart_dataframe(
     """一般労働者とパートの指定指標を横持ちで結合する。"""
 
     general = general_df[
-        ["date", column,]
-    ].rename(
-        columns={column: "一般労働者"}
-    )
+        [
+            "date",
+            column,
+        ]
+    ].rename(columns={column: "一般労働者"})
 
     part = part_df[
-        ["date", column,]
-    ].rename(
-        columns={column: "パートタイム労働者"}
-    )
+        [
+            "date",
+            column,
+        ]
+    ].rename(columns={column: "パートタイム労働者"})
 
     return general.merge(
         part,
@@ -216,9 +219,7 @@ def create_comparison_output_dataframe(
     result["working_hours_item"] = "総実労働時間"
     result["industry"] = "調査産業計"
 
-    return result.sort_values(
-        ["date", "employment_type"]
-    ).reset_index(drop=True)
+    return result.sort_values(["date", "employment_type"]).reset_index(drop=True)
 
 
 def create_index_chart(
@@ -656,10 +657,7 @@ def main() -> None:
         f"{general_df['date'].max().strftime('%Y年%m月')}"
     )
 
-    st.subheader(
-        f"主要結果：{ANALYSIS_START_YEAR}年から"
-        f"{ANALYSIS_END_YEAR}年の変化"
-    )
+    st.subheader(f"主要結果：{ANALYSIS_START_YEAR}年から{ANALYSIS_END_YEAR}年の変化")
 
     try:
         comparison_summary_df = create_yearly_comparison_summary(
@@ -738,8 +736,7 @@ def main() -> None:
         ]
 
         with st.expander(
-            f"{ANALYSIS_START_YEAR}年・"
-            f"{ANALYSIS_END_YEAR}年の年平均を確認",
+            f"{ANALYSIS_START_YEAR}年・{ANALYSIS_END_YEAR}年の年平均を確認",
             expanded=False,
         ):
             st.dataframe(
@@ -773,8 +770,7 @@ def main() -> None:
             and ANALYSIS_END_YEAR == 2025
         ):
             st.caption(
-                "考察更新日：2026年9月11日 ｜ "
-                "対象：5人以上・調査産業計・CPI総合"
+                "考察更新日：2026年9月11日 ｜ 対象：5人以上・調査産業計・CPI総合"
             )
 
             st.markdown(
@@ -834,9 +830,7 @@ def main() -> None:
                 alternative_values = {}
 
                 for year in [ANALYSIS_START_YEAR, ANALYSIS_END_YEAR]:
-                    annual_df = analysis_df.loc[
-                        analysis_df["date"].dt.year == year
-                    ]
+                    annual_df = analysis_df.loc[analysis_df["date"].dt.year == year]
 
                     # 賃金・時間等の12か月確認は、
                     # 上で実行した年次比較関数で実施済み。
@@ -928,9 +922,7 @@ def main() -> None:
                 )
 
                 # 年率換算には、正の開始値・終了値を使用する。
-                if (
-                    result[["start_value", "end_value"]] <= 0
-                ).any().any():
+                if (result[["start_value", "end_value"]] <= 0).any().any():
                     raise ValueError(
                         f"{start_year}→{end_year}年の"
                         "年率換算には正の開始値・終了値が必要です。"
@@ -938,11 +930,7 @@ def main() -> None:
 
                 years = end_year - start_year
                 result["annualized_change_pct"] = (
-                    (
-                        result["end_value"]
-                        / result["start_value"]
-                    ) ** (1 / years)
-                    - 1
+                    (result["end_value"] / result["start_value"]) ** (1 / years) - 1
                 ) * 100
 
                 result["period"] = f"{start_year}→{end_year}"
@@ -983,18 +971,14 @@ def main() -> None:
                 "各年の変化率の単純平均を意味しません。"
             )
 
-        period_order = [
-            f"{start}→{end}"
-            for start, end in comparison_periods
-        ]
+        period_order = [f"{start}→{end}" for start, end in comparison_periods]
 
         for employment_type in [
             "一般労働者",
             "パートタイム労働者",
         ]:
             selected = period_comparison_df.loc[
-                period_comparison_df["employment_type"]
-                == employment_type
+                period_comparison_df["employment_type"] == employment_type
             ]
 
             table = (
@@ -1093,9 +1077,7 @@ def main() -> None:
             },
             "実質時間当たり賃金": {
                 "column": "real_approx_hourly_wage_index",
-                "note": (
-                    "時間当たり賃金を選択したCPIで実質化した値です。"
-                ),
+                "note": ("時間当たり賃金を選択したCPIで実質化した値です。"),
             },
         }
 
@@ -1150,8 +1132,7 @@ def main() -> None:
         )
 
         common_months = sorted(
-            set(general_available["valid_months"])
-            & set(part_available["valid_months"])
+            set(general_available["valid_months"]) & set(part_available["valid_months"])
         )
 
         if not common_months:
@@ -1197,10 +1178,7 @@ def main() -> None:
             width="stretch",
         )
 
-        st.markdown(
-            f"#### 期間要約："
-            f"{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年"
-        )
+        st.markdown(f"#### 期間要約：{ANALYSIS_START_YEAR}〜{ANALYSIS_END_YEAR}年")
 
         n_expected = general_decomposition_summary["n_expected_months"]
         n_used = general_decomposition_summary["n_months"]
@@ -1417,7 +1395,6 @@ def main() -> None:
         )
 
         with st.expander("Tableau用：全条件のCSVを生成", expanded=False):
-
             st.caption(
                 "事業所規模・CPI系列・雇用形態の全条件を含むCSVを生成します。"
                 "Tableau側で各条件をフィルターして分析できます。"
@@ -1506,7 +1483,7 @@ def main() -> None:
         @st.fragment
         def render_snapshot_download():
             if st.button("再計算記録のZIPを作成"):
-                captured_at = datetime.now(timezone.utc)
+                captured_at = datetime.now(UTC)
                 timestamp = captured_at.strftime("%Y%m%dT%H%M%SZ")
                 project_root = Path(__file__).resolve().parents[1]
 
@@ -1539,9 +1516,7 @@ def main() -> None:
                 )
 
                 # 保存済みのソースと依存関係を収録する。
-                source_paths = sorted(
-                    (project_root / "src").rglob("*.py")
-                )
+                source_paths = sorted((project_root / "src").rglob("*.py"))
                 source_paths.append(Path(__file__).resolve())
 
                 for filename in ["pyproject.toml", "uv.lock"]:
@@ -1637,6 +1612,7 @@ def main() -> None:
                 )
 
         render_snapshot_download()
+
 
 if __name__ == "__main__":
     main()

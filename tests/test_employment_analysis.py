@@ -120,9 +120,27 @@ def test_merge_wage_and_working_hours_uses_matching_dates_only() -> None:
     )
 
     assert result["date"].tolist() == [
+        pd.Timestamp("2020-01-01"),
         pd.Timestamp("2020-02-01"),
         pd.Timestamp("2020-03-01"),
     ]
+
+    assert pd.isna(
+        result.loc[
+            result["date"] == pd.Timestamp("2020-01-01"),
+            "working_hours",
+        ].iloc[0]
+    )
+
+    assert result.loc[
+        result["date"] == pd.Timestamp("2020-02-01"),
+        "working_hours",
+    ].iloc[0] == pytest.approx(162.0)
+
+    assert result.loc[
+        result["date"] == pd.Timestamp("2020-03-01"),
+        "working_hours",
+    ].iloc[0] == pytest.approx(165.0)
 
 
 def test_merge_wage_and_working_hours_returns_sorted_dates() -> None:
@@ -146,20 +164,19 @@ def test_merge_wage_and_working_hours_raises_for_duplicate_wage_dates() -> None:
         ignore_index=True,
     )
 
-    working_hours_df = create_test_working_hours_df()
-
-    with pytest.raises(pd.errors.MergeError):
+    with pytest.raises(
+        ValueError,
+        match="賃金データに同じ年月の重複があります",
+    ):
         merge_wage_and_working_hours(
             wage_df,
-            working_hours_df,
+            create_test_working_hours_df(),
         )
 
 
 def test_merge_wage_and_working_hours_raises_for_duplicate_working_hours_dates() -> (
     None
 ):
-    wage_df = create_test_wage_df()
-
     working_hours_df = pd.concat(
         [
             create_test_working_hours_df(),
@@ -168,9 +185,12 @@ def test_merge_wage_and_working_hours_raises_for_duplicate_working_hours_dates()
         ignore_index=True,
     )
 
-    with pytest.raises(pd.errors.MergeError):
+    with pytest.raises(
+        ValueError,
+        match="労働時間データに同じ年月の重複があります",
+    ):
         merge_wage_and_working_hours(
-            wage_df,
+            create_test_wage_df(),
             working_hours_df,
         )
 
@@ -551,7 +571,10 @@ def test_merge_employment_analysis_with_cpi_raises_for_duplicate_cpi_dates() -> 
         ignore_index=True,
     )
 
-    with pytest.raises(pd.errors.MergeError):
+    with pytest.raises(
+        ValueError,
+        match="CPIデータに同じ年月の重複があります",
+    ):
         merge_employment_analysis_with_cpi(
             df,
             cpi_df,
@@ -591,7 +614,7 @@ def test_add_real_employment_values_raises_when_cpi_not_positive() -> None:
 
     with pytest.raises(
         ValueError,
-        match="CPIには0より大きい値が必要です",
+        match="CPIには0より大きい有限値が必要です",
     ):
         add_real_employment_values(df)
 
@@ -731,12 +754,11 @@ def test_add_wage_change_decomposition_raises_when_required_column_missing() -> 
 
 def test_add_wage_change_decomposition_raises_when_value_not_positive() -> None:
     df = create_decomposition_test_df()
-
     df.loc[0, "working_hours"] = 0.0
 
     with pytest.raises(
         ValueError,
-        match="0より大きい賃金・労働時間データが必要",
+        match="要因分解には0より大きい有限の賃金・労働時間データが必要です",
     ):
         add_wage_change_decomposition(df)
 
@@ -1334,23 +1356,28 @@ def test_create_employment_analysis_discussion() -> None:
 
     result = create_employment_analysis_discussion(summary_df)
 
-    joined = "\n".join(result)
-
-    assert len(result) == 3
-
-    assert "両就業形態とも、時間当たり賃金が上昇する一方で総実労働時間は減少" in joined
+    assert (
+        "一般労働者では、時間当たり賃金が上昇する一方、総実労働時間は減少しています。"
+    ) in result
 
     assert (
-        "パートタイム労働者では、一般労働者より時間当たり賃金の伸びが大きく" in joined
-    )
-
-    assert "時間当たり賃金の改善ほど月額賃金は伸びていません" in joined
+        "パートタイム労働者の時間当たり賃金の変化率は、一般労働者を上回っています。"
+    ) in result
 
     assert (
-        "両就業形態とも名目月額賃金の伸びに比べて実質月額賃金の伸びは小さく" in joined
-    )
+        "総実労働時間の減少率は、パートタイム労働者の方が大きくなっています。"
+    ) in result
 
-    assert "物価上昇によって" in joined
+    assert (
+        "一般労働者では、物価調整後の実質月額賃金の"
+        "変化率が、名目月額賃金の変化率を下回っています。"
+    ) in result
+
+    assert (
+        "これらは集団平均の変化であり、"
+        "同一労働者の賃上げや労働時間の変化、"
+        "それらの原因を直接示すものではありません。"
+    ) in result
 
 
 def test_summarize_wage_change_decomposition() -> None:

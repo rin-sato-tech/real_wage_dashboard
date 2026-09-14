@@ -171,10 +171,7 @@ def add_base_year_index(
     if base_values.isna().any():
         raise ValueError(f"{base_year}年の基準データに欠損値があります: {column}")
 
-    if (
-        not np.isfinite(base_values).all()
-        or (base_values <= 0).any()
-    ):
+    if not np.isfinite(base_values).all() or (base_values <= 0).any():
         raise ValueError("基準年の値はすべて0より大きい有限値である必要があります。")
 
     # 基準年以外も無限大は認めない。欠測値は保持する。
@@ -320,10 +317,7 @@ def add_real_employment_values(df: pd.DataFrame) -> pd.DataFrame:
 
     # CPIの欠測値は保持するが、0以下や無限大はエラーとする。
     observed_cpi = result["index_value"].dropna()
-    if (
-        not np.isfinite(observed_cpi).all()
-        or (observed_cpi <= 0).any()
-    ):
+    if not np.isfinite(observed_cpi).all() or (observed_cpi <= 0).any():
         raise ValueError("CPIには0より大きい有限値が必要です。")
 
     for column in ["nominal_wage_amount", "approx_hourly_wage"]:
@@ -435,11 +429,11 @@ def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
     values = result[list(output_columns)]
 
     # 欠測は保持するが、観測値は正の有限値に限定する。
-    invalid = values.notna() & (
-        (values <= 0) | ~np.isfinite(values)
-    )
+    invalid = values.notna() & ((values <= 0) | ~np.isfinite(values))
     if invalid.any().any():
-        raise ValueError("要因分解には0より大きい有限の賃金・労働時間データが必要です。")
+        raise ValueError(
+            "要因分解には0より大きい有限の賃金・労働時間データが必要です。"
+        )
 
     # 3指標がそろう行で、時間当たり賃金の定義を検証する。
     complete = values.notna().all(axis=1)
@@ -457,31 +451,23 @@ def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
 
     if not consistent.all():
         invalid_months = (
-            result.loc[complete, "date"]
-            .loc[~consistent]
-            .astype(str)
-            .tolist()
+            result.loc[complete, "date"].loc[~consistent].astype(str).tolist()
         )
         raise ValueError(
             f"時間当たり賃金が月額賃金÷労働時間と一致しません: {invalid_months}"
         )
 
     # 当月・前年同月の全指標がそろう月だけ、3項を算出する。
-    valid_pair = (
-        values.notna().all(axis=1)
-        & previous.notna().all(axis=1)
-    )
+    valid_pair = values.notna().all(axis=1) & previous.notna().all(axis=1)
 
     for column, output_column in output_columns.items():
-        change = (
-            np.log(result[column]) - np.log(previous[column])
-        ) * 100
+        change = (np.log(result[column]) - np.log(previous[column])) * 100
         result[output_column] = change.where(valid_pair)
 
     return result
 
 
-'''
+"""
 ここまでの列（総数20列）:
     # 基本指標
     date, nominal_wage_amount, working_hours, approx_hourly_wage,
@@ -508,7 +494,7 @@ def add_wage_change_decomposition(df: pd.DataFrame) -> pd.DataFrame:
 CPI欠測月も保持し、その月の実質値・実質指数は欠損となる。
 前年同月比・要因分解は年月を照合し、必要な値が欠測なら欠損となる。
 ただし、基準年に必要な値が欠測している場合はエラーとする。
-'''
+"""
 
 # ============================================================
 # 5. 月次分析パイプライン
@@ -597,19 +583,17 @@ def calculate_yearly_averages(
     if not np.isfinite(averages).all():
         raise ValueError(f"{year}年の年平均を有限値として算出できません。")
 
-    return {
-        column: float(averages[column])
-        for column in columns
-    }
+    return {column: float(averages[column]) for column in columns}
 
-'''
+
+"""
 {
     'nominal_wage_amount': 123456.78,
     'working_hours': 160.0,
     'approx_hourly_wage': 771.6,
     ...
 }
-'''
+"""
 
 
 # 6-2
@@ -632,6 +616,7 @@ def calculate_change_rate(start_value: float, end_value: float) -> float:
 
     return float(change_rate)
 
+
 # 6-3
 def calculate_yearly_change_rates(
     start_averages: dict[str, float],
@@ -652,12 +637,12 @@ def calculate_yearly_change_rates(
     }
 
 
-'''
+"""
 ANALYSIS_INDICATORS = [
     ["nominal_wage_amount", "working_hours", "approx_hourly_wage"],
     ["real_regular_wage", "real_approx_hourly_wage"]
 ]
-'''
+"""
 
 
 # 6-4
@@ -758,13 +743,9 @@ def compare_employment_change_rates(summary_df: pd.DataFrame) -> pd.DataFrame:
 
     result = pivot_df.reset_index()
 
-    result["difference_pct_point"] = (
-        result["パートタイム労働者"] - result["一般労働者"]
-    )
+    result["difference_pct_point"] = result["パートタイム労働者"] - result["一般労働者"]
 
-    comparable = result[
-        ["一般労働者", "パートタイム労働者"]
-    ].notna().all(axis=1)
+    comparable = result[["一般労働者", "パートタイム労働者"]].notna().all(axis=1)
 
     difference = result["difference_pct_point"]
 
@@ -800,11 +781,7 @@ def compare_employment_change_rates(summary_df: pd.DataFrame) -> pd.DataFrame:
 def describe_change_direction(value: float, tolerance: float = 0.1) -> str:
     """変化率を上昇・低下・横ばいに分類し、欠測時は判定不可とする。"""
 
-    if (
-        pd.isna(tolerance)
-        or not np.isfinite(tolerance)
-        or tolerance < 0
-    ):
+    if pd.isna(tolerance) or not np.isfinite(tolerance) or tolerance < 0:
         raise ValueError("許容幅は0以上の有限値である必要があります。")
 
     if pd.isna(value):
@@ -839,11 +816,7 @@ def create_employment_analysis_discussion(
     if missing:
         raise ValueError(f"必要な列がありません: {sorted(missing)}")
 
-    if (
-        pd.isna(tolerance)
-        or not np.isfinite(tolerance)
-        or tolerance < 0
-    ):
+    if pd.isna(tolerance) or not np.isfinite(tolerance) or tolerance < 0:
         raise ValueError("許容幅は0以上の有限値である必要があります。")
 
     def get_rate(
@@ -951,13 +924,11 @@ def create_employment_analysis_discussion(
 
         if difference < -tolerance:
             discussions.append(
-                "総実労働時間の減少率は、"
-                "パートタイム労働者の方が大きくなっています。"
+                "総実労働時間の減少率は、パートタイム労働者の方が大きくなっています。"
             )
         elif difference > tolerance:
             discussions.append(
-                "総実労働時間の減少率は、"
-                "一般労働者の方が大きくなっています。"
+                "総実労働時間の減少率は、一般労働者の方が大きくなっています。"
             )
 
     # 4. 各就業形態の名目・実質月額賃金を比較する。
@@ -965,12 +936,11 @@ def create_employment_analysis_discussion(
         wage = values["wage"]
         real_wage = values["real_wage"]
 
-        if pd.notna(wage) and pd.notna(real_wage):
-            if real_wage < wage - tolerance:
-                discussions.append(
-                    f"{employment_type}では、物価調整後の実質月額賃金の"
-                    "変化率が、名目月額賃金の変化率を下回っています。"
-                )
+        if pd.notna(wage) and pd.notna(real_wage) and real_wage < wage - tolerance:
+            discussions.append(
+                f"{employment_type}では、物価調整後の実質月額賃金の"
+                "変化率が、名目月額賃金の変化率を下回っています。"
+            )
 
         if pd.notna(real_wage):
             direction = describe_change_direction(
@@ -984,15 +954,12 @@ def create_employment_analysis_discussion(
 
     # 5. 欠測による考察の省略を明示する。
     has_missing = any(
-        pd.isna(value)
-        for values in rates.values()
-        for value in values.values()
+        pd.isna(value) for values in rates.values() for value in values.values()
     )
 
     if has_missing:
         discussions.append(
-            "一部の指標が欠測しているため、"
-            "該当する指標についての考察は省略しています。"
+            "一部の指標が欠測しているため、該当する指標についての考察は省略しています。"
         )
 
     discussions.append(
@@ -1097,18 +1064,10 @@ def summarize_wage_change_decomposition(
         "n_excluded_months": len(excluded),
         "valid_months": valid_df.index.astype(str).tolist(),
         "excluded_months": excluded.astype(str).tolist(),
-        "mean_wage_log_change": float(
-            valid_df["wage_log_change"].mean()
-        ),
+        "mean_wage_log_change": float(valid_df["wage_log_change"].mean()),
         "mean_hourly_wage_contribution": float(hourly.mean()),
         "mean_working_hours_contribution": float(hours.mean()),
-        "hourly_positive_share_pct": float(
-            (hourly > 0).mean() * 100
-        ),
-        "hours_negative_share_pct": float(
-            (hours < 0).mean() * 100
-        ),
-        "hourly_dominant_share_pct": float(
-            (hourly.abs() > hours.abs()).mean() * 100
-        ),
+        "hourly_positive_share_pct": float((hourly > 0).mean() * 100),
+        "hours_negative_share_pct": float((hours < 0).mean() * 100),
+        "hourly_dominant_share_pct": float((hourly.abs() > hours.abs()).mean() * 100),
     }
