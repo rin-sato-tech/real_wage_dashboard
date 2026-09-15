@@ -1,12 +1,13 @@
-from getpass import getpass
-
-import streamlit as st
+import json
 
 import pandas as pd
 
 from real_wage_dashboard.config import (
     LFS_EMPLOYMENT_BY_AGE_PATH,
+    LFS_EMPLOYMENT_TYPE_HOURS_SNAPSHOT_PATH,
     LFS_HOURS_BY_AGE_PATH,
+    LFS_HOURS_BY_AGE_SEX_SNAPSHOT_PATH,
+    LFS_WORKING_HOURS_DISTRIBUTION_SNAPSHOT_PATH,
     WAGE_DATA_PATH,
 )
 from real_wage_dashboard.labor_force_analysis import (
@@ -23,11 +24,11 @@ from real_wage_dashboard.labor_force_analysis import (
     create_working_hours_distribution_period_summary,
 )
 from real_wage_dashboard.labor_force_service import (
+    create_lfs_employment_type_hours_dataframe,
+    create_lfs_hours_by_age_sex_dataframe,
+    create_lfs_working_hours_distribution_dataframe,
     load_lfs_employment_by_age,
-    load_lfs_employment_type_hours_from_api,
     load_lfs_hours_by_age,
-    load_lfs_hours_by_age_sex_from_api,
-    load_lfs_working_hours_distribution_from_api,
 )
 from real_wage_dashboard.labor_input_analysis import (
     create_employment_type_composition_period_summary,
@@ -109,18 +110,12 @@ def print_df(df: pd.DataFrame) -> None:
     )
 
 
-def get_estat_app_id() -> str:
-    app_id = st.secrets["ESTAT_APP_ID"]
-
-    if app_id:
-        return app_id
-
-    app_id = getpass("e-Stat appId: ").strip()
-
-    if not app_id:
-        raise ValueError("e-Stat appId が必要です。")
-
-    return app_id
+def load_json(path) -> dict:
+    with path.open(
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return json.load(f)
 
 
 def create_annual_levels(
@@ -402,30 +397,34 @@ def main() -> None:
         )
 
     # ============================================================
-    # 労働力調査：e-Stat API
+    # 労働力調査：固定したe-Stat APIレスポンス
     # ============================================================
 
-    app_id = get_estat_app_id()
+    distribution_response = load_json(
+        LFS_WORKING_HOURS_DISTRIBUTION_SNAPSHOT_PATH
+    )
 
     distribution_df = (
-        load_lfs_working_hours_distribution_from_api(
-            app_id,
-            start_year=2000,
-            end_year=2025,
+        create_lfs_working_hours_distribution_dataframe(
+            distribution_response
         )
     )
 
-    sex_df = load_lfs_hours_by_age_sex_from_api(
-        app_id,
-        start_year=2000,
-        end_year=2025,
+    sex_response = load_json(
+        LFS_HOURS_BY_AGE_SEX_SNAPSHOT_PATH
+    )
+
+    sex_df = create_lfs_hours_by_age_sex_dataframe(
+        sex_response
+    )
+
+    employment_type_response = load_json(
+        LFS_EMPLOYMENT_TYPE_HOURS_SNAPSHOT_PATH
     )
 
     employment_type_hours_df = (
-        load_lfs_employment_type_hours_from_api(
-            app_id,
-            start_year=2012,
-            end_year=2025,
+        create_lfs_employment_type_hours_dataframe(
+            employment_type_response
         )
     )
 

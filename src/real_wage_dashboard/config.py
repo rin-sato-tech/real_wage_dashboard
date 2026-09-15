@@ -170,6 +170,18 @@ LFS_EMPLOYMENT_BY_AGE_PATH = Path(
 
 LFS_HOURS_BY_AGE_PATH = Path("data/raw/labor_input/lfs_hours_by_age_annual.csv")
 
+LFS_WORKING_HOURS_DISTRIBUTION_SNAPSHOT_PATH = Path(
+    "data/raw/labor_input/lfs_working_hours_distribution_2000_2025.json"
+)
+
+LFS_HOURS_BY_AGE_SEX_SNAPSHOT_PATH = Path(
+    "data/raw/labor_input/lfs_hours_by_age_sex_2000_2025.json"
+)
+
+LFS_EMPLOYMENT_TYPE_HOURS_SNAPSHOT_PATH = Path(
+    "data/raw/labor_input/lfs_employment_type_hours_2012_2025.json"
+)
+
 LFS_HOURS_BY_AGE_SEX_BASE_FILTERS = {
     "cdCat03": "00",  # 従業上の地位：総数
     "cdCat04": "000",  # 産業：全産業
