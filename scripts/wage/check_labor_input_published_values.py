@@ -65,6 +65,11 @@ COMPOSITION_PERIODS = [
     (2015, 2025),
 ]
 
+DISTRIBUTION_PERIODS = [
+    *ROBUSTNESS_PERIODS,
+    (2019, 2020),
+]
+
 AGE_GROUPS = [
     "15～24歳",
     "25～34歳",
@@ -432,7 +437,7 @@ def main() -> None:
     distribution_summary = (
         create_working_hours_distribution_period_summary(
             distribution_df,
-            periods=ROBUSTNESS_PERIODS,
+            periods=DISTRIBUTION_PERIODS,
             age_group="15歳以上",
         )
     )
