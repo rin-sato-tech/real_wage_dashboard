@@ -1,12 +1,9 @@
-import pandas as pd
-
 from real_wage_dashboard.config import WAGE_DATA_PATH
 from real_wage_dashboard.labor_input_analysis import (
     create_employment_type_composition_period_summary,
     create_labor_input_dataframe,
 )
 from real_wage_dashboard.wage_service import load_wage_csv
-
 
 PERIODS = [
     (1993, 2025),

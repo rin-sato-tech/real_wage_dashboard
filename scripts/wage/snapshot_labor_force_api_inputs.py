@@ -1,5 +1,4 @@
 import json
-
 from getpass import getpass
 from pathlib import Path
 
@@ -25,7 +24,6 @@ from real_wage_dashboard.labor_force_service import (
     AGE_GROUPS,
     create_lfs_working_hours_time_codes,
 )
-
 
 OUTPUT_DIR = Path("data/raw/labor_input")
 

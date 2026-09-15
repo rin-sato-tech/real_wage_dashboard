@@ -38,7 +38,6 @@ from real_wage_dashboard.labor_input_analysis import (
 )
 from real_wage_dashboard.wage_service import load_wage_csv
 
-
 MAIN_PERIODS = [
     (2000, 2025),
     (2015, 2025),

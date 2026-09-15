@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 START_YEAR = 1990
 END_YEAR = 2025
 SHEET_NAME = "TL"
