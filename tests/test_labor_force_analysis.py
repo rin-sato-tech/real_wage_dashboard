@@ -228,6 +228,29 @@ def test_age_hours_period_summary() -> None:
     assert error.abs().max() < 1e-10
 
 
+def test_employment_structure_summary_change_pct() -> None:
+    df = pd.DataFrame(
+        {
+            "year": [2015, 2025],
+            "age_group": ["65歳以上", "65歳以上"],
+            "employed_persons": [100.0, 125.0],
+            "employment_rate": [20.0, 25.0],
+        }
+    )
+
+    result = create_employment_structure_summary(
+        df,
+        start_year=2015,
+        end_year=2025,
+    )
+
+    row = result.iloc[0]
+
+    assert row["employed_persons_change"] == pytest.approx(25.0)
+    assert row["employed_persons_change_pct"] == pytest.approx(25.0)
+    assert row["employment_rate_change_pt"] == pytest.approx(5.0)
+
+
 def test_employment_count_decomposition_identity() -> None:
     df = load_lfs_age_df()
 
