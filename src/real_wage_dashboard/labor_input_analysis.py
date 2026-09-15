@@ -907,3 +907,237 @@ def create_working_hours_index_comparison(
         )
 
     return result
+
+
+def _summarize_annual_labor_input_level(
+    df: pd.DataFrame,
+    year: int,
+    columns: list[str],
+) -> dict[str, float]:
+    """指定年の労働投入指標と年間労働者ウェイト合計を返す。"""
+
+    year_df = df.loc[df["date"].dt.year == year]
+
+    if len(year_df) != 12:
+        raise ValueError(
+            f"{year}年の年平均計算には12か月分のデータが必要です。"
+        )
+
+    worker_exposure = float(year_df["worker_weight"].sum())
+
+    if worker_exposure <= 0:
+        raise ValueError("年間労働者ウェイト合計は正である必要があります。")
+
+    result = {
+        "worker_exposure": worker_exposure,
+    }
+
+    for column in columns:
+        result[column] = weighted_mean(year_df, column)
+
+    return result
+
+
+def create_employment_type_composition_decomposition(
+    total_df: pd.DataFrame,
+    regular_df: pd.DataFrame,
+    part_time_df: pd.DataFrame,
+    start_year: int,
+    end_year: int,
+    metrics: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    """就業形態計の水準変化を就業形態内効果と構成効果へ分解する。
+
+    一般労働者・パートタイム労働者の年平均水準と年間労働者
+    ウェイトから構成比を求め、対称分解する。
+
+    再構成残差は、公表された就業形態計の変化と、
+    一般・パートから再構成した変化との差を表す。
+    """
+
+    if start_year >= end_year:
+        raise ValueError("start_year は end_year より前である必要があります。")
+
+    if metrics is None:
+        metrics = {
+            "nominal_wage_amount": "きまって支給する給与",
+            "total_hours": "総実労働時間",
+            "scheduled_hours": "所定内労働時間",
+            "overtime_hours": "所定外労働時間",
+            "working_days": "出勤日数",
+        }
+
+    columns = list(metrics)
+
+    total_start = _summarize_annual_labor_input_level(
+        total_df,
+        start_year,
+        columns,
+    )
+    total_end = _summarize_annual_labor_input_level(
+        total_df,
+        end_year,
+        columns,
+    )
+
+    group_dfs = {
+        "regular": regular_df,
+        "part_time": part_time_df,
+    }
+
+    group_start = {
+        name: _summarize_annual_labor_input_level(
+            df,
+            start_year,
+            columns,
+        )
+        for name, df in group_dfs.items()
+    }
+
+    group_end = {
+        name: _summarize_annual_labor_input_level(
+            df,
+            end_year,
+            columns,
+        )
+        for name, df in group_dfs.items()
+    }
+
+    start_exposure = sum(
+        values["worker_exposure"]
+        for values in group_start.values()
+    )
+    end_exposure = sum(
+        values["worker_exposure"]
+        for values in group_end.values()
+    )
+
+    start_shares = {
+        name: values["worker_exposure"] / start_exposure
+        for name, values in group_start.items()
+    }
+
+    end_shares = {
+        name: values["worker_exposure"] / end_exposure
+        for name, values in group_end.items()
+    }
+
+    records = []
+
+    for column, label in metrics.items():
+        published_start = total_start[column]
+        published_end = total_end[column]
+        published_change = published_end - published_start
+
+        reconstructed_start = sum(
+            start_shares[name] * group_start[name][column]
+            for name in group_dfs
+        )
+
+        reconstructed_end = sum(
+            end_shares[name] * group_end[name][column]
+            for name in group_dfs
+        )
+
+        within_effect = sum(
+            ((start_shares[name] + end_shares[name]) / 2)
+            * (
+                group_end[name][column]
+                - group_start[name][column]
+            )
+            for name in group_dfs
+        )
+
+        composition_effect = sum(
+            (
+                (
+                    group_start[name][column]
+                    + group_end[name][column]
+                )
+                / 2
+            )
+            * (
+                end_shares[name]
+                - start_shares[name]
+            )
+            for name in group_dfs
+        )
+
+        reconstructed_change = (
+            reconstructed_end - reconstructed_start
+        )
+
+        residual = published_change - reconstructed_change
+
+        records.append(
+            {
+                "start_year": start_year,
+                "end_year": end_year,
+                "indicator": label,
+                "column": column,
+                "published_start": published_start,
+                "published_end": published_end,
+                "published_change": published_change,
+                "published_change_pct": (
+                    published_change / published_start * 100
+                ),
+                "reconstructed_start": reconstructed_start,
+                "reconstructed_end": reconstructed_end,
+                "within_effect": within_effect,
+                "composition_effect": composition_effect,
+                "residual": residual,
+                "within_contribution_pct": (
+                    within_effect / published_start * 100
+                ),
+                "composition_contribution_pct": (
+                    composition_effect / published_start * 100
+                ),
+                "residual_contribution_pct": (
+                    residual / published_start * 100
+                ),
+                "regular_share_start": (
+                    start_shares["regular"]
+                ),
+                "regular_share_end": (
+                    end_shares["regular"]
+                ),
+                "part_time_share_start": (
+                    start_shares["part_time"]
+                ),
+                "part_time_share_end": (
+                    end_shares["part_time"]
+                ),
+            }
+        )
+
+    return pd.DataFrame(records)
+
+
+def create_employment_type_composition_period_summary(
+    total_df: pd.DataFrame,
+    regular_df: pd.DataFrame,
+    part_time_df: pd.DataFrame,
+    periods: list[tuple[int, int]],
+    metrics: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    """複数期間について就業形態構成分解をまとめて返す。"""
+
+    results = [
+        create_employment_type_composition_decomposition(
+            total_df=total_df,
+            regular_df=regular_df,
+            part_time_df=part_time_df,
+            start_year=start_year,
+            end_year=end_year,
+            metrics=metrics,
+        )
+        for start_year, end_year in periods
+    ]
+
+    if not results:
+        return pd.DataFrame()
+
+    return pd.concat(
+        results,
+        ignore_index=True,
+    )

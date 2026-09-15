@@ -7,6 +7,8 @@ from real_wage_dashboard.labor_input_analysis import (
     add_scheduled_hours_decomposition,
     add_wage_decomposition,
     add_working_hours_decomposition,
+    create_employment_type_composition_decomposition,
+    create_employment_type_composition_period_summary,
     create_labor_input_dataframe,
     create_rolling_labor_input_decomposition,
     create_working_hours_index_comparison,
@@ -369,3 +371,183 @@ def test_working_hours_index_comparison_base_year() -> None:
     )
 
     assert comparison.loc[comparison["year"].between(1990, 2025)].shape[0] == 36
+
+
+def test_employment_type_composition_decomposition_identity() -> None:
+    dates = list(pd.date_range("2000-01-01", periods=12, freq="MS"))
+    dates += list(pd.date_range("2025-01-01", periods=12, freq="MS"))
+
+    regular_df = pd.DataFrame(
+        {
+            "date": dates,
+            "worker_weight": [80.0] * 12 + [70.0] * 12,
+            "total_hours": [160.0] * 12 + [150.0] * 12,
+        }
+    )
+
+    part_time_df = pd.DataFrame(
+        {
+            "date": dates,
+            "worker_weight": [20.0] * 12 + [30.0] * 12,
+            "total_hours": [100.0] * 12 + [90.0] * 12,
+        }
+    )
+
+    # 2000年:
+    # 0.8 * 160 + 0.2 * 100 = 148
+    #
+    # 2025年:
+    # 0.7 * 150 + 0.3 * 90 = 132
+    total_df = pd.DataFrame(
+        {
+            "date": dates,
+            "worker_weight": [100.0] * 24,
+            "total_hours": [148.0] * 12 + [132.0] * 12,
+        }
+    )
+
+    result = create_employment_type_composition_decomposition(
+        total_df=total_df,
+        regular_df=regular_df,
+        part_time_df=part_time_df,
+        start_year=2000,
+        end_year=2025,
+        metrics={
+            "total_hours": "総実労働時間",
+        },
+    )
+
+    row = result.iloc[0]
+
+    assert np.isclose(
+        row["published_change"],
+        -16.0,
+    )
+
+    assert np.isclose(
+        row["within_effect"],
+        -10.0,
+    )
+
+    assert np.isclose(
+        row["composition_effect"],
+        -6.0,
+    )
+
+    assert np.isclose(
+        row["residual"],
+        0.0,
+        atol=1e-10,
+    )
+
+    assert np.isclose(
+        row["published_change"],
+        (
+            row["within_effect"]
+            + row["composition_effect"]
+            + row["residual"]
+        ),
+        atol=1e-10,
+    )
+
+
+def test_employment_type_composition_decomposition_real_data() -> None:
+    raw_df = load_wage_csv(WAGE_DATA_PATH)
+
+    total_df = create_labor_input_dataframe(
+        raw_df,
+        establishment_size="T",
+        employment_type="0",
+    )
+
+    regular_df = create_labor_input_dataframe(
+        raw_df,
+        establishment_size="T",
+        employment_type="1",
+    )
+
+    part_time_df = create_labor_input_dataframe(
+        raw_df,
+        establishment_size="T",
+        employment_type="2",
+    )
+
+    result = create_employment_type_composition_decomposition(
+        total_df=total_df,
+        regular_df=regular_df,
+        part_time_df=part_time_df,
+        start_year=2000,
+        end_year=2025,
+    )
+
+    error = (
+        result["published_change"]
+        - result["within_effect"]
+        - result["composition_effect"]
+        - result["residual"]
+    )
+
+    assert error.abs().max() < 1e-10
+
+    total_hours = result.loc[
+        result["column"] == "total_hours"
+    ].iloc[0]
+
+    assert np.isclose(
+        total_hours["published_change_pct"],
+        -12.501771,
+        atol=1e-5,
+    )
+
+    assert np.isclose(
+        total_hours["within_contribution_pct"],
+        -6.999165,
+        atol=1e-5,
+    )
+
+    assert np.isclose(
+        total_hours["composition_contribution_pct"],
+        -5.519825,
+        atol=1e-5,
+    )
+
+
+def test_employment_type_composition_period_summary() -> None:
+    raw_df = load_wage_csv(WAGE_DATA_PATH)
+
+    total_df = create_labor_input_dataframe(
+        raw_df,
+        establishment_size="T",
+        employment_type="0",
+    )
+    regular_df = create_labor_input_dataframe(
+        raw_df,
+        establishment_size="T",
+        employment_type="1",
+    )
+    part_time_df = create_labor_input_dataframe(
+        raw_df,
+        establishment_size="T",
+        employment_type="2",
+    )
+
+    result = create_employment_type_composition_period_summary(
+        total_df=total_df,
+        regular_df=regular_df,
+        part_time_df=part_time_df,
+        periods=[
+            (1993, 2025),
+            (2000, 2025),
+            (2015, 2025),
+        ],
+    )
+
+    assert len(result) == 15
+
+    assert set(
+        zip(result["start_year"], result["end_year"])
+    ) == {
+        (1993, 2025),
+        (2000, 2025),
+        (2015, 2025),
+    }
