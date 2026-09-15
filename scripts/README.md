@@ -147,6 +147,131 @@ uv run python scripts/wage/check_establishment_size_wage.py
 
 5人以上系列は30人以上事業所を含むため、独立二群の比較とは解釈しない。
 
+### 労働投入分析の検証
+
+`docs/analysis/03_labor_input.md` の掲載値について、毎月勤労統計、労働力調査、公式指数との整合性と再現性を確認する。
+
+#### `check_labor_input_employment_type_composition.py`
+
+毎月勤労統計の就業形態計・一般労働者・パートタイム労働者を用いて、賃金・労働時間・出勤日数の就業形態構成分解を確認する。
+
+```bash
+uv run python scripts/wage/check_labor_input_employment_type_composition.py
+```
+
+主に、
+
+- 1993～2025年
+- 2000～2025年
+- 2015～2025年
+
+について、就業形態内効果、構成効果、残差を再計算する。
+
+#### `check_labor_input_cy_annual_means.py`
+
+毎月勤労統計の月次値から加重年平均を再計算し、公表されているCY年平均と照合する。
+
+```bash
+uv run python scripts/wage/check_labor_input_cy_annual_means.py
+```
+
+確認対象は、
+
+- 就業形態計
+- 一般労働者
+- パートタイム労働者
+
+について、1993年、2000年、2015年、2025年の主要5指標である。
+
+再計算値とCY公表値の完全一致は要求せず、公表値の表示精度を考慮して外部整合性を確認する。
+
+#### `check_labor_input_hours_indices.py`
+
+毎月勤労統計の公式労働時間指数を用いて、1990～2025年の長期変化を再計算する。
+
+```bash
+uv run python scripts/wage/check_labor_input_hours_indices.py
+```
+
+確認する系列は、
+
+- 総実労働時間
+- 所定内労働時間
+- 所定外労働時間
+
+である。
+
+再計算した実額系列との変化率は、指数接続、改定、丸め等の影響により完全には一致しないため、方向と大きさの外部整合確認として使用する。
+
+#### `snapshot_labor_force_api_inputs.py`
+
+労働投入分析で使用するe-Stat APIレスポンスを、再現性確保用の固定入力として保存する。
+
+```bash
+uv run python scripts/wage/snapshot_labor_force_api_inputs.py
+```
+
+保存対象は次の3統計表である。
+
+- 年齢別就業時間分布
+- 年齢・性別就業時間
+- 年齢・正規／非正規別就業時間
+
+出力は `data/raw/labor_input/` 以下のJSONファイルへ保存する。
+
+このスクリプトは通常の検証実行時には毎回実行しない。e-Stat側のデータ更新を分析へ反映する場合や、新しい分析スナップショットを作成する場合に使用する。
+
+#### `check_labor_input_published_values.py`
+
+`03_labor_input.md` の主要掲載値を一括再生成する最終確認スクリプトである。
+
+```bash
+uv run python scripts/wage/check_labor_input_published_values.py
+```
+
+主な確認対象は、
+
+- 毎月勤労統計の年平均水準
+- 月額賃金・時間当たり賃金・労働時間の分解
+- 就業形態構成分解
+- 年齢別就業者数・就業率
+- 人口要因・就業率要因分解
+- 年齢別平均週間就業時間
+- 年齢層内効果・年齢構成効果
+- 就業時間分布
+- 総労働投入
+- 男女別追加分解
+- 正規・非正規別追加分解
+
+である。
+
+労働力調査のe-Stat API由来データについては、オンラインAPIを直接取得せず、`data/raw/labor_input/` に保存した固定JSONレスポンスを使用する。
+
+これにより、分析スナップショット時点の入力から主要掲載値を再生成できる。
+
+#### 推奨実行順序
+
+`03_labor_input.md` の掲載値を更新・確定する場合は、原則として次の順序で確認する。
+
+```bash
+uv run pytest
+
+uv run python scripts/wage/check_labor_input_employment_type_composition.py
+uv run python scripts/wage/check_labor_input_cy_annual_means.py
+uv run python scripts/wage/check_labor_input_hours_indices.py
+uv run python scripts/wage/check_labor_input_published_values.py
+```
+
+e-Stat API由来の固定入力そのものを更新する場合のみ、その前に、
+
+```bash
+uv run python scripts/wage/snapshot_labor_force_api_inputs.py
+```
+
+を実行する。
+
+固定入力を更新した場合は、旧スナップショットとの差を確認し、`check_labor_input_published_values.py` により本文主要掲載値を再検証する。
+
 ---
 
 ## 6. CPI・実質賃金

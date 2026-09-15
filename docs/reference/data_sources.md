@@ -10,17 +10,19 @@ Real Wage Dashboardで現在使用している入力データについて、出�
 
 ## 2. 入力データ一覧
 
-| 分野                   | 統計・系列                                     | 公表元               | 取得方法          | リポジトリ内の保存場所                           |
-| ---------------------- | ---------------------------------------------- | -------------------- | ----------------- | ------------------------------------------------ |
-| 物価                   | 消費者物価指数                                 | 総務省統計局・e-Stat | e-Stat API        | 保存しない                                       |
-| 賃金・労働時間         | 毎月勤労統計調査・長期時系列表                 | 厚生労働省・e-Stat   | CSVを手動取得     | `data/raw/hon-maikin-k-jissu.csv`                |
-| 求人倍率               | 一般職業紹介状況                               | 厚生労働省           | Excelを手動取得   | `data/raw/labor_market/`                         |
-| 完全失業率             | 労働力調査・長期時系列データ                   | 総務省統計局         | Excelを手動取得   | `data/raw/labor_market/unemployment_rate.xlsx`   |
-| 企業の雇用判断         | 全国企業短期経済観測調査（短観）               | 日本銀行             | CSVを手動取得     | `data/raw/labor_market/tankan_employment_di.csv` |
-| 企業業績・生産性・分配 | 法人企業統計調査・年次別調査                   | 財務省・e-Stat       | e-Stat API        | 保存しない                                       |
-| 賃金改定行動           | 賃金引上げ等の実態に関する調査                 | 厚生労働省           | Excelを手動取得   | `data/raw/wage_revision/`                        |
-| 実質賃金要因分解       | 毎月勤労統計の賃金指数・公式実質賃金指数       | 厚生労働省           | Excelを手動取得   | `data/raw/real_wage_decomposition/`              |
-| 賃金分布               | 賃金構造基本統計調査・所定内給与額の分布特性値 | 厚生労働省・e-Stat   | Excel・e-Stat API | `data/raw/wage_distribution/`                    |
+| 分野                     | 統計・系列                                     | 公表元               | 取得方法               | リポジトリ内の保存場所                           |
+| ------------------------ | ---------------------------------------------- | -------------------- | ---------------------- | ------------------------------------------------ |
+| 物価                     | 消費者物価指数                                 | 総務省統計局・e-Stat | e-Stat API             | 保存しない                                       |
+| 賃金・労働時間           | 毎月勤労統計調査・長期時系列表                 | 厚生労働省・e-Stat   | CSVを手動取得          | `data/raw/hon-maikin-k-jissu.csv`                |
+| 求人倍率                 | 一般職業紹介状況                               | 厚生労働省           | Excelを手動取得        | `data/raw/labor_market/`                         |
+| 完全失業率               | 労働力調査・長期時系列データ                   | 総務省統計局         | Excelを手動取得        | `data/raw/labor_market/unemployment_rate.xlsx`   |
+| 企業の雇用判断           | 全国企業短期経済観測調査（短観）               | 日本銀行             | CSVを手動取得          | `data/raw/labor_market/tankan_employment_di.csv` |
+| 企業業績・生産性・分配   | 法人企業統計調査・年次別調査                   | 財務省・e-Stat       | e-Stat API             | 保存しない                                       |
+| 賃金改定行動             | 賃金引上げ等の実態に関する調査                 | 厚生労働省           | Excelを手動取得        | `data/raw/wage_revision/`                        |
+| 実質賃金要因分解         | 毎月勤労統計の賃金指数・公式実質賃金指数       | 厚生労働省           | Excelを手動取得        | `data/raw/real_wage_decomposition/`              |
+| 賃金分布                 | 賃金構造基本統計調査・所定内給与額の分布特性値 | 厚生労働省・e-Stat   | Excel・e-Stat API      | `data/raw/wage_distribution/`                    |
+| 労働投入・年齢別就業構造 | 労働力調査・年齢別就業者数、就業率、就業時間   | 総務省統計局・e-Stat | Excel・CSV・e-Stat API | `data/raw/labor_input/`                          |
+| 労働時間指数             | 毎月勤労統計調査・労働時間指数                 | 厚生労働省           | Excelを手動取得        | `data/raw/labor_input/`                          |
 
 `data/raw/`には公表元から取得した入力データを保存する。アプリからダウンロードする分析用CSVは入力データではなく、Git管理の対象としない。
 
@@ -210,7 +212,7 @@ uv run python scripts/wage/check_establishment_size_wage.py
 
 ## 6. 労働力調査
 
-### 6.1 出典
+### 6.1 完全失業率
 
 - 統計：労働力調査
 - 公表元：総務省統計局
@@ -219,9 +221,92 @@ uv run python scripts/wage/check_establishment_size_wage.py
 - 使用シート：`季節調整値`
 - 使用系列：完全失業率・全国・月次
 
-読み込みと整形は`src/real_wage_dashboard/labor_market_service.py`で処理する。
+読み込みと整形は `src/real_wage_dashboard/labor_market_service.py` で処理する。
 
 労働力調査の季節調整値は過去に遡って改定される可能性があるため、更新時は分析期間全体を再検証する。
+
+### 6.2 労働投入分析
+
+`docs/analysis/03_labor_input.md` では、労働力調査を用いて、年齢別の就業構造、平均週間就業時間、就業時間分布、性別・雇用形態別の追加分解、総労働投入を分析する。
+
+#### 保存済み年次データ
+
+| ファイル                                                 | 内容                                         | 主な利用                                   |
+| -------------------------------------------------------- | -------------------------------------------- | ------------------------------------------ |
+| `data/raw/labor_input/lfs_employment_by_age_annual.xlsx` | 年齢階級別の就業者数・就業率                 | 年齢別就業構造、人口要因・就業率要因分解   |
+| `data/raw/labor_input/lfs_hours_by_age_annual.csv`       | 年齢階級別の平均週間就業時間・延週間就業時間 | 平均週間就業時間、年齢構成分解、総労働投入 |
+
+主な分析期間は2000～2025年である。2011年は東日本大震災の影響により利用する全国年平均値が欠測しているため、補間せず欠測として扱う。
+
+データの読み込み・整形は `src/real_wage_dashboard/labor_force_service.py`、分解・集計は `src/real_wage_dashboard/labor_force_analysis.py` で処理する。
+
+#### e-Stat API由来データ
+
+労働投入分析では、次の3統計表を使用する。
+
+| 用途                         | 統計表ID     | 保存スナップショット                            |
+| ---------------------------- | ------------ | ----------------------------------------------- |
+| 年齢別就業時間分布           | `0003009700` | `lfs_working_hours_distribution_2000_2025.json` |
+| 年齢・性別就業時間           | `0003009701` | `lfs_hours_by_age_sex_2000_2025.json`           |
+| 年齢・正規／非正規別就業時間 | `0003006654` | `lfs_employment_type_hours_2012_2025.json`      |
+
+通常の取得処理ではe-Stat APIを利用するが、確定した掲載値の再現性を確保するため、2026年9月15日時点で取得したAPIレスポンスを `data/raw/labor_input/` に固定入力として保存している。
+
+スナップショットの取得には、
+
+```bash
+uv run python scripts/wage/snapshot_labor_force_api_inputs.py
+```
+
+を使用する。
+
+最終再現確認ではオンラインAPIを再取得せず、保存したJSONレスポンスからDataFrameを再構成する。
+
+これにより、将来e-Stat側で過去値が改定された場合でも、分析スナップショット時点の掲載値を再生成できる。
+
+### 6.3 毎月勤労統計の公式労働時間指数
+
+労働投入分析の長期変化について外部整合性を確認するため、毎月勤労統計の公式労働時間指数も使用する。
+
+保存ファイルは次のとおりである。
+
+- `data/raw/labor_input/total_hours_index_5plus.xls`
+- `data/raw/labor_input/scheduled_hours_index_5plus.xls`
+- `data/raw/labor_input/overtime_hours_index_5plus.xls`
+
+使用条件は、
+
+- 事業所規模：5人以上
+- 就業形態：就業形態計
+- 産業：調査産業計
+- 対象：年平均指数
+
+である。
+
+これらは毎月勤労統計の再計算実額系列とは独立した外部整合確認に使用する。指数と実額系列では指数接続、改定、丸め等の影響により変化率が完全には一致しないため、厳密な一致は要求しない。
+
+確認には、
+
+```bash
+uv run python scripts/wage/check_labor_input_hours_indices.py
+```
+
+を使用する。
+
+### 6.4 更新時の注意点
+
+労働投入分析用データを更新した場合は、入力ファイルだけでなく、分析期間全体の主要掲載値を再検証する。
+
+特に次を確認する。
+
+1. 年齢階級・年次・単位・母集団定義が変わっていないこと。
+2. 2011年の欠測処理を変更していないこと。
+3. 就業者と従業者を混同していないこと。
+4. 就業時間分布の分母定義が変わっていないこと。
+5. e-Stat APIの分類コード・統計表IDが変更されていないこと。
+6. APIスナップショットを更新した場合は旧版との差を確認すること。
+7. `check_labor_input_published_values.py` で本文主要掲載値を再生成すること。
+8. 結果が変化した場合は `docs/analysis/03_labor_input.md` と `docs/analysis/00_overview.md` を更新すること。
 
 ---
 

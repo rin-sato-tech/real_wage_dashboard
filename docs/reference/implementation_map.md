@@ -60,26 +60,28 @@ analysis
 
 ## 3. 共通モジュール
 
-| モジュール                            | 役割                                                                                           | 主な利用先                               | 主なテスト                                 |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
-| `config.py`                           | 統計表ID、系列コード、初期値、ファイルパス                                                     | 全体                                     | 各機能テストから間接確認                   |
-| `estat_client.py`                     | e-Stat API通信とAPIエラー処理                                                                  | CPI、法人企業統計                        | `test_estat_client.py`                     |
-| `estat_response.py` | e-Statの単一値・リスト形式の正規化 | CPI、法人企業統計 | `test_corporate_performance_service.py`、`test_cpi_service.py` |
-| `monthly_labor_service.py` | 毎月勤労統計の月次抽出・数値化・欠損除外・重複処理 | 賃金・労働時間・出勤日数サービス | `test_monthly_labor_service.py`、各サービステスト |
-| `cpi_analysis.py` | CPI変化率・移動平均・年平均 | CPI、最低賃金、賃金分布 | `test_cpi_analysis.py`、`test_minimum_wage_analysis.py` |
-| `wage_service.py`                     | 毎月勤労統計CSVの読み込みと条件抽出                                                            | 名目・実質賃金、各賃金分析               | `test_wage_service.py`                     |
-| `wage_analysis.py`                    | 名目賃金の変化率と移動平均                                                                     | 名目・実質賃金                           | `test_wage_analysis.py`                    |
-| `working_hours_service.py`            | 労働時間系列の抽出                                                                             | 雇用形態、労働投入、産業別、事業所規模別 | `test_working_hours_service.py`            |
-| `working_days_service.py`             | 出勤日数系列の抽出                                                                             | 労働投入                                 | `test_labor_input_analysis.py`から間接確認 |
-| `time_series.py`                      | 月次変化率・移動平均の共通処理                                                                 | CPI・名目・実質賃金等                    | `test_time_series.py`、各分析テスト        |
-| `corporate_performance_service.py`    | 法人企業統計APIデータの整形、企業業績指標生成                                                  | 企業業績分析                             | `test_corporate_performance_service.py`    |
-| `corporate_performance_analysis.py`   | 期間比較、規模別・産業別比較、賃金との結合、相関等                                             | 企業業績分析                             | `test_corporate_performance_analysis.py`   |
-| `wage_revision_service.py`            | 賃金引上げ等の実態に関する調査の読み込み・整形                                                 | 賃金改定行動分析                         | `test_wage_revision_service.py`            |
-| `wage_revision_analysis.py`           | 改定率、実施状況、重視要因等の比較                                                             | 賃金改定行動分析                         | `test_wage_revision_analysis.py`           |
-| `real_wage_decomposition_analysis.py` | 名目賃金・物価・実質賃金の連鎖・分解                                                           | 実質賃金要因分解                         | `test_real_wage_decomposition_analysis.py` |
-| `establishment_size_wage_analysis.py` | 5人以上・30人以上系列の比較、規模差の分解                                                      | 事業所規模別賃金分析                     | `test_establishment_size_wage_analysis.py` |
-| `wage_distribution_service.py`        | 賃金構造基本統計調査の分布特性値の読み込み、API・Excel統合、男女別・雇用形態別・企業規模別抽出 | 賃金分布分析                             | `test_wage_distribution_service.py`        |
-| `wage_distribution_analysis.py`       | 分位指数、分位比、実質分位指数、男女・雇用形態・企業規模別分析                                 | 賃金分布分析                             | `test_wage_distribution_analysis.py`       |
+| モジュール                            | 役割                                                                                                | 主な利用先                               | 主なテスト                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
+| `config.py`                           | 統計表ID、系列コード、初期値、ファイルパス                                                          | 全体                                     | 各機能テストから間接確認                                       |
+| `estat_client.py`                     | e-Stat API通信とAPIエラー処理                                                                       | CPI、法人企業統計                        | `test_estat_client.py`                                         |
+| `estat_response.py`                   | e-Statの単一値・リスト形式の正規化                                                                  | CPI、法人企業統計                        | `test_corporate_performance_service.py`、`test_cpi_service.py` |
+| `monthly_labor_service.py`            | 毎月勤労統計の月次抽出・数値化・欠損除外・重複処理                                                  | 賃金・労働時間・出勤日数サービス         | `test_monthly_labor_service.py`、各サービステスト              |
+| `cpi_analysis.py`                     | CPI変化率・移動平均・年平均                                                                         | CPI、最低賃金、賃金分布                  | `test_cpi_analysis.py`、`test_minimum_wage_analysis.py`        |
+| `wage_service.py`                     | 毎月勤労統計CSVの読み込みと条件抽出                                                                 | 名目・実質賃金、各賃金分析               | `test_wage_service.py`                                         |
+| `wage_analysis.py`                    | 名目賃金の変化率と移動平均                                                                          | 名目・実質賃金                           | `test_wage_analysis.py`                                        |
+| `working_hours_service.py`            | 労働時間系列の抽出                                                                                  | 雇用形態、労働投入、産業別、事業所規模別 | `test_working_hours_service.py`                                |
+| `working_days_service.py`             | 出勤日数系列の抽出                                                                                  | 労働投入                                 | `test_labor_input_analysis.py`から間接確認                     |
+| `time_series.py`                      | 月次変化率・移動平均の共通処理                                                                      | CPI・名目・実質賃金等                    | `test_time_series.py`、各分析テスト                            |
+| `corporate_performance_service.py`    | 法人企業統計APIデータの整形、企業業績指標生成                                                       | 企業業績分析                             | `test_corporate_performance_service.py`                        |
+| `corporate_performance_analysis.py`   | 期間比較、規模別・産業別比較、賃金との結合、相関等                                                  | 企業業績分析                             | `test_corporate_performance_analysis.py`                       |
+| `wage_revision_service.py`            | 賃金引上げ等の実態に関する調査の読み込み・整形                                                      | 賃金改定行動分析                         | `test_wage_revision_service.py`                                |
+| `wage_revision_analysis.py`           | 改定率、実施状況、重視要因等の比較                                                                  | 賃金改定行動分析                         | `test_wage_revision_analysis.py`                               |
+| `real_wage_decomposition_analysis.py` | 名目賃金・物価・実質賃金の連鎖・分解                                                                | 実質賃金要因分解                         | `test_real_wage_decomposition_analysis.py`                     |
+| `establishment_size_wage_analysis.py` | 5人以上・30人以上系列の比較、規模差の分解                                                           | 事業所規模別賃金分析                     | `test_establishment_size_wage_analysis.py`                     |
+| `wage_distribution_service.py`        | 賃金構造基本統計調査の分布特性値の読み込み、API・Excel統合、男女別・雇用形態別・企業規模別抽出      | 賃金分布分析                             | `test_wage_distribution_service.py`                            |
+| `wage_distribution_analysis.py`       | 分位指数、分位比、実質分位指数、男女・雇用形態・企業規模別分析                                      | 賃金分布分析                             | `test_wage_distribution_analysis.py`                           |
+| `labor_force_service.py`              | 労働力調査の年齢別就業構造・就業時間・時間分布・性別・雇用形態別データの読み込み、APIレスポンス変換 | 労働投入分析                             | `test_labor_force_service.py`                                  |
+| `labor_force_analysis.py`             | 年齢別就業構造、平均週間就業時間、時間分布、総労働投入、性別・雇用形態別の分解                      | 労働投入分析                             | `test_labor_force_analysis.py`                                 |
 
 ---
 
@@ -88,17 +90,19 @@ analysis
 
 ## 4. UI化している分析
 
-| 画面             | UI                            | 主な分析処理                                               | データ処理・入力                                                         | 主なテスト                                                                                           | 分析文書                      |
-| ---------------- | ----------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------- |
-| 消費者物価指数   | `app.py`                      | `cpi_analysis.py`                                          | `estat_client.py`、`cpi_service.py`                                      | `test_cpi_analysis.py`、`test_cpi_service.py`                                                        | `00_overview.md`              |
-| 名目賃金         | `pages/2_名目賃金.py`         | `wage_analysis.py`                                         | `wage_service.py`                                                        | `test_wage_analysis.py`、`test_wage_service.py`                                                      | `00_overview.md`              |
-| 実質賃金         | `pages/3_実質賃金.py`         | `real_wage_analysis.py`、`wage_analysis.py`                | `wage_service.py`、`cpi_service.py`、`estat_client.py`                   | `test_real_wage_analysis.py`、`test_wage_analysis.py`、`test_wage_service.py`、`test_cpi_service.py` | `00_overview.md`              |
-| 雇用形態比較     | `pages/4_雇用形態比較.py`     | `employment_analysis.py`                                   | `wage_service.py`、`working_hours_service.py`、`cpi_service.py`          | `test_employment_analysis.py`、`test_working_hours_service.py`、`test_wage_service.py`               | `01_employment_comparison.md` |
-| 給与構成分析     | `pages/5_給与構成分析.py`     | `wage_composition_analysis.py`                             | `wage_service.py`                                                        | `test_wage_composition_analysis.py`、`test_wage_service.py`                                          | `02_wage_composition.md`      |
-| 労働投入分析     | `pages/6_労働投入分析.py`     | `labor_input_analysis.py`                                  | `wage_service.py`、`working_hours_service.py`、`working_days_service.py` | `test_labor_input_analysis.py`、`test_working_hours_service.py`、`test_wage_service.py`              | `03_labor_input.md`           |
-| 産業別分析       | `pages/7_産業別分析.py`       | `industry_analysis.py`                                     | `wage_service.py`、`working_hours_service.py`                            | `test_industry_analysis.py`、`test_working_hours_service.py`、`test_wage_service.py`                 | `04_industry_wage.md`         |
-| 産業構成効果分析 | `pages/8_産業構成効果分析.py` | `industry_composition_analysis.py`、`industry_analysis.py` | `wage_service.py`                                                        | `test_industry_composition_analysis.py`、`test_industry_analysis.py`、`test_wage_service.py`         | `05_industry_composition.md`  |
-| 労働需給分析     | `pages/9_労働需給分析.py`     | `labor_market_analysis.py`                                 | `labor_market_service.py`、`wage_service.py`                             | `test_labor_market_analysis.py`、`test_labor_market_service.py`、`test_wage_service.py`              | `06_labor_market.md`          |
+| 画面             | UI                            | 主な分析処理                                               | データ処理・入力                                                                                                                     | 主なテスト                                                                                           | 分析文書                      |
+| ---------------- | ----------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------- |
+| 消費者物価指数   | `app.py`                      | `cpi_analysis.py`                                          | `estat_client.py`、`cpi_service.py`                                                                                                  | `test_cpi_analysis.py`、`test_cpi_service.py`                                                        | `00_overview.md`              |
+| 名目賃金         | `pages/2_名目賃金.py`         | `wage_analysis.py`                                         | `wage_service.py`                                                                                                                    | `test_wage_analysis.py`、`test_wage_service.py`                                                      | `00_overview.md`              |
+| 実質賃金         | `pages/3_実質賃金.py`         | `real_wage_analysis.py`、`wage_analysis.py`                | `wage_service.py`、`cpi_service.py`、`estat_client.py`                                                                               | `test_real_wage_analysis.py`、`test_wage_analysis.py`、`test_wage_service.py`、`test_cpi_service.py` | `00_overview.md`              |
+| 雇用形態比較     | `pages/4_雇用形態比較.py`     | `employment_analysis.py`                                   | `wage_service.py`、`working_hours_service.py`、`cpi_service.py`                                                                      | `test_employment_analysis.py`、`test_working_hours_service.py`、`test_wage_service.py`               | `01_employment_comparison.md` |
+| 給与構成分析     | `pages/5_給与構成分析.py`     | `wage_composition_analysis.py`                             | `wage_service.py`                                                                                                                    | `test_wage_composition_analysis.py`、`test_wage_service.py`                                          | `02_wage_composition.md`      |
+| 労働投入分析     | `pages/6_労働投入分析.py`     | `labor_input_analysis.py`、`labor_force_analysis.py`       | `wage_service.py`、`working_hours_service.py`、`working_days_service.py`、`labor_force_service.py`、毎月勤労統計・労働力調査固定入力 | `test_labor_input_analysis.py`、`test_labor_force_analysis.py`、`test_labor_force_service.py`        | `03_labor_input.md`           |
+| 産業別分析       | `pages/7_産業別分析.py`       | `industry_analysis.py`                                     | `wage_service.py`、`working_hours_service.py`                                                                                        | `test_industry_analysis.py`、`test_working_hours_service.py`、`test_wage_service.py`                 | `04_industry_wage.md`         |
+| 産業構成効果分析 | `pages/8_産業構成効果分析.py` | `industry_composition_analysis.py`、`industry_analysis.py` | `wage_service.py`                                                                                                                    | `test_industry_composition_analysis.py`、`test_industry_analysis.py`、`test_wage_service.py`         | `05_industry_composition.md`  |
+| 労働需給分析     | `pages/9_労働需給分析.py`     | `labor_market_analysis.py`                                 | `labor_market_service.py`、`wage_service.py`                                                                                         | `test_labor_market_analysis.py`、`test_labor_market_service.py`、`test_wage_service.py`              | `06_labor_market.md`          |
+
+`03_labor_input.md` には、Streamlit画面で表示する毎月勤労統計ベースの分析に加え、労働力調査を用いた年齢別就業構造、平均週間就業時間、就業時間分布、総労働投入、性別・雇用形態別の追加分析を含む。これらの追加分析は、分析モジュール・確認スクリプト・テスト・文書を正式な成果物とし、すべてをUI化しているわけではない。
 
 ---
 
@@ -151,14 +155,66 @@ UI化の有無は分析の完成度とは別に判断する。
 
 ### 6.3 労働投入分析
 
-| 項目       | 対応                                              |
-| ---------- | ------------------------------------------------- |
-| 文書       | `docs/analysis/03_labor_input.md`                 |
-| UI         | `pages/6_労働投入分析.py`                         |
-| 中核処理   | `src/real_wage_dashboard/labor_input_analysis.py` |
-| 労働時間   | `working_hours_service.py`                        |
-| 出勤日数   | `working_days_service.py`                         |
-| 中核テスト | `tests/test_labor_input_analysis.py`              |
+| 項目                     | 対応                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 文書                     | `docs/analysis/03_labor_input.md`                                                                                                                       |
+| UI                       | `pages/6_労働投入分析.py`                                                                                                                               |
+| 毎月勤労統計側の中核処理 | `src/real_wage_dashboard/labor_input_analysis.py`                                                                                                       |
+| 労働力調査側の中核処理   | `src/real_wage_dashboard/labor_force_analysis.py`                                                                                                       |
+| 毎月勤労統計の入力・抽出 | `wage_service.py`、`working_hours_service.py`、`working_days_service.py`                                                                                |
+| 労働力調査の入力・整形   | `src/real_wage_dashboard/labor_force_service.py`                                                                                                        |
+| 保存年次データ           | `data/raw/labor_input/lfs_employment_by_age_annual.xlsx`、`lfs_hours_by_age_annual.csv`                                                                 |
+| 公式指数                 | `data/raw/labor_input/total_hours_index_5plus.xls`、`scheduled_hours_index_5plus.xls`、`overtime_hours_index_5plus.xls`                                 |
+| 固定e-Stat入力           | `data/raw/labor_input/lfs_working_hours_distribution_2000_2025.json`、`lfs_hours_by_age_sex_2000_2025.json`、`lfs_employment_type_hours_2012_2025.json` |
+| APIスナップショット取得  | `scripts/wage/snapshot_labor_force_api_inputs.py`                                                                                                       |
+| 就業形態構成分解確認     | `scripts/wage/check_labor_input_employment_type_composition.py`                                                                                         |
+| CY年平均照合             | `scripts/wage/check_labor_input_cy_annual_means.py`                                                                                                     |
+| 公式指数照合             | `scripts/wage/check_labor_input_hours_indices.py`                                                                                                       |
+| 主要掲載値一括確認       | `scripts/wage/check_labor_input_published_values.py`                                                                                                    |
+| 中核テスト               | `tests/test_labor_input_analysis.py`、`tests/test_labor_force_analysis.py`、`tests/test_labor_force_service.py`                                         |
+
+労働投入分析は、次の2系統から構成する。
+
+```text
+毎月勤労統計
+├─ 月額賃金・労働時間
+├─ 一般／パート構成
+├─ 所定内・所定外労働時間
+└─ 出勤日数
+        ↓
+labor_input_analysis.py
+
+労働力調査
+├─ 年齢別就業者数・就業率
+├─ 年齢別平均週間就業時間
+├─ 就業時間分布
+├─ 男女別就業時間
+└─ 正規・非正規別就業時間
+        ↓
+labor_force_service.py
+        ↓
+labor_force_analysis.py
+```
+
+e-Stat API由来の3系列は、通常の取得処理では `labor_force_service.py` からAPIを利用できる。一方、確定した分析結果の最終再現では `data/raw/labor_input/` に保存した固定JSONレスポンスを使用し、外部APIの現在状態に依存しないようにする。
+
+主要掲載値の再現経路は、
+
+```text
+Git管理された入力データ
+        ↓
+service
+        ↓
+analysis
+        ↓
+check_labor_input_published_values.py
+        ↓
+03_labor_input.md の主要掲載値
+```
+
+とする。
+
+UIは毎月勤労統計を中心とする既存機能を提供するが、労働力調査を用いた拡張分析については、UI化を完成条件とせず、分析コード、固定入力、検証スクリプト、pytest、分析文書を正式な成果物とする。
 
 ### 6.4 産業別賃金・労働時間分析
 

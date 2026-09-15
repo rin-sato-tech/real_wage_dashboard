@@ -15,6 +15,15 @@ data/
 ├── README.md
 └── raw/
     ├── hon-maikin-k-jissu.csv
+    ├── labor_input/
+    │   ├── lfs_employment_by_age_annual.xlsx
+    │   ├── lfs_hours_by_age_annual.csv
+    │   ├── total_hours_index_5plus.xls
+    │   ├── scheduled_hours_index_5plus.xls
+    │   ├── overtime_hours_index_5plus.xls
+    │   ├── lfs_working_hours_distribution_2000_2025.json
+    │   ├── lfs_hours_by_age_sex_2000_2025.json
+    │   └── lfs_employment_type_hours_2012_2025.json
     ├── labor_market/
     │   ├── effective_job_openings_ratio.xlsx
     │   ├── new_job_openings_ratio.xlsx
@@ -42,7 +51,16 @@ data/
 
 加工済みデータ、中間ファイル、アプリから出力したCSVは保存しない。
 
-e-Stat APIから都度取得するCPI・法人企業統計のAPIレスポンスは保存しない。
+e-Stat APIから通常のアプリ実行時に都度取得するCPI・法人企業統計等のレスポンスは、原則として `data/raw/` に保存しない。  
+ただし、確定した分析結果の再現性を確保するため、特定時点のAPIレスポンスそのものを固定入力として使用する必要がある場合は、対象統計表、取得期間、用途、再取得方法を明示したうえで `data/raw/` にスナップショットを保存することがある。
+
+労働投入分析では、将来のe-Stat側の遡及改定等による再計算値の変化を避けるため、次のAPIレスポンスを固定入力として保存している。
+
+- `lfs_working_hours_distribution_2000_2025.json`
+- `lfs_hours_by_age_sex_2000_2025.json`
+- `lfs_employment_type_hours_2012_2025.json`
+
+これらは一時ファイルや加工済み分析結果ではなく、公表APIから取得した入力データのスナップショットとして扱う。
 
 ---
 
@@ -51,6 +69,9 @@ e-Stat APIから都度取得するCPI・法人企業統計のAPIレスポンス�
 | ファイル                                                                            | 内容                                                                                     | 主な利用先                                                                         |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `raw/hon-maikin-k-jissu.csv`                                                        | 毎月勤労統計の賃金、労働時間、出勤日数、労働者数                                         | 名目・実質賃金、雇用形態、給与構成、労働投入、産業分析、産業構成、事業所規模別分析 |
+| `raw/labor_input/lfs_employment_by_age_annual.xlsx`、`lfs_hours_by_age_annual.csv`  | 労働力調査の年齢別就業者数・就業率・平均週間就業時間・延週間就業時間                     | 労働投入分析                                                                       |
+| `raw/labor_input/*_hours_index_5plus.xls`                                           | 毎月勤労統計の公式労働時間指数。1990～2025年の長期変化の外部整合確認に使用               | 労働投入分析                                                                       |
+| `raw/labor_input/lfs_*_2000_2025.json`、`lfs_employment_type_hours_2012_2025.json`  | 労働力調査e-Stat APIレスポンスの再現性確保用スナップショット                             | 労働投入分析の最終再現確認                                                         |
 | `raw/labor_market/effective_job_openings_ratio.xlsx`                                | 有効求人倍率・季節調整値                                                                 | 労働需給分析                                                                       |
 | `raw/labor_market/new_job_openings_ratio.xlsx`                                      | 新規求人倍率・季節調整値                                                                 | 労働需給分析                                                                       |
 | `raw/labor_market/unemployment_rate.xlsx`                                           | 完全失業率・季節調整値                                                                   | 労働需給分析                                                                       |
@@ -95,7 +116,7 @@ CPIと法人企業統計はe-Stat APIから取得するため、`data/raw/`に�
 - Excelの一時ファイル
 - API認証情報
 - 個人情報や非公開データ
-- e-Stat APIの一時レスポンス
+- 再現性確保のために固定入力として明示的に保存したものを除く、e-Stat APIの一時レスポンス
 
 再利用する加工データが必要になった場合は、生成処理、入力元、再生成方法を確立してから保存場所を決める。
 
@@ -256,6 +277,26 @@ uv run python scripts/wage_distribution/check_company_size_distribution_analysis
 uv run pytest tests/test_wage_distribution_service.py
 uv run pytest tests/test_wage_distribution_analysis.py
 ```
+
+### 7.6 労働投入分析用データを更新した場合
+
+毎月勤労統計または労働力調査の入力を更新した場合は、次を実行する。
+
+```bash
+uv run python scripts/wage/check_labor_input_cy_annual_means.py
+uv run python scripts/wage/check_labor_input_hours_indices.py
+uv run python scripts/wage/check_labor_input_published_values.py
+```
+
+e-Stat API由来の固定入力を更新する必要がある場合は、
+
+```bash
+uv run python scripts/wage/snapshot_labor_force_api_inputs.py
+```
+
+でスナップショットを再取得した後、`check_labor_input_published_values.py` により主要掲載値を再生成する。
+
+固定JSONを更新した場合は、API側の改定による値の変化がないか、既存スナップショットとの差と `docs/analysis/03_labor_input.md` の主要掲載値を確認する。
 
 ---
 
