@@ -4870,3 +4870,581 @@ def create_deduction_burden_change_summary(
         )
 
     return pd.DataFrame(rows)
+
+
+def create_hundred_yen_allocation(
+    df: pd.DataFrame,
+    years: list[int],
+) -> pd.DataFrame:
+    """額面賃金100円あたりの税・社会保険料・手取り額を作成する。"""
+
+    required_columns = {
+        "year",
+        "income_tax_rate",
+        "resident_tax_rate",
+        "pension_rate_effective",
+        "health_insurance_rate_effective",
+        "employment_insurance_rate_effective",
+        "take_home_rate",
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            "100円配分の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if df["year"].duplicated().any():
+        raise ValueError(
+            "年次データに重複年があります。"
+        )
+
+    rows = []
+
+    for year in years:
+        selected = df.loc[
+            df["year"] == year
+        ]
+
+        if len(selected) != 1:
+            raise ValueError(
+                f"{year}年のデータを"
+                "一意に取得できません。"
+            )
+
+        row = selected.iloc[0]
+
+        allocation = {
+            "year": year,
+            "income_tax_yen_per_100":
+                row["income_tax_rate"] * 100,
+            "resident_tax_yen_per_100":
+                row["resident_tax_rate"] * 100,
+            "pension_yen_per_100":
+                row["pension_rate_effective"] * 100,
+            "health_insurance_yen_per_100":
+                row["health_insurance_rate_effective"] * 100,
+            "employment_insurance_yen_per_100":
+                row["employment_insurance_rate_effective"] * 100,
+            "take_home_yen_per_100":
+                row["take_home_rate"] * 100,
+        }
+
+        allocation[
+            "allocation_total_yen"
+        ] = sum(
+            value
+            for key, value in allocation.items()
+            if key.endswith("_per_100")
+        )
+
+        rows.append(
+            allocation
+        )
+
+    return pd.DataFrame(rows)
+
+
+def add_deduction_component_changes(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """税・社会保険料の項目別負担率について前年差を追加する。
+
+    前年差は percentage point 単位で表す。
+    """
+
+    required_columns = {
+        "year",
+        "income_tax_rate",
+        "resident_tax_rate",
+        "pension_rate_effective",
+        "health_insurance_rate_effective",
+        "employment_insurance_rate_effective",
+        "effective_burden_rate",
+    }
+
+    missing = (
+        required_columns
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "負担率前年差の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    result = df.copy()
+
+    if result["year"].duplicated().any():
+        raise ValueError(
+            "年次データに重複年があります。"
+        )
+
+    result = (
+        result
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
+
+    rate_columns = {
+        "income_tax_rate":
+            "income_tax_yoy_pt",
+        "resident_tax_rate":
+            "resident_tax_yoy_pt",
+        "pension_rate_effective":
+            "pension_yoy_pt",
+        "health_insurance_rate_effective":
+            "health_insurance_yoy_pt",
+        "employment_insurance_rate_effective":
+            "employment_insurance_yoy_pt",
+        "effective_burden_rate":
+            "total_burden_yoy_pt",
+    }
+
+    for rate_column, output_column in (
+        rate_columns.items()
+    ):
+        result[output_column] = (
+            result[rate_column]
+            .diff()
+            * 100
+        )
+
+    component_change_columns = [
+        "income_tax_yoy_pt",
+        "resident_tax_yoy_pt",
+        "pension_yoy_pt",
+        "health_insurance_yoy_pt",
+        "employment_insurance_yoy_pt",
+    ]
+
+    result[
+        "component_burden_yoy_sum_pt"
+    ] = (
+        result[
+            component_change_columns
+        ]
+        .sum(
+            axis=1,
+            min_count=1,
+        )
+    )
+
+    result[
+        "component_burden_yoy_error_pt"
+    ] = (
+        result[
+            "total_burden_yoy_pt"
+        ]
+        - result[
+            "component_burden_yoy_sum_pt"
+        ]
+    )
+
+    return result
+
+
+def calculate_take_home_under_policy_year(
+    wage_year: int,
+    policy_year: int,
+    monthly_regular_pay_yen: float,
+    annual_bonus_yen: float,
+    rule_tables: dict[str, pd.DataFrame],
+    sex: str = "male",
+    business_type: str = "general",
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    resident_other_income_deductions_yen: float = 0.0,
+    human_deduction_difference_yen: float = 50_000.0,
+    municipality_band: str | None = None,
+    policy_mode: str = "actual_policy",
+) -> dict[str, float | int]:
+    """ある年の賃金を、指定した別年の税・社会保険制度で評価する。
+
+    wage_year:
+        賃金データが属する年。
+        結果の識別にのみ使用する。
+
+    policy_year:
+        所得税・社会保険制度を適用する年。
+        住民税は policy_year + 1 年度を使用する。
+
+    Notes
+    -----
+    これは制度を名目額のまま固定する反実仮想である。
+    税率だけでなく、控除額、課税ブラケット、
+    標準報酬月額の等級・上限なども policy_year に固定される。
+    """
+
+    result = calculate_standard_worker_take_home(
+        year=policy_year,
+        monthly_regular_pay_yen=(
+            monthly_regular_pay_yen
+        ),
+        annual_bonus_yen=annual_bonus_yen,
+        income_tax_deductions=(
+            rule_tables[
+                "income_tax_deductions"
+            ]
+        ),
+        income_tax_brackets=(
+            rule_tables[
+                "income_tax_brackets"
+            ]
+        ),
+        income_tax_adjustments=(
+            rule_tables[
+                "income_tax_adjustments"
+            ]
+        ),
+        pension_standard_monthly_rules=(
+            rule_tables[
+                "pension_standard_monthly"
+            ]
+        ),
+        pension_rates=(
+            rule_tables[
+                "pension_rates"
+            ]
+        ),
+        health_standard_monthly_rules=(
+            rule_tables[
+                "health_standard_monthly"
+            ]
+        ),
+        health_insurance_rates=(
+            rule_tables[
+                "health_insurance_rates"
+            ]
+        ),
+        bonus_rules=(
+            rule_tables[
+                "social_insurance_bonus_rules"
+            ]
+        ),
+        employment_insurance_rates=(
+            rule_tables[
+                "employment_insurance_rates"
+            ]
+        ),
+        resident_tax_deductions=(
+            rule_tables[
+                "resident_tax_deductions"
+            ]
+        ),
+        resident_tax_income_rates=(
+            rule_tables[
+                "resident_tax_income_rates"
+            ]
+        ),
+        resident_tax_adjustments=(
+            rule_tables[
+                "resident_tax_adjustments"
+            ]
+        ),
+        resident_tax_per_capita=(
+            rule_tables[
+                "resident_tax_per_capita"
+            ]
+        ),
+        sex=sex,
+        business_type=business_type,
+        dependent_count=dependent_count,
+        other_income_deductions_yen=(
+            other_income_deductions_yen
+        ),
+        resident_other_income_deductions_yen=(
+            resident_other_income_deductions_yen
+        ),
+        human_deduction_difference_yen=(
+            human_deduction_difference_yen
+        ),
+        municipality_band=municipality_band,
+        policy_mode=policy_mode,
+    )
+
+    return {
+        "wage_year": wage_year,
+        "policy_year": policy_year,
+        **result,
+    }
+
+
+def calculate_fixed_policy_take_home_time_series(
+    annual_wage_df: pd.DataFrame,
+    rule_tables: dict[str, pd.DataFrame],
+    policy_year: int,
+    start_year: int = 1990,
+    end_year: int = 2025,
+    sex: str = "male",
+    business_type: str = "general",
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    resident_other_income_deductions_yen: float = 0.0,
+    human_deduction_difference_yen: float = 50_000.0,
+    municipality_band: str | None = None,
+    policy_mode: str = "actual_policy",
+) -> pd.DataFrame:
+    """各年の賃金を同一の制度年で評価した手取り時系列を作成する。
+
+    Parameters
+    ----------
+    policy_year:
+        全期間に固定して適用する税・社会保険制度の年。
+
+    Notes
+    -----
+    賃金水準・月例賃金・賞与は各 wage_year の実績値を使用し、
+    税率、控除、課税ブラケット、社会保険料率、
+    標準報酬月額表などを policy_year に固定する。
+
+    金額基準も名目額のまま固定するため、
+    「制度を文字通り名目額で凍結した反実仮想」である。
+    """
+
+    required_columns = {
+        "year",
+        "total_cash_earnings",
+        "regular_earnings",
+        "special_earnings",
+    }
+
+    missing = (
+        required_columns
+        - set(annual_wage_df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "固定制度時系列に必要な"
+            "賃金列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if start_year > end_year:
+        raise ValueError(
+            "start_year は end_year 以下で"
+            "ある必要があります。"
+        )
+
+    data = annual_wage_df.copy()
+
+    numeric_columns = [
+        "year",
+        "total_cash_earnings",
+        "regular_earnings",
+        "special_earnings",
+    ]
+
+    for column in numeric_columns:
+        data[column] = pd.to_numeric(
+            data[column],
+            errors="coerce",
+        )
+
+    if data[numeric_columns].isna().any().any():
+        raise ValueError(
+            "年平均賃金データに不正な数値があります。"
+        )
+
+    if (
+        data[
+            [
+                "total_cash_earnings",
+                "regular_earnings",
+                "special_earnings",
+            ]
+        ]
+        < 0
+    ).any().any():
+        raise ValueError(
+            "賃金額は0以上である必要があります。"
+        )
+
+    if (
+        data["year"]
+        != data["year"].astype(int)
+    ).any():
+        raise ValueError(
+            "year は整数である必要があります。"
+        )
+
+    data["year"] = (
+        data["year"]
+        .astype(int)
+    )
+
+    data = data.loc[
+        data["year"].between(
+            start_year,
+            end_year,
+        )
+    ].copy()
+
+    if data.empty:
+        raise ValueError(
+            "指定期間に賃金データがありません。"
+        )
+
+    if data["year"].duplicated().any():
+        duplicated = (
+            data.loc[
+                data["year"].duplicated(
+                    keep=False
+                ),
+                "year",
+            ]
+            .sort_values()
+            .unique()
+            .tolist()
+        )
+
+        raise ValueError(
+            "年平均賃金データに重複年があります: "
+            f"{duplicated}"
+        )
+
+    expected_years = set(
+        range(
+            start_year,
+            end_year + 1,
+        )
+    )
+
+    actual_years = set(
+        data["year"].tolist()
+    )
+
+    missing_years = sorted(
+        expected_years
+        - actual_years
+    )
+
+    if missing_years:
+        raise ValueError(
+            "固定制度時系列に必要な年が"
+            "欠けています: "
+            f"{missing_years}"
+        )
+
+    identity_diff = (
+        data["total_cash_earnings"]
+        - (
+            data["regular_earnings"]
+            + data["special_earnings"]
+        )
+    )
+
+    invalid_identity = (
+        identity_diff.abs() > 1e-6
+    )
+
+    if invalid_identity.any():
+        bad = data.loc[
+            invalid_identity,
+            [
+                "year",
+                "total_cash_earnings",
+                "regular_earnings",
+                "special_earnings",
+            ],
+        ].copy()
+
+        raise ValueError(
+            "給与構成の恒等式が成立しません: "
+            f"{bad.to_dict('records')}"
+        )
+
+    data = (
+        data
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
+
+    rows = []
+
+    for row in data.itertuples(
+        index=False
+    ):
+        wage_year = int(row.year)
+
+        monthly_regular_pay_yen = float(
+            row.regular_earnings
+        )
+
+        annual_bonus_yen = float(
+            row.special_earnings
+            * 12
+        )
+
+        expected_gross_yen = float(
+            row.total_cash_earnings
+            * 12
+        )
+
+        result = (
+            calculate_take_home_under_policy_year(
+                wage_year=wage_year,
+                policy_year=policy_year,
+                monthly_regular_pay_yen=(
+                    monthly_regular_pay_yen
+                ),
+                annual_bonus_yen=annual_bonus_yen,
+                rule_tables=rule_tables,
+                sex=sex,
+                business_type=business_type,
+                dependent_count=dependent_count,
+                other_income_deductions_yen=(
+                    other_income_deductions_yen
+                ),
+                resident_other_income_deductions_yen=(
+                    resident_other_income_deductions_yen
+                ),
+                human_deduction_difference_yen=(
+                    human_deduction_difference_yen
+                ),
+                municipality_band=(
+                    municipality_band
+                ),
+                policy_mode=policy_mode,
+            )
+        )
+
+        if not math.isclose(
+            result["gross_salary_yen"],
+            expected_gross_yen,
+            rel_tol=0.0,
+            abs_tol=1e-6,
+        ):
+            raise ValueError(
+                "年間額面賃金の恒等式が成立しません。"
+                f" wage_year={wage_year},"
+                f" expected={expected_gross_yen},"
+                f" calculated="
+                f"{result['gross_salary_yen']}"
+            )
+
+        rows.append(
+            {
+                "year": wage_year,
+                "monthly_total_cash_earnings_yen": float(
+                    row.total_cash_earnings
+                ),
+                "monthly_regular_earnings_yen": (
+                    monthly_regular_pay_yen
+                ),
+                "monthly_special_earnings_yen": float(
+                    row.special_earnings
+                ),
+                **result,
+            }
+        )
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("year")
+        .reset_index(drop=True)
+    )

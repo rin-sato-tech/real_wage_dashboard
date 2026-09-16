@@ -15,6 +15,7 @@ from real_wage_dashboard.take_home_analysis import (
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
     _select_standard_monthly_remuneration_rule,
+    add_deduction_component_changes,
     add_deduction_component_rates,
     add_real_take_home_metrics,
     calculate_annual_employment_insurance,
@@ -29,6 +30,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_base_resident_income_levy,
     calculate_basic_deduction,
     calculate_employment_insurance,
+    calculate_fixed_policy_take_home_time_series,
     calculate_health_bonus_base,
     calculate_health_bonus_contribution,
     calculate_income_tax_after_adjustments,
@@ -49,11 +51,13 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_standard_worker_resident_tax,
     calculate_standard_worker_take_home,
     calculate_take_home_time_series,
+    calculate_take_home_under_policy_year,
     calculate_taxable_income,
     calculate_total_income_tax,
     calculate_total_resident_tax,
     create_constant_monthly_remuneration,
     create_deduction_burden_change_summary,
+    create_hundred_yen_allocation,
     create_semiannual_bonus_payments,
     create_take_home_period_log_decomposition,
 )
@@ -5371,6 +5375,359 @@ def test_create_deduction_burden_change_summary():
     ] == pytest.approx(0)
 
 
+def test_create_hundred_yen_allocation():
+    df = pd.DataFrame(
+        {
+            "year": [2000],
+            "income_tax_rate": [0.05],
+            "resident_tax_rate": [0.04],
+            "pension_rate_effective": [0.10],
+            "health_insurance_rate_effective": [0.05],
+            "employment_insurance_rate_effective": [0.01],
+            "take_home_rate": [0.75],
+        }
+    )
+
+    result = create_hundred_yen_allocation(
+        df,
+        years=[2000],
+    )
+
+    assert result.loc[
+        0,
+        "income_tax_yen_per_100",
+    ] == pytest.approx(5)
+
+    assert result.loc[
+        0,
+        "resident_tax_yen_per_100",
+    ] == pytest.approx(4)
+
+    assert result.loc[
+        0,
+        "pension_yen_per_100",
+    ] == pytest.approx(10)
+
+    assert result.loc[
+        0,
+        "health_insurance_yen_per_100",
+    ] == pytest.approx(5)
+
+    assert result.loc[
+        0,
+        "employment_insurance_yen_per_100",
+    ] == pytest.approx(1)
+
+    assert result.loc[
+        0,
+        "take_home_yen_per_100",
+    ] == pytest.approx(75)
+
+    assert result.loc[
+        0,
+        "allocation_total_yen",
+    ] == pytest.approx(100)
 
 
+def test_add_deduction_component_changes():
+    df = pd.DataFrame(
+        {
+            "year": [
+                2000,
+                2001,
+            ],
+            "income_tax_rate": [
+                0.05,
+                0.04,
+            ],
+            "resident_tax_rate": [
+                0.03,
+                0.04,
+            ],
+            "pension_rate_effective": [
+                0.07,
+                0.08,
+            ],
+            "health_insurance_rate_effective": [
+                0.04,
+                0.045,
+            ],
+            "employment_insurance_rate_effective": [
+                0.01,
+                0.012,
+            ],
+            "effective_burden_rate": [
+                0.20,
+                0.217,
+            ],
+        }
+    )
 
+    result = add_deduction_component_changes(
+        df
+    )
+
+    assert pd.isna(
+        result.loc[
+            0,
+            "total_burden_yoy_pt",
+        ]
+    )
+
+    assert result.loc[
+        1,
+        "income_tax_yoy_pt",
+    ] == pytest.approx(-1.0)
+
+    assert result.loc[
+        1,
+        "resident_tax_yoy_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        1,
+        "pension_yoy_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        1,
+        "health_insurance_yoy_pt",
+    ] == pytest.approx(0.5)
+
+    assert result.loc[
+        1,
+        "employment_insurance_yoy_pt",
+    ] == pytest.approx(0.2)
+
+    assert result.loc[
+        1,
+        "component_burden_yoy_sum_pt",
+    ] == pytest.approx(1.7)
+
+    assert result.loc[
+        1,
+        "total_burden_yoy_pt",
+    ] == pytest.approx(1.7)
+
+    assert result.loc[
+        1,
+        "component_burden_yoy_error_pt",
+    ] == pytest.approx(0)
+
+
+def test_calculate_take_home_under_policy_year():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_take_home_under_policy_year(
+        wage_year=2025,
+        policy_year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        rule_tables=rules,
+    )
+
+    assert result[
+        "wage_year"
+    ] == 2025
+
+    assert result[
+        "policy_year"
+    ] == 2025
+
+    assert result[
+        "gross_salary_yen"
+    ] == pytest.approx(
+        3_460_000
+    )
+
+    assert result[
+        "resident_tax_assessment_year"
+    ] == 2026
+
+
+def test_take_home_under_policy_year_separates_wage_and_policy_year():
+    rules = load_take_home_rule_tables()
+
+    actual_2025 = (
+        calculate_take_home_under_policy_year(
+            wage_year=2025,
+            policy_year=2025,
+            monthly_regular_pay_yen=205_000,
+            annual_bonus_yen=1_000_000,
+            rule_tables=rules,
+        )
+    )
+
+    policy_1990 = (
+        calculate_take_home_under_policy_year(
+            wage_year=2025,
+            policy_year=1990,
+            monthly_regular_pay_yen=205_000,
+            annual_bonus_yen=1_000_000,
+            rule_tables=rules,
+        )
+    )
+
+    # 賃金入力は同一なので額面は同じ。
+    assert policy_1990[
+        "gross_salary_yen"
+    ] == pytest.approx(
+        actual_2025[
+            "gross_salary_yen"
+        ]
+    )
+
+    # 制度年は異なる。
+    assert actual_2025[
+        "resident_tax_assessment_year"
+    ] == 2026
+
+    assert policy_1990[
+        "resident_tax_assessment_year"
+    ] == 1991
+
+    # 制度が異なるため控除総額も異なる。
+    assert policy_1990[
+        "total_deductions_yen"
+    ] != pytest.approx(
+        actual_2025[
+            "total_deductions_yen"
+        ]
+    )
+
+
+def test_fixed_policy_time_series_matches_actual_for_same_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [2025],
+            "total_cash_earnings": [
+                4_267_634 / 12,
+            ],
+            "regular_earnings": [
+                3_448_900 / 12,
+            ],
+            "special_earnings": [
+                818_734 / 12,
+            ],
+        }
+    )
+
+    actual = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+        timing="income_year",
+    )
+
+    fixed = (
+        calculate_fixed_policy_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            policy_year=2025,
+            start_year=2025,
+            end_year=2025,
+        )
+    )
+
+    assert fixed.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        actual.loc[
+            0,
+            "gross_salary_yen",
+        ]
+    )
+
+    assert fixed.loc[
+        0,
+        "total_deductions_yen",
+    ] == pytest.approx(
+        actual.loc[
+            0,
+            "total_deductions_yen",
+        ]
+    )
+
+    assert fixed.loc[
+        0,
+        "nominal_take_home_yen",
+    ] == pytest.approx(
+        actual.loc[
+            0,
+            "nominal_take_home_yen",
+        ]
+    )
+
+
+def test_fixed_policy_time_series_uses_same_policy_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = (
+        calculate_fixed_policy_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            policy_year=1990,
+            start_year=2024,
+            end_year=2025,
+        )
+    )
+
+    assert result[
+        "wage_year"
+    ].tolist() == [
+        2024,
+        2025,
+    ]
+
+    assert result[
+        "policy_year"
+    ].tolist() == [
+        1990,
+        1990,
+    ]
+
+    assert result[
+        "resident_tax_assessment_year"
+    ].tolist() == [
+        1991,
+        1991,
+    ]
+
+    assert result.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        300_000 * 12
+    )
+
+    assert result.loc[
+        1,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        320_000 * 12
+    )
