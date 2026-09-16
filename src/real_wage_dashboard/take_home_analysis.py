@@ -3362,3 +3362,254 @@ def calculate_total_resident_tax(
             total_resident_tax_yen
         ),
     }
+
+
+def calculate_standard_worker_take_home(
+    year: int,
+    monthly_regular_pay_yen: float,
+    annual_bonus_yen: float,
+    income_tax_deductions: pd.DataFrame,
+    income_tax_brackets: pd.DataFrame,
+    income_tax_adjustments: pd.DataFrame,
+    pension_standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    health_standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    employment_insurance_rates: pd.DataFrame,
+    resident_tax_deductions: pd.DataFrame,
+    resident_tax_income_rates: pd.DataFrame,
+    resident_tax_adjustments: pd.DataFrame,
+    resident_tax_per_capita: pd.DataFrame,
+    sex: str = "male",
+    business_type: str = "general",
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    resident_other_income_deductions_yen: float = 0.0,
+    human_deduction_difference_yen: float = 50_000.0,
+    municipality_band: str | None = None,
+    policy_mode: str = "actual_policy",
+) -> dict[str, float | int]:
+    """標準労働者モデルの名目手取り賃金を計算する。
+
+    住民税は所得年対応ベースとし、
+    所得年 year に対して assessment_year = year + 1
+    の制度を適用する。
+
+    これは実際の年内キャッシュフローではなく、
+    各所得年に対応する税・社会保険負担を比較するための
+    分析上の対応付けである。
+    """
+
+    income_tax_result = calculate_standard_worker_income_tax(
+        year=year,
+        monthly_regular_pay_yen=monthly_regular_pay_yen,
+        annual_bonus_yen=annual_bonus_yen,
+        income_tax_deductions=income_tax_deductions,
+        income_tax_brackets=income_tax_brackets,
+        income_tax_adjustments=income_tax_adjustments,
+        pension_standard_monthly_rules=(
+            pension_standard_monthly_rules
+        ),
+        pension_rates=pension_rates,
+        health_standard_monthly_rules=(
+            health_standard_monthly_rules
+        ),
+        health_insurance_rates=(
+            health_insurance_rates
+        ),
+        bonus_rules=bonus_rules,
+        employment_insurance_rates=(
+            employment_insurance_rates
+        ),
+        sex=sex,
+        business_type=business_type,
+        dependent_count=dependent_count,
+        other_income_deductions_yen=(
+            other_income_deductions_yen
+        ),
+        policy_mode=policy_mode,
+    )
+
+    assessment_year = year + 1
+
+    resident_taxable = (
+        calculate_resident_taxable_income(
+            salary_income_yen=(
+                income_tax_result[
+                    "salary_income_yen"
+                ]
+            ),
+            social_insurance_deduction_yen=(
+                income_tax_result[
+                    "social_insurance_yen"
+                ]
+            ),
+            assessment_year=assessment_year,
+            resident_tax_deductions=(
+                resident_tax_deductions
+            ),
+            other_income_deductions_yen=(
+                resident_other_income_deductions_yen
+            ),
+        )
+    )
+
+    resident_taxable_income_yen = (
+        resident_taxable[
+            "resident_taxable_income_yen"
+        ]
+    )
+
+    base_resident_income_levy_yen = (
+        calculate_base_resident_income_levy(
+            taxable_income_yen=(
+                resident_taxable_income_yen
+            ),
+            assessment_year=assessment_year,
+            income_rate_rules=(
+                resident_tax_income_rates
+            ),
+        )
+    )
+
+    adjusted_resident = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=(
+                base_resident_income_levy_yen
+            ),
+            taxable_income_yen=(
+                resident_taxable_income_yen
+            ),
+            total_income_yen=(
+                income_tax_result[
+                    "salary_income_yen"
+                ]
+            ),
+            assessment_year=assessment_year,
+            adjustment_rules=(
+                resident_tax_adjustments
+            ),
+            dependent_count=dependent_count,
+            human_deduction_difference_yen=(
+                human_deduction_difference_yen
+            ),
+            policy_mode=policy_mode,
+        )
+    )
+
+    resident_tax = calculate_total_resident_tax(
+        income_levy_after_adjustments_yen=(
+            adjusted_resident[
+                "resident_income_levy_after_adjustments_yen"
+            ]
+        ),
+        assessment_year=assessment_year,
+        per_capita_rules=resident_tax_per_capita,
+        municipality_band=municipality_band,
+    )
+
+    gross_salary_yen = income_tax_result[
+        "gross_salary_yen"
+    ]
+
+    social_insurance_yen = income_tax_result[
+        "social_insurance_yen"
+    ]
+
+    income_tax_yen = income_tax_result[
+        "income_tax_yen"
+    ]
+
+    resident_tax_yen = resident_tax[
+        "total_resident_tax_yen"
+    ]
+
+    total_deductions_yen = (
+        social_insurance_yen
+        + income_tax_yen
+        + resident_tax_yen
+    )
+
+    nominal_take_home_yen = (
+        gross_salary_yen
+        - total_deductions_yen
+    )
+
+    effective_burden_rate = (
+        total_deductions_yen
+        / gross_salary_yen
+        if gross_salary_yen > 0
+        else 0.0
+    )
+
+    take_home_rate = (
+        nominal_take_home_yen
+        / gross_salary_yen
+        if gross_salary_yen > 0
+        else 0.0
+    )
+
+    return {
+        **income_tax_result,
+        "resident_tax_assessment_year": (
+            assessment_year
+        ),
+        "resident_basic_deduction_yen": float(
+            resident_taxable[
+                "resident_basic_deduction_yen"
+            ]
+        ),
+        "resident_taxable_income_yen": float(
+            resident_taxable_income_yen
+        ),
+        "base_resident_income_levy_yen": float(
+            base_resident_income_levy_yen
+        ),
+        "resident_adjustment_credit_yen": float(
+            adjusted_resident[
+                "resident_adjustment_credit_yen"
+            ]
+        ),
+        "resident_other_reduction_yen": float(
+            adjusted_resident[
+                "resident_other_reduction_yen"
+            ]
+        ),
+        "resident_income_levy_yen": float(
+            resident_tax[
+                "resident_income_levy_yen"
+            ]
+        ),
+        "resident_per_capita_yen": float(
+            resident_tax[
+                "resident_per_capita_yen"
+            ]
+        ),
+        "forest_environment_tax_yen": float(
+            resident_tax[
+                "forest_environment_tax_yen"
+            ]
+        ),
+        "resident_tax_yen": float(
+            resident_tax_yen
+        ),
+        "total_deductions_yen": float(
+            round(
+                total_deductions_yen,
+                10,
+            )
+        ),
+        "nominal_take_home_yen": float(
+            round(
+                nominal_take_home_yen,
+                10,
+            )
+        ),
+        "effective_burden_rate": float(
+            effective_burden_rate
+        ),
+        "take_home_rate": float(
+            take_home_rate
+        ),
+    }

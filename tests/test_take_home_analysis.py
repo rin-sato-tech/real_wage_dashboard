@@ -42,6 +42,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_salary_income_deduction,
     calculate_standard_monthly_remuneration,
     calculate_standard_worker_income_tax,
+    calculate_standard_worker_take_home,
     calculate_taxable_income,
     calculate_total_income_tax,
     calculate_total_resident_tax,
@@ -4324,3 +4325,171 @@ def test_total_resident_tax_for_2025_income():
     assert result[
         "total_resident_tax_yen"
     ] == 143_600
+
+
+def test_calculate_standard_worker_take_home_2025():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_take_home(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules["social_insurance_bonus_rules"]
+        ),
+        employment_insurance_rates=(
+            rules["employment_insurance_rates"]
+        ),
+        resident_tax_deductions=(
+            rules["resident_tax_deductions"]
+        ),
+        resident_tax_income_rates=(
+            rules["resident_tax_income_rates"]
+        ),
+        resident_tax_adjustments=(
+            rules["resident_tax_adjustments"]
+        ),
+        resident_tax_per_capita=(
+            rules["resident_tax_per_capita"]
+        ),
+    )
+
+    assert result[
+        "resident_tax_assessment_year"
+    ] == 2026
+
+    assert result[
+        "gross_salary_yen"
+    ] == 3_460_000
+
+    assert result[
+        "social_insurance_yen"
+    ] == pytest.approx(
+        500_437.5
+    )
+
+    assert result[
+        "income_tax_yen"
+    ] == 49_000
+
+    assert result[
+        "resident_taxable_income_yen"
+    ] == 1_411_000
+
+    assert result[
+        "resident_adjustment_credit_yen"
+    ] == 2_500
+
+    assert result[
+        "resident_tax_yen"
+    ] == 143_600
+
+    assert result[
+        "total_deductions_yen"
+    ] == pytest.approx(
+        693_037.5
+    )
+
+    assert result[
+        "nominal_take_home_yen"
+    ] == pytest.approx(
+        2_766_962.5
+    )
+
+
+def test_standard_worker_take_home_identity():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_take_home(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules["social_insurance_bonus_rules"]
+        ),
+        employment_insurance_rates=(
+            rules["employment_insurance_rates"]
+        ),
+        resident_tax_deductions=(
+            rules["resident_tax_deductions"]
+        ),
+        resident_tax_income_rates=(
+            rules["resident_tax_income_rates"]
+        ),
+        resident_tax_adjustments=(
+            rules["resident_tax_adjustments"]
+        ),
+        resident_tax_per_capita=(
+            rules["resident_tax_per_capita"]
+        ),
+    )
+
+    expected_deductions = (
+        result["social_insurance_yen"]
+        + result["income_tax_yen"]
+        + result["resident_tax_yen"]
+    )
+
+    expected_take_home = (
+        result["gross_salary_yen"]
+        - expected_deductions
+    )
+
+    assert result[
+        "total_deductions_yen"
+    ] == pytest.approx(
+        expected_deductions
+    )
+
+    assert result[
+        "nominal_take_home_yen"
+    ] == pytest.approx(
+        expected_take_home
+    )
+
+    assert (
+        result["take_home_rate"]
+        + result["effective_burden_rate"]
+    ) == pytest.approx(1.0)
