@@ -1028,3 +1028,219 @@ def calculate_standard_monthly_remuneration(
         )
 
     return float(standard_monthly_yen)
+
+
+def _select_pension_rate_rule(
+    target_date: str | date | pd.Timestamp,
+    pension_rates: pd.DataFrame,
+    sex: str = "male",
+) -> pd.Series:
+    """適用日時点の厚生年金保険料率ルールを取得する。"""
+
+    if sex not in {
+        "male",
+        "female",
+    }:
+        raise ValueError(
+            "sex は male または female である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        pension_rates,
+        target_date=target_date,
+    )
+
+    if rules.empty:
+        raise ValueError(
+            "指定日に有効な厚生年金保険料率がありません。"
+        )
+
+    if "insured_category" not in rules.columns:
+        raise ValueError(
+            "厚生年金保険料率データに "
+            "insured_category 列がありません。"
+        )
+
+    # 男女別料率が設定されている時期は
+    # general_male / general_female を使用する。
+    sex_category = f"general_{sex}"
+
+    sex_rules = rules.loc[
+        rules["insured_category"] == sex_category
+    ]
+
+    if not sex_rules.empty:
+        rules = sex_rules
+    else:
+        # 男女共通化後は general を使用する。
+        rules = rules.loc[
+            rules["insured_category"] == "general"
+        ]
+
+    if len(rules) != 1:
+        raise ValueError(
+            "厚生年金保険料率を一意に取得できません。"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" sex={sex},"
+            f" rows={len(rules)}"
+        )
+
+    return rules.iloc[0]
+
+
+def calculate_monthly_pension_contribution(
+    remuneration_yen: float,
+    target_date: str | date | pd.Timestamp,
+    standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    sex: str = "male",
+) -> float:
+    """月額報酬から厚生年金の月額本人負担額を計算する。"""
+
+    if remuneration_yen < 0:
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    standard_monthly_yen = (
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=remuneration_yen,
+            target_date=target_date,
+            standard_monthly_rules=standard_monthly_rules,
+        )
+    )
+
+    rule = _select_pension_rate_rule(
+        target_date=target_date,
+        pension_rates=pension_rates,
+        sex=sex,
+    )
+
+    total_rate = pd.to_numeric(
+        pd.Series(
+            [rule["regular_total_rate"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    employee_share = pd.to_numeric(
+        pd.Series(
+            [rule["employee_share"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(total_rate):
+        raise ValueError(
+            "厚生年金の regular_total_rate に"
+            "不正な値があります。"
+        )
+
+    if pd.isna(employee_share):
+        raise ValueError(
+            "厚生年金の employee_share に"
+            "不正な値があります。"
+        )
+
+    if total_rate < 0:
+        raise ValueError(
+            "厚生年金保険料率は0以上である必要があります。"
+        )
+
+    if not 0 <= employee_share <= 1:
+        raise ValueError(
+            "厚生年金の本人負担割合は"
+            "0以上1以下である必要があります。"
+        )
+
+    contribution = (
+        standard_monthly_yen
+        * float(total_rate)
+        * float(employee_share)
+    )
+
+    # float演算に伴う 14299.999999999998 のような
+    # 微小な数値誤差を除去する。
+    return float(
+        round(
+            contribution,
+            10,
+        )
+    )
+
+
+def calculate_annual_regular_pension_contribution(
+    monthly_remuneration: pd.DataFrame,
+    standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    sex: str = "male",
+) -> float:
+    """月次報酬から厚生年金の年間本人負担額（月給部分）を計算する。"""
+
+    required_columns = {
+        "date",
+        "regular_pay_yen",
+    }
+
+    missing = required_columns - set(
+        monthly_remuneration.columns
+    )
+
+    if missing:
+        raise ValueError(
+            "年間厚生年金保険料の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if monthly_remuneration.empty:
+        raise ValueError(
+            "月次報酬データが空です。"
+        )
+
+    data = monthly_remuneration.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    if data["date"].isna().any():
+        raise ValueError(
+            "月次報酬データの date に不正な値があります。"
+        )
+
+    data["regular_pay_yen"] = pd.to_numeric(
+        data["regular_pay_yen"],
+        errors="coerce",
+    )
+
+    if data["regular_pay_yen"].isna().any():
+        raise ValueError(
+            "regular_pay_yen に不正な値があります。"
+        )
+
+    if (data["regular_pay_yen"] < 0).any():
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    contributions = [
+        calculate_monthly_pension_contribution(
+            remuneration_yen=float(
+                row.regular_pay_yen
+            ),
+            target_date=row.date,
+            standard_monthly_rules=(
+                standard_monthly_rules
+            ),
+            pension_rates=pension_rates,
+            sex=sex,
+        )
+        for row in data.itertuples(
+            index=False
+        )
+    ]
+
+    return float(
+        sum(contributions)
+    )

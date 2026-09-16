@@ -6,14 +6,17 @@ from real_wage_dashboard.take_home_analysis import (
     _floor_to_thousand_yen,
     _select_assessment_year_rules,
     _select_effective_rules,
+    _select_pension_rate_rule,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
     _select_standard_monthly_remuneration_rule,
     calculate_annual_employment_insurance,
+    calculate_annual_regular_pension_contribution,
     calculate_base_income_tax,
     calculate_basic_deduction,
     calculate_employment_insurance,
     calculate_income_tax_after_adjustments,
+    calculate_monthly_pension_contribution,
     calculate_reconstruction_special_income_tax,
     calculate_salary_income,
     calculate_salary_income_deduction,
@@ -1794,4 +1797,366 @@ def test_calculate_standard_monthly_remuneration_rejects_missing_period():
             remuneration_yen=300_000,
             target_date="1990-01-01",
             standard_monthly_rules=rules,
+        )
+
+
+def _create_pension_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1990-01-01",
+                "1990-01-01",
+                "1994-01-01",
+                "2015-09-01",
+                "2016-09-01",
+                "2017-09-01",
+            ],
+            "effective_to": [
+                "1990-12-31",
+                "1990-12-31",
+                "1994-10-31",
+                "2016-08-31",
+                "2017-08-31",
+                None,
+            ],
+            "insured_category": [
+                "general_male",
+                "general_female",
+                "general",
+                "general",
+                "general",
+                "general",
+            ],
+            "regular_total_rate": [
+                0.1430,
+                0.1380,
+                0.1450,
+                0.17828,
+                0.18182,
+                0.18300,
+            ],
+            "bonus_total_rate": [
+                0,
+                0,
+                0,
+                0.17828,
+                0.18182,
+                0.18300,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_pension_standard_monthly_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1989-12-01",
+                "1989-12-01",
+                "1989-12-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2020-09-01",
+                "2020-09-01",
+                "2020-09-01",
+            ],
+            "effective_to": [
+                "1994-10-31",
+                "1994-10-31",
+                "1994-10-31",
+                "2020-08-31",
+                "2020-08-31",
+                "2020-08-31",
+                None,
+                None,
+                None,
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+            ],
+            "standard_monthly_yen": [
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+            ],
+            "remuneration_upper_yen": [
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+            ],
+        }
+    )
+
+
+def test_calculate_monthly_pension_contribution():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    result = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert result == 18_300
+
+
+def test_monthly_pension_uses_standard_monthly_remuneration():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    result = calculate_monthly_pension_contribution(
+        remuneration_yen=209_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    expected = (
+        200_000
+        * 0.183
+        * 0.5
+    )
+
+    assert result == expected
+
+
+def test_monthly_pension_standard_monthly_boundary():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    below = calculate_monthly_pension_contribution(
+        remuneration_yen=209_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    boundary = calculate_monthly_pension_contribution(
+        remuneration_yen=210_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert below == 18_300
+    assert boundary == 20_130
+
+
+def test_monthly_pension_1990_sex_difference():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    male = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1990-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="male",
+    )
+
+    female = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1990-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="female",
+    )
+
+    assert male == 14_300
+    assert female == 13_800
+
+
+def test_pension_rate_uses_general_after_sex_rates_end():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    male = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1994-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="male",
+    )
+
+    female = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1994-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="female",
+    )
+
+    assert male == female
+    assert male == 14_500
+
+
+def test_monthly_pension_2017_rate_change():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    august = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="2017-08-31",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    september = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="2017-09-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert august == 18_182
+    assert september == 18_300
+
+
+def test_calculate_annual_regular_pension_contribution():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    result = (
+        calculate_annual_regular_pension_contribution(
+            monthly_remuneration=monthly,
+            standard_monthly_rules=standard_rules,
+            pension_rates=rates,
+        )
+    )
+
+    assert result == 18_300 * 12
+    assert result == 219_600
+
+
+def test_annual_regular_pension_handles_rate_change():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    rates = _create_pension_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2017-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    result = (
+        calculate_annual_regular_pension_contribution(
+            monthly_remuneration=monthly,
+            standard_monthly_rules=standard_rules,
+            pension_rates=rates,
+        )
+    )
+
+    expected = (
+        18_182 * 8
+        + 18_300 * 4
+    )
+
+    assert result == expected
+
+
+def test_select_pension_rate_rejects_invalid_sex():
+    rates = _create_pension_rates()
+
+    with pytest.raises(
+        ValueError,
+        match="sex は male または female",
+    ):
+        _select_pension_rate_rule(
+            target_date="1990-06-01",
+            pension_rates=rates,
+            sex="other",
         )
