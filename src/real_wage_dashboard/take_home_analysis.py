@@ -6202,6 +6202,19 @@ def create_burden_three_factor_shapley_decomposition(
     start_year の状態を0、end_year の状態を1として、
     3要因の全6順列について各要因の限界寄与を計算し、
     その平均をShapley値とする。
+
+    Notes
+    -----
+    Shapley値はプレイヤー集合の定義に依存する。
+
+    したがって、本関数で得られる
+    tax_policy_effect + social_insurance_policy_effect
+    は、税・社会保険を単一の policy 要因として扱った
+    2要因Shapleyの policy_effect と一般には一致しない。
+
+    本関数内部では、
+    wage + tax + social = total change
+    が厳密に成立する。
     """
 
     required_columns = {
@@ -6569,6 +6582,616 @@ def create_burden_three_factor_shapley_decomposition(
                     (
                         total_change_pt
                         - shapley_sum_pt
+                    ),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def create_real_take_home_four_factor_shapley_decomposition(
+    annual_wage_df: pd.DataFrame,
+    annual_cpi_df: pd.DataFrame,
+    rule_tables: dict[str, pd.DataFrame],
+    periods: list[tuple[int, int]],
+    sex: str = "male",
+    business_type: str = "general",
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    resident_other_income_deductions_yen: float = 0.0,
+    human_deduction_difference_yen: float = 50_000.0,
+    municipality_band: str | None = None,
+    policy_mode: str = "actual_policy",
+) -> pd.DataFrame:
+    """実質手取り変化をW・T・S・Pの4要因にShapley分解する。
+
+    W:
+        賃金水準・月例賃金/賞与構成
+
+    T:
+        所得税・住民税制度
+
+    S:
+        厚生年金・健康保険・雇用保険制度
+
+    P:
+        物価水準（CPI）
+
+    実質手取りは、
+
+        nominal_take_home / (CPI / 100)
+
+    と定義する。
+
+    各要因についてstart_yearの状態を0、
+    end_yearの状態を1とし、
+    全24順列の限界寄与を平均してShapley値を求める。
+
+    各寄与は円単位に加え、
+    開始年の実質手取りに対する比率でも返す。
+    """
+
+    # ----------------------------------------
+    # 1. 賃金データ検証
+    # ----------------------------------------
+
+    required_wage_columns = {
+        "year",
+        "total_cash_earnings",
+        "regular_earnings",
+        "special_earnings",
+    }
+
+    missing_wage = (
+        required_wage_columns
+        - set(annual_wage_df.columns)
+    )
+
+    if missing_wage:
+        raise ValueError(
+            "4要因Shapley分解に必要な"
+            "賃金列がありません: "
+            f"{sorted(missing_wage)}"
+        )
+
+    wage_data = annual_wage_df.copy()
+
+    wage_numeric_columns = [
+        "year",
+        "total_cash_earnings",
+        "regular_earnings",
+        "special_earnings",
+    ]
+
+    for column in wage_numeric_columns:
+        wage_data[column] = pd.to_numeric(
+            wage_data[column],
+            errors="coerce",
+        )
+
+    if (
+        wage_data[
+            wage_numeric_columns
+        ]
+        .isna()
+        .any()
+        .any()
+    ):
+        raise ValueError(
+            "年平均賃金データに不正な数値があります。"
+        )
+
+    if (
+        wage_data[
+            [
+                "total_cash_earnings",
+                "regular_earnings",
+                "special_earnings",
+            ]
+        ]
+        < 0
+    ).any().any():
+        raise ValueError(
+            "賃金額は0以上である必要があります。"
+        )
+
+    if (
+        wage_data["year"]
+        != wage_data["year"].astype(int)
+    ).any():
+        raise ValueError(
+            "year は整数である必要があります。"
+        )
+
+    wage_data["year"] = (
+        wage_data["year"]
+        .astype(int)
+    )
+
+    if wage_data["year"].duplicated().any():
+        raise ValueError(
+            "年平均賃金データに重複年があります。"
+        )
+
+    identity_diff = (
+        wage_data["total_cash_earnings"]
+        - (
+            wage_data["regular_earnings"]
+            + wage_data["special_earnings"]
+        )
+    )
+
+    if (
+        identity_diff.abs()
+        > 1e-6
+    ).any():
+        raise ValueError(
+            "給与構成の恒等式が成立しません。"
+        )
+
+    # ----------------------------------------
+    # 2. CPI検証
+    # ----------------------------------------
+
+    required_cpi_columns = {
+        "year",
+        "cpi",
+    }
+
+    missing_cpi = (
+        required_cpi_columns
+        - set(annual_cpi_df.columns)
+    )
+
+    if missing_cpi:
+        raise ValueError(
+            "4要因Shapley分解に必要な"
+            "CPI列がありません: "
+            f"{sorted(missing_cpi)}"
+        )
+
+    cpi_data = annual_cpi_df.copy()
+
+    cpi_data["year"] = pd.to_numeric(
+        cpi_data["year"],
+        errors="coerce",
+    )
+
+    cpi_data["cpi"] = pd.to_numeric(
+        cpi_data["cpi"],
+        errors="coerce",
+    )
+
+    if (
+        cpi_data[
+            [
+                "year",
+                "cpi",
+            ]
+        ]
+        .isna()
+        .any()
+        .any()
+    ):
+        raise ValueError(
+            "CPIデータに不正な数値があります。"
+        )
+
+    if (
+        cpi_data["year"]
+        != cpi_data["year"].astype(int)
+    ).any():
+        raise ValueError(
+            "CPIの year は整数である必要があります。"
+        )
+
+    cpi_data["year"] = (
+        cpi_data["year"]
+        .astype(int)
+    )
+
+    if cpi_data["year"].duplicated().any():
+        raise ValueError(
+            "CPIデータに重複年があります。"
+        )
+
+    if (
+        cpi_data["cpi"] <= 0
+    ).any():
+        raise ValueError(
+            "CPIは0より大きい必要があります。"
+        )
+
+    # ----------------------------------------
+    # 3. 期間ごとにShapley分解
+    # ----------------------------------------
+
+    rows = []
+
+    for start_year, end_year in periods:
+        if start_year >= end_year:
+            raise ValueError(
+                "期間の開始年は終了年より"
+                "前である必要があります。"
+            )
+
+        start_wage = wage_data.loc[
+            wage_data["year"]
+            == start_year
+        ]
+
+        end_wage = wage_data.loc[
+            wage_data["year"]
+            == end_year
+        ]
+
+        if len(start_wage) != 1:
+            raise ValueError(
+                f"{start_year}年の賃金データを"
+                "一意に取得できません。"
+            )
+
+        if len(end_wage) != 1:
+            raise ValueError(
+                f"{end_year}年の賃金データを"
+                "一意に取得できません。"
+            )
+
+        start_cpi = cpi_data.loc[
+            cpi_data["year"]
+            == start_year,
+            "cpi",
+        ]
+
+        end_cpi = cpi_data.loc[
+            cpi_data["year"]
+            == end_year,
+            "cpi",
+        ]
+
+        if len(start_cpi) != 1:
+            raise ValueError(
+                f"{start_year}年のCPIを"
+                "一意に取得できません。"
+            )
+
+        if len(end_cpi) != 1:
+            raise ValueError(
+                f"{end_year}年のCPIを"
+                "一意に取得できません。"
+            )
+
+        wage_rows = {
+            0: start_wage.iloc[0],
+            1: end_wage.iloc[0],
+        }
+
+        policy_years = {
+            0: start_year,
+            1: end_year,
+        }
+
+        cpi_values = {
+            0: float(
+                start_cpi.iloc[0]
+            ),
+            1: float(
+                end_cpi.iloc[0]
+            ),
+        }
+
+        nominal_cache: dict[
+            tuple[int, int, int],
+            float,
+        ] = {}
+
+        real_cache: dict[
+            tuple[int, int, int, int],
+            float,
+        ] = {}
+
+        def evaluate_nominal(
+            wage_state: int,
+            tax_state: int,
+            social_state: int,
+        ) -> float:
+            key = (
+                wage_state,
+                tax_state,
+                social_state,
+            )
+
+            if key in nominal_cache:
+                return nominal_cache[key]
+
+            wage = wage_rows[
+                wage_state
+            ]
+
+            result = (
+                calculate_take_home_under_policy_years(
+                    wage_year=int(
+                        wage["year"]
+                    ),
+                    tax_policy_year=(
+                        policy_years[
+                            tax_state
+                        ]
+                    ),
+                    social_insurance_policy_year=(
+                        policy_years[
+                            social_state
+                        ]
+                    ),
+                    monthly_regular_pay_yen=float(
+                        wage[
+                            "regular_earnings"
+                        ]
+                    ),
+                    annual_bonus_yen=float(
+                        wage[
+                            "special_earnings"
+                        ]
+                        * 12
+                    ),
+                    rule_tables=rule_tables,
+                    sex=sex,
+                    business_type=(
+                        business_type
+                    ),
+                    dependent_count=(
+                        dependent_count
+                    ),
+                    other_income_deductions_yen=(
+                        other_income_deductions_yen
+                    ),
+                    resident_other_income_deductions_yen=(
+                        resident_other_income_deductions_yen
+                    ),
+                    human_deduction_difference_yen=(
+                        human_deduction_difference_yen
+                    ),
+                    municipality_band=(
+                        municipality_band
+                    ),
+                    policy_mode=(
+                        policy_mode
+                    ),
+                )
+            )
+
+            value = float(
+                result[
+                    "nominal_take_home_yen"
+                ]
+            )
+
+            nominal_cache[key] = value
+
+            return value
+
+        def evaluate_real(
+            wage_state: int,
+            tax_state: int,
+            social_state: int,
+            price_state: int,
+        ) -> float:
+            key = (
+                wage_state,
+                tax_state,
+                social_state,
+                price_state,
+            )
+
+            if key in real_cache:
+                return real_cache[key]
+
+            nominal = evaluate_nominal(
+                wage_state,
+                tax_state,
+                social_state,
+            )
+
+            cpi = cpi_values[
+                price_state
+            ]
+
+            real = (
+                nominal
+                / (cpi / 100)
+            )
+
+            real_cache[key] = real
+
+            return real
+
+        # ------------------------------------
+        # 4. 全24順列
+        # ------------------------------------
+
+        factors = (
+            "wage",
+            "tax",
+            "social",
+            "price",
+        )
+
+        contributions = {
+            factor: []
+            for factor in factors
+        }
+
+        for order in permutations(
+            factors
+        ):
+            state = {
+                "wage": 0,
+                "tax": 0,
+                "social": 0,
+                "price": 0,
+            }
+
+            current_value = evaluate_real(
+                state["wage"],
+                state["tax"],
+                state["social"],
+                state["price"],
+            )
+
+            for factor in order:
+                state[factor] = 1
+
+                new_value = evaluate_real(
+                    state["wage"],
+                    state["tax"],
+                    state["social"],
+                    state["price"],
+                )
+
+                marginal = (
+                    new_value
+                    - current_value
+                )
+
+                contributions[
+                    factor
+                ].append(
+                    marginal
+                )
+
+                current_value = (
+                    new_value
+                )
+
+        effects_yen = {
+            factor: (
+                sum(
+                    contributions[
+                        factor
+                    ]
+                )
+                / len(
+                    contributions[
+                        factor
+                    ]
+                )
+            )
+            for factor in factors
+        }
+
+        start_nominal = (
+            evaluate_nominal(
+                0,
+                0,
+                0,
+            )
+        )
+
+        end_nominal = (
+            evaluate_nominal(
+                1,
+                1,
+                1,
+            )
+        )
+
+        start_real = evaluate_real(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        end_real = evaluate_real(
+            1,
+            1,
+            1,
+            1,
+        )
+
+        total_change_yen = (
+            end_real
+            - start_real
+        )
+
+        shapley_sum_yen = sum(
+            effects_yen.values()
+        )
+
+        if start_real == 0:
+            raise ValueError(
+                "開始年の実質手取りが0のため、"
+                "変化率を計算できません。"
+            )
+
+        effects_pct = {
+            factor: (
+                effect
+                / start_real
+                * 100
+            )
+            for factor, effect
+            in effects_yen.items()
+        }
+
+        total_change_pct = (
+            total_change_yen
+            / start_real
+            * 100
+        )
+
+        rows.append(
+            {
+                "period":
+                    f"{start_year}→{end_year}",
+                "start_year":
+                    start_year,
+                "end_year":
+                    end_year,
+                "start_cpi":
+                    cpi_values[0],
+                "end_cpi":
+                    cpi_values[1],
+                "start_nominal_take_home_yen":
+                    start_nominal,
+                "end_nominal_take_home_yen":
+                    end_nominal,
+                "start_real_take_home_yen":
+                    start_real,
+                "end_real_take_home_yen":
+                    end_real,
+                "wage_effect_yen":
+                    effects_yen["wage"],
+                "tax_policy_effect_yen":
+                    effects_yen["tax"],
+                "social_insurance_policy_effect_yen":
+                    effects_yen["social"],
+                "price_effect_yen":
+                    effects_yen["price"],
+                "total_change_yen":
+                    total_change_yen,
+                "shapley_sum_yen":
+                    shapley_sum_yen,
+                "decomposition_error_yen":
+                    (
+                        total_change_yen
+                        - shapley_sum_yen
+                    ),
+                "wage_effect_pct_of_start":
+                    effects_pct["wage"],
+                "tax_policy_effect_pct_of_start":
+                    effects_pct["tax"],
+                "social_insurance_policy_effect_pct_of_start":
+                    effects_pct["social"],
+                "price_effect_pct_of_start":
+                    effects_pct["price"],
+                "total_change_pct":
+                    total_change_pct,
+                "shapley_sum_pct_of_start":
+                    (
+                        shapley_sum_yen
+                        / start_real
+                        * 100
                     ),
             }
         )

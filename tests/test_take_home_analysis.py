@@ -62,6 +62,7 @@ from real_wage_dashboard.take_home_analysis import (
     create_constant_monthly_remuneration,
     create_deduction_burden_change_summary,
     create_hundred_yen_allocation,
+    create_real_take_home_four_factor_shapley_decomposition,
     create_semiannual_bonus_payments,
     create_take_home_period_log_decomposition,
 )
@@ -6328,7 +6329,7 @@ def test_create_burden_three_factor_shapley_decomposition():
     )
 
 
-def test_three_factor_policy_sum_matches_two_factor_policy_effect():
+def test_three_factor_shapley_matches_total_change():
     rules = load_take_home_rule_tables()
 
     annual_wage = pd.DataFrame(
@@ -6352,17 +6353,7 @@ def test_three_factor_policy_sum_matches_two_factor_policy_effect():
         }
     )
 
-    two_factor = (
-        create_burden_policy_shapley_decomposition(
-            annual_wage_df=annual_wage,
-            rule_tables=rules,
-            periods=[
-                (2024, 2025),
-            ],
-        )
-    )
-
-    three_factor = (
+    result = (
         create_burden_three_factor_shapley_decomposition(
             annual_wage_df=annual_wage,
             rule_tables=rules,
@@ -6372,24 +6363,280 @@ def test_three_factor_policy_sum_matches_two_factor_policy_effect():
         )
     )
 
-    assert three_factor.loc[
-        0,
-        "wage_effect_pt",
-    ] == pytest.approx(
-        two_factor.loc[
+    factor_sum = (
+        result.loc[
             0,
             "wage_effect_pt",
+        ]
+        + result.loc[
+            0,
+            "tax_policy_effect_pt",
+        ]
+        + result.loc[
+            0,
+            "social_insurance_policy_effect_pt",
+        ]
+    )
+
+    assert factor_sum == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pt",
         ],
         abs=1e-10,
     )
 
-    assert three_factor.loc[
+    assert result.loc[
         0,
-        "policy_effect_pt",
+        "decomposition_error_pt",
     ] == pytest.approx(
-        two_factor.loc[
+        0,
+        abs=1e-10,
+    )
+
+
+def test_create_real_take_home_four_factor_shapley_decomposition():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    annual_cpi = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "cpi": [
+                100.0,
+                110.0,
+            ],
+        }
+    )
+
+    result = (
+        create_real_take_home_four_factor_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            annual_cpi_df=annual_cpi,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    assert len(result) == 1
+
+    factor_sum = (
+        result.loc[
             0,
-            "policy_effect_pt",
+            "wage_effect_yen",
+        ]
+        + result.loc[
+            0,
+            "tax_policy_effect_yen",
+        ]
+        + result.loc[
+            0,
+            "social_insurance_policy_effect_yen",
+        ]
+        + result.loc[
+            0,
+            "price_effect_yen",
+        ]
+    )
+
+    assert factor_sum == pytest.approx(
+        result.loc[
+            0,
+            "total_change_yen",
+        ],
+        abs=1e-8,
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_yen",
+    ] == pytest.approx(
+        0,
+        abs=1e-8,
+    )
+
+    assert result.loc[
+        0,
+        "shapley_sum_pct_of_start",
+    ] == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pct",
         ],
         abs=1e-10,
+    )
+
+
+def test_four_factor_shapley_price_effect_is_negative_when_cpi_rises():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    annual_cpi = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "cpi": [
+                100.0,
+                110.0,
+            ],
+        }
+    )
+
+    result = (
+        create_real_take_home_four_factor_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            annual_cpi_df=annual_cpi,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    assert result.loc[
+        0,
+        "price_effect_yen",
+    ] < 0
+
+    assert result.loc[
+        0,
+        "price_effect_pct_of_start",
+    ] < 0
+
+
+def test_four_factor_shapley_endpoint_real_take_home():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    annual_cpi = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "cpi": [
+                105.0,
+                110.0,
+            ],
+        }
+    )
+
+    result = (
+        create_real_take_home_four_factor_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            annual_cpi_df=annual_cpi,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    start = (
+        calculate_take_home_under_policy_years(
+            wage_year=2024,
+            tax_policy_year=2024,
+            social_insurance_policy_year=2024,
+            monthly_regular_pay_yen=250_000,
+            annual_bonus_yen=600_000,
+            rule_tables=rules,
+        )
+    )
+
+    end = (
+        calculate_take_home_under_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=270_000,
+            annual_bonus_yen=600_000,
+            rule_tables=rules,
+        )
+    )
+
+    assert result.loc[
+        0,
+        "start_real_take_home_yen",
+    ] == pytest.approx(
+        start[
+            "nominal_take_home_yen"
+        ]
+        / 1.05
+    )
+
+    assert result.loc[
+        0,
+        "end_real_take_home_yen",
+    ] == pytest.approx(
+        end[
+            "nominal_take_home_yen"
+        ]
+        / 1.10
     )
