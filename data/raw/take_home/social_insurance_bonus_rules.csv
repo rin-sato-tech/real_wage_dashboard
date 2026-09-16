@@ -1,0 +1,4 @@
+scheme,effective_from,effective_to,cap_type,cap_yen,rounding_unit_yen
+health,2003-04-01,2007-03-31,per_payment,2000000,1000
+health,2007-04-01,,annual,5400000,1000
+pension,2003-04-01,,per_payment,1500000,1000
