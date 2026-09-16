@@ -1993,7 +1993,13 @@ def calculate_annual_health_bonus_contribution(
     health_insurance_rates: pd.DataFrame,
     bonus_rules: pd.DataFrame,
 ) -> float:
-    """年間の賞与にかかる健康保険本人負担額を計算する。"""
+    """年間の賞与にかかる健康保険本人負担額を計算する。
+
+    標準労働者モデルでは賞与を6月・12月に支給するため、
+    暦年データ内で健康保険の年度累計上限を完結して計算できる。
+    1～3月にも賞与がある一般ケースでは、前暦年4～12月分を含む
+    当該年度全体の賞与履歴を渡す必要がある。
+    """
 
     required_columns = {
         "date",
@@ -2095,3 +2101,55 @@ def calculate_annual_health_bonus_contribution(
             10,
         )
     )
+
+
+def calculate_annual_health_insurance_contribution(
+    monthly_remuneration: pd.DataFrame,
+    bonus_payments: pd.DataFrame,
+    standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+) -> dict[str, float]:
+    """月給・賞与を合わせた年間健康保険本人負担額を計算する。"""
+
+    regular_contribution = (
+        calculate_annual_regular_health_insurance_contribution(
+            monthly_remuneration=monthly_remuneration,
+            standard_monthly_rules=standard_monthly_rules,
+            health_insurance_rates=health_insurance_rates,
+        )
+    )
+
+    bonus_contribution = (
+        calculate_annual_health_bonus_contribution(
+            bonus_payments=bonus_payments,
+            health_insurance_rates=health_insurance_rates,
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    total_contribution = (
+        regular_contribution
+        + bonus_contribution
+    )
+
+    return {
+        "regular_health_yen": float(
+            round(
+                regular_contribution,
+                10,
+            )
+        ),
+        "bonus_health_yen": float(
+            round(
+                bonus_contribution,
+                10,
+            )
+        ),
+        "total_health_yen": float(
+            round(
+                total_contribution,
+                10,
+            )
+        ),
+    }

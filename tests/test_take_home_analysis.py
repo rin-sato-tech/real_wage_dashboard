@@ -14,6 +14,7 @@ from real_wage_dashboard.take_home_analysis import (
     _select_standard_monthly_remuneration_rule,
     calculate_annual_employment_insurance,
     calculate_annual_health_bonus_contribution,
+    calculate_annual_health_insurance_contribution,
     calculate_annual_pension_bonus_contribution,
     calculate_annual_pension_contribution,
     calculate_annual_regular_health_insurance_contribution,
@@ -3063,3 +3064,168 @@ def test_health_bonus_cap_resets_in_april():
 def test_get_fiscal_year():
     assert _get_fiscal_year("2025-03-31") == 2024
     assert _get_fiscal_year("2025-04-01") == 2025
+
+
+def test_calculate_annual_health_insurance_contribution():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+
+    rates = _create_health_insurance_rates()
+    bonus_rules = _create_health_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = (
+        calculate_annual_health_insurance_contribution(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    assert result[
+        "regular_health_yen"
+    ] == 120_000
+
+    assert result[
+        "bonus_health_yen"
+    ] == 50_000
+
+    assert result[
+        "total_health_yen"
+    ] == 170_000
+
+
+def test_calculate_annual_health_insurance_contribution_1990():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+
+    rates = _create_health_insurance_rates()
+    bonus_rules = _create_health_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "1990-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "1990-06-01",
+                "1990-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = (
+        calculate_annual_health_insurance_contribution(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    assert result[
+        "regular_health_yen"
+    ] == 100_800
+
+    assert result[
+        "bonus_health_yen"
+    ] == 3_000
+
+    assert result[
+        "total_health_yen"
+    ] == 103_800
+
+
+def test_calculate_annual_health_insurance_without_bonus():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+
+    rates = _create_health_insurance_rates()
+    bonus_rules = _create_health_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        columns=[
+            "date",
+            "bonus_yen",
+        ]
+    )
+
+    result = (
+        calculate_annual_health_insurance_contribution(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    assert result[
+        "regular_health_yen"
+    ] == 120_000
+
+    assert result[
+        "bonus_health_yen"
+    ] == 0
+
+    assert result[
+        "total_health_yen"
+    ] == 120_000
