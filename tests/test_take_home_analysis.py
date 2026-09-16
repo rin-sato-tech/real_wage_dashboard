@@ -6,6 +6,7 @@ from real_wage_dashboard.take_home_analysis import (
     _select_effective_rules,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
+    calculate_basic_deduction,
     calculate_salary_income,
     calculate_salary_income_deduction,
 )
@@ -425,5 +426,257 @@ def test_calculate_salary_income_deduction_rejects_missing_rule():
         calculate_salary_income_deduction(
             gross_salary_yen=1_000_000,
             target_date="2010-01-01",
+            deduction_rules=rules,
+        )
+
+
+def _create_basic_deduction_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "deduction_type": [
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+            ],
+            "effective_from": [
+                "1995-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+            ],
+            "effective_to": [
+                "2019-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                1,
+                2,
+                3,
+                4,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+            ],
+            "basis": ["total_income"] * 14,
+            "lower_bound_yen": [
+                0,
+                0,
+                24_000_001,
+                24_500_001,
+                25_000_001,
+                0,
+                1_320_001,
+                3_360_001,
+                4_890_001,
+                6_550_001,
+                23_500_001,
+                24_000_001,
+                24_500_001,
+                25_000_001,
+            ],
+            "upper_bound_yen": [
+                None,
+                24_000_000,
+                24_500_000,
+                25_000_000,
+                None,
+                1_320_000,
+                3_360_000,
+                4_890_000,
+                6_550_000,
+                23_500_000,
+                24_000_000,
+                24_500_000,
+                25_000_000,
+                None,
+            ],
+            "fixed_yen": [
+                380_000,
+                480_000,
+                320_000,
+                160_000,
+                0,
+                950_000,
+                880_000,
+                680_000,
+                630_000,
+                580_000,
+                480_000,
+                320_000,
+                160_000,
+                0,
+            ],
+            "source_key": ["test"] * 14,
+        }
+    )
+
+
+def test_calculate_basic_deduction_2019():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=3_000_000,
+        target_date="2019-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 380_000
+
+
+def test_calculate_basic_deduction_2020():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=3_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 480_000
+
+
+def test_calculate_basic_deduction_2020_high_income():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=24_300_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 320_000
+
+
+def test_calculate_basic_deduction_2020_over_limit():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=26_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_basic_deduction_2025_standard_worker():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=2_800_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 880_000
+
+
+def test_calculate_basic_deduction_2025_low_income():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=1_000_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 950_000
+
+
+def test_calculate_basic_deduction_2025_boundary():
+    rules = _create_basic_deduction_rules()
+
+    lower_band = calculate_basic_deduction(
+        total_income_yen=1_320_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    upper_band = calculate_basic_deduction(
+        total_income_yen=1_320_001,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert lower_band == 950_000
+    assert upper_band == 880_000
+
+
+def test_calculate_basic_deduction_2025_middle_income():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=4_000_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 680_000
+
+
+def test_calculate_basic_deduction_rejects_negative_income():
+    rules = _create_basic_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="合計所得金額は0以上",
+    ):
+        calculate_basic_deduction(
+            total_income_yen=-1,
+            target_date="2025-06-01",
+            deduction_rules=rules,
+        )
+
+
+def test_calculate_basic_deduction_rejects_missing_rule():
+    rules = _create_basic_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な基礎控除ルールがありません",
+    ):
+        calculate_basic_deduction(
+            total_income_yen=3_000_000,
+            target_date="1990-01-01",
             deduction_rules=rules,
         )

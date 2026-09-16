@@ -275,3 +275,77 @@ def calculate_salary_income(
             0,
         )
     )
+
+
+def calculate_basic_deduction(
+    total_income_yen: float,
+    target_date: str | date | pd.Timestamp,
+    deduction_rules: pd.DataFrame,
+) -> float:
+    """合計所得金額と適用年から所得税の基礎控除額を計算する。"""
+
+    if total_income_yen < 0:
+        raise ValueError(
+            "合計所得金額は0以上である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        deduction_rules,
+        target_date=target_date,
+    )
+
+    rules = rules.loc[
+        rules["deduction_type"] == "basic"
+    ].copy()
+
+    if rules.empty:
+        raise ValueError(
+            "指定日に有効な基礎控除ルールがありません。"
+        )
+
+    lower = pd.to_numeric(
+        rules["lower_bound_yen"],
+        errors="coerce",
+    )
+
+    upper = pd.to_numeric(
+        rules["upper_bound_yen"],
+        errors="coerce",
+    )
+
+    if lower.isna().any():
+        raise ValueError(
+            "基礎控除ルールの lower_bound_yen に"
+            "不正な値があります。"
+        )
+
+    mask = (
+        (lower <= total_income_yen)
+        & (
+            upper.isna()
+            | (total_income_yen <= upper)
+        )
+    )
+
+    matched = rules.loc[mask].copy()
+
+    if len(matched) != 1:
+        raise ValueError(
+            "基礎控除ルールを一意に取得できません。"
+            f" total_income_yen={total_income_yen},"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(matched)}"
+        )
+
+    fixed_yen = pd.to_numeric(
+        pd.Series([matched.iloc[0]["fixed_yen"]]),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(fixed_yen):
+        raise ValueError(
+            "基礎控除ルールの fixed_yen に"
+            "不正な値があります。"
+        )
+
+    return float(fixed_yen)
