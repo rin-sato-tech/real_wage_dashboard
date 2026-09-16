@@ -71,9 +71,7 @@ def extract_cy_values(
             .astype(int)
             .unique()
         )
-        raise ValueError(
-            f"CY公表値に同一年の重複があります: {duplicated_years}"
-        )
+        raise ValueError(f"CY公表値に同一年の重複があります: {duplicated_years}")
 
     for source_column in INDICATORS:
         result[source_column] = pd.to_numeric(
@@ -116,9 +114,7 @@ def create_comparison(
         columns=list(INDICATORS.values()),
     )
 
-    recalculated = recalculated.loc[
-        recalculated["year"].isin(TARGET_YEARS)
-    ].copy()
+    recalculated = recalculated.loc[recalculated["year"].isin(TARGET_YEARS)].copy()
 
     official = extract_cy_values(
         raw_df,

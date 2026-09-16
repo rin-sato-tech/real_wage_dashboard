@@ -2,11 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-
-OUTPUT_PATH = Path(
-    "data/snapshots/"
-    "take_home_robustness_summary.csv"
-)
+OUTPUT_PATH = Path("data/snapshots/take_home_robustness_summary.csv")
 
 
 def main() -> None:
@@ -21,10 +17,7 @@ def main() -> None:
             "metric": "real_take_home_change_pct",
             "value": -19.363,
             "unit": "pct",
-            "note": (
-                "主分析。所得年tに賦課年度t+1の"
-                "住民税を対応。"
-            ),
+            "note": ("主分析。所得年tに賦課年度t+1の住民税を対応。"),
         },
         {
             "check": "resident_tax_timing",
@@ -33,12 +26,8 @@ def main() -> None:
             "metric": "real_take_home_change_pct",
             "value": -19.480,
             "unit": "pct",
-            "note": (
-                "前年所得に基づく年税額を"
-                "当年へ対応する感応度分析。"
-            ),
+            "note": ("前年所得に基づく年税額を当年へ対応する感応度分析。"),
         },
-
         # ------------------------------------
         # 男女差
         # ------------------------------------
@@ -58,12 +47,8 @@ def main() -> None:
             "metric": "real_take_home_change_pct",
             "value": -18.784,
             "unit": "pct",
-            "note": (
-                "厚生年金保険料率の男女差を反映。"
-                "差は1990～1993年のみ。"
-            ),
+            "note": ("厚生年金保険料率の男女差を反映。差は1990～1993年のみ。"),
         },
-
         # ------------------------------------
         # 年齢・介護保険
         # ------------------------------------
@@ -83,9 +68,7 @@ def main() -> None:
             "metric": "real_take_home_change_pct",
             "value": -19.315,
             "unit": "pct",
-            "note": (
-                "40～64歳の介護保険料を反映。"
-            ),
+            "note": ("40～64歳の介護保険料を反映。"),
         },
         {
             "check": "age_long_term_care",
@@ -94,12 +77,8 @@ def main() -> None:
             "metric": "nominal_take_home_difference_yen",
             "value": -28043.1,
             "unit": "yen",
-            "note": (
-                "介護保険料33,243.1円の一部を"
-                "所得税・住民税減が相殺。"
-            ),
+            "note": ("介護保険料33,243.1円の一部を所得税・住民税減が相殺。"),
         },
-
         # ------------------------------------
         # 賃金系列
         # ------------------------------------
@@ -110,10 +89,7 @@ def main() -> None:
             "metric": "real_gross_wage_change_pct",
             "value": -14.763,
             "unit": "pct",
-            "note": (
-                "毎月勤労統計の実額月次値から"
-                "年平均を作成。"
-            ),
+            "note": ("毎月勤労統計の実額月次値から年平均を作成。"),
         },
         {
             "check": "wage_series",
@@ -131,10 +107,7 @@ def main() -> None:
             "metric": "real_gross_wage_change_pct",
             "value": -3.320,
             "unit": "pct",
-            "note": (
-                "毎月勤労統計の実額月次値から"
-                "年平均を作成。"
-            ),
+            "note": ("毎月勤労統計の実額月次値から年平均を作成。"),
         },
         {
             "check": "wage_series",
@@ -145,7 +118,6 @@ def main() -> None:
             "unit": "pct",
             "note": "公表前年比を連鎖。",
         },
-
         # ------------------------------------
         # 一時的税制措置
         # ------------------------------------
@@ -156,10 +128,7 @@ def main() -> None:
             "metric": "interpretation",
             "value": None,
             "unit": None,
-            "note": (
-                "一時的減税を含む実際の制度。"
-                "実質手取りのピークは1996年。"
-            ),
+            "note": ("一時的減税を含む実際の制度。実質手取りのピークは1996年。"),
         },
         {
             "check": "temporary_tax_measures",
@@ -188,14 +157,9 @@ def main() -> None:
         index=False,
     )
 
-    print(
-        f"saved: {OUTPUT_PATH} "
-        f"({len(result)} rows)"
-    )
+    print(f"saved: {OUTPUT_PATH} ({len(result)} rows)")
 
-    print(
-        "\n=== robustness summary ==="
-    )
+    print("\n=== robustness summary ===")
     print(
         result.to_string(
             index=False,

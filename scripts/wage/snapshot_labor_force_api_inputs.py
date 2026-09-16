@@ -64,12 +64,8 @@ def main() -> None:
     # ---------------------------------------------------------
     distribution_filters = {
         **LFS_WORKING_HOURS_DISTRIBUTION_BASE_FILTERS,
-        "cdCat02": ",".join(
-            LFS_WORKING_HOURS_AGE_CODES.values()
-        ),
-        "cdCat04": ",".join(
-            LFS_WORKING_HOURS_CATEGORY_CODES.values()
-        ),
+        "cdCat02": ",".join(LFS_WORKING_HOURS_AGE_CODES.values()),
+        "cdCat04": ",".join(LFS_WORKING_HOURS_CATEGORY_CODES.values()),
         "cdTime": ",".join(
             create_lfs_working_hours_time_codes(
                 start_year=2000,
@@ -86,8 +82,7 @@ def main() -> None:
 
     save_json(
         distribution_response,
-        OUTPUT_DIR
-        / "lfs_working_hours_distribution_2000_2025.json",
+        OUTPUT_DIR / "lfs_working_hours_distribution_2000_2025.json",
     )
 
     # ---------------------------------------------------------
@@ -95,15 +90,10 @@ def main() -> None:
     # ---------------------------------------------------------
     age_sex_filters = {
         **LFS_HOURS_BY_AGE_SEX_BASE_FILTERS,
-        "cdTab": ",".join(
-            LFS_HOURS_BY_AGE_SEX_TAB_CODES.values()
-        ),
-        "cdCat01": ",".join(
-            LFS_HOURS_BY_AGE_SEX_CODES.values()
-        ),
+        "cdTab": ",".join(LFS_HOURS_BY_AGE_SEX_TAB_CODES.values()),
+        "cdCat01": ",".join(LFS_HOURS_BY_AGE_SEX_CODES.values()),
         "cdCat02": ",".join(
-            LFS_WORKING_HOURS_AGE_CODES[age_group]
-            for age_group in AGE_GROUPS
+            LFS_WORKING_HOURS_AGE_CODES[age_group] for age_group in AGE_GROUPS
         ),
         "cdTime": ",".join(
             create_lfs_working_hours_time_codes(
@@ -121,8 +111,7 @@ def main() -> None:
 
     save_json(
         age_sex_response,
-        OUTPUT_DIR
-        / "lfs_hours_by_age_sex_2000_2025.json",
+        OUTPUT_DIR / "lfs_hours_by_age_sex_2000_2025.json",
     )
 
     # ---------------------------------------------------------
@@ -130,15 +119,9 @@ def main() -> None:
     # ---------------------------------------------------------
     employment_type_filters = {
         **LFS_EMPLOYMENT_TYPE_HOURS_BASE_FILTERS,
-        "cdCat01": ",".join(
-            LFS_EMPLOYMENT_TYPE_CODES.values()
-        ),
-        "cdCat02": ",".join(
-            LFS_EMPLOYMENT_TYPE_AGE_CODES.values()
-        ),
-        "cdCat04": ",".join(
-            LFS_EMPLOYMENT_TYPE_HOURS_CODES.values()
-        ),
+        "cdCat01": ",".join(LFS_EMPLOYMENT_TYPE_CODES.values()),
+        "cdCat02": ",".join(LFS_EMPLOYMENT_TYPE_AGE_CODES.values()),
+        "cdCat04": ",".join(LFS_EMPLOYMENT_TYPE_HOURS_CODES.values()),
         "cdTime": ",".join(
             create_lfs_working_hours_time_codes(
                 start_year=2012,
@@ -155,8 +138,7 @@ def main() -> None:
 
     save_json(
         employment_type_response,
-        OUTPUT_DIR
-        / "lfs_employment_type_hours_2012_2025.json",
+        OUTPUT_DIR / "lfs_employment_type_hours_2012_2025.json",
     )
 
 

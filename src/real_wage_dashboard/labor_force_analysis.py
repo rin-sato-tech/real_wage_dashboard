@@ -593,9 +593,7 @@ def create_employment_structure_summary(
         raise ValueError("開始年の就業者数は0より大きい必要があります。")
 
     result["employed_persons_change_pct"] = (
-        result["employed_persons_change"]
-        / result["start_employed_persons"]
-        * 100
+        result["employed_persons_change"] / result["start_employed_persons"] * 100
     )
 
     # 就業率は元データが%単位なので、差をそのまま%ポイントとして扱う。

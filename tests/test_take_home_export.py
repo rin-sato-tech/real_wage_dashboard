@@ -214,26 +214,14 @@ def test_create_take_home_tableau_export() -> None:
         }
     )
 
-    result = (
-        create_take_home_tableau_export(
-            main_series=main,
-            period_log_decomposition=(
-                period_log
-            ),
-            burden_change_summary=(
-                burden_change
-            ),
-            burden_shapley=(
-                burden_shapley
-            ),
-            real_shapley=real_shapley,
-            fixed_policy_comparison=(
-                fixed_policy
-            ),
-            robustness_summary=(
-                robustness
-            ),
-        )
+    result = create_take_home_tableau_export(
+        main_series=main,
+        period_log_decomposition=(period_log),
+        burden_change_summary=(burden_change),
+        burden_shapley=(burden_shapley),
+        real_shapley=real_shapley,
+        fixed_policy_comparison=(fixed_policy),
+        robustness_summary=(robustness),
     )
 
     assert not result.empty
@@ -246,76 +234,35 @@ def test_create_take_home_tableau_export() -> None:
         "real_take_home_shapley",
         "fixed_policy_comparison",
         "robustness",
-    } == set(
-        result[
-            "record_type"
-        ].unique()
-    )
+    } == set(result["record_type"].unique())
 
     annual = result.loc[
-        (
-            result[
-                "record_type"
-            ] == "annual_main"
-        )
-        & (
-            result[
-                "metric"
-            ] == "gross_salary_yen"
-        )
+        (result["record_type"] == "annual_main")
+        & (result["metric"] == "gross_salary_yen")
     ]
 
     assert len(annual) == 2
-    assert set(
-        annual["unit"]
-    ) == {"yen"}
+    assert set(annual["unit"]) == {"yen"}
 
-    assert (
-        result["analysis"]
-        == "take_home_wage"
-    ).all()
+    assert (result["analysis"] == "take_home_wage").all()
 
     shapley_pct = result.loc[
-        (
-            result["record_type"]
-            == "real_take_home_shapley"
-        )
-        & (
-            result["metric"]
-            == "price_effect_pct_of_start"
-        )
+        (result["record_type"] == "real_take_home_shapley")
+        & (result["metric"] == "price_effect_pct_of_start")
     ]
 
     assert len(shapley_pct) == 1
-    assert (
-        shapley_pct.iloc[0]["unit"]
-        == "pct"
-    )
+    assert shapley_pct.iloc[0]["unit"] == "pct"
 
     fixed_2025 = result.loc[
-        (
-            result["record_type"]
-            == "fixed_policy_comparison"
-        )
-        & (
-            result["year"]
-            == 2025
-        )
-        & (
-            result["comparison"]
-            == "actual_minus_fixed_1990"
-        )
-        & (
-            result["metric"]
-            == "nominal_take_home_difference_yen"
-        )
+        (result["record_type"] == "fixed_policy_comparison")
+        & (result["year"] == 2025)
+        & (result["comparison"] == "actual_minus_fixed_1990")
+        & (result["metric"] == "nominal_take_home_difference_yen")
     ]
 
     assert len(fixed_2025) == 1
-    assert (
-        fixed_2025.iloc[0]["value"]
-        == -120_000.0
-    )
+    assert fixed_2025.iloc[0]["value"] == -120_000.0
 
 
 def test_create_japanese_tableau_export_keeps_metric_id():
@@ -384,56 +331,25 @@ def test_create_japanese_tableau_export_keeps_metric_id():
         }
     )
 
-    result = (
-        create_japanese_tableau_export(
-            source
-        )
-    )
+    result = create_japanese_tableau_export(source)
 
-    assert (
-        result.iloc[0]["指標ID"]
-        == "gross_salary_yen"
-    )
+    assert result.iloc[0]["指標ID"] == "gross_salary_yen"
 
-    assert (
-        result.iloc[0]["指標"]
-        == "額面賃金"
-    )
+    assert result.iloc[0]["指標"] == "額面賃金"
 
-    assert (
-        result.iloc[0]["分析"]
-        == "手取り賃金分析"
-    )
+    assert result.iloc[0]["分析"] == "手取り賃金分析"
 
-    assert (
-        result.iloc[0]["レコード種別ID"]
-        == "annual_main"
-    )
+    assert result.iloc[0]["レコード種別ID"] == "annual_main"
 
-    assert (
-        result.iloc[0]["レコード種別"]
-        == "年次主系列"
-    )
+    assert result.iloc[0]["レコード種別"] == "年次主系列"
 
-    assert (
-        result.iloc[0]["単位ID"]
-        == "yen"
-    )
+    assert result.iloc[0]["単位ID"] == "yen"
 
-    assert (
-        result.iloc[0]["単位"]
-        == "円"
-    )
+    assert result.iloc[0]["単位"] == "円"
 
-    assert (
-        result.iloc[0]["モデル性別"]
-        == "男性"
-    )
+    assert result.iloc[0]["モデル性別"] == "男性"
 
-    assert (
-        result.iloc[0]["住民税対応"]
-        == "所得年対応"
-    )
+    assert result.iloc[0]["住民税対応"] == "所得年対応"
 
 
 def test_create_japanese_tableau_export_keeps_unknown_label():
@@ -462,23 +378,10 @@ def test_create_japanese_tableau_export_keeps_unknown_label():
         }
     )
 
-    result = (
-        create_japanese_tableau_export(
-            source
-        )
-    )
+    result = create_japanese_tableau_export(source)
 
-    assert (
-        result.iloc[0]["レコード種別"]
-        == "unknown_type"
-    )
+    assert result.iloc[0]["レコード種別"] == "unknown_type"
 
-    assert (
-        result.iloc[0]["指標"]
-        == "unknown_metric"
-    )
+    assert result.iloc[0]["指標"] == "unknown_metric"
 
-    assert (
-        result.iloc[0]["比較ケース"]
-        == "unknown_case"
-    )
+    assert result.iloc[0]["比較ケース"] == "unknown_case"

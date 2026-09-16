@@ -13,11 +13,7 @@ from real_wage_dashboard.cpi_service import (
     load_cpi_dataframe,
 )
 
-
-YOY_PATH = Path(
-    "data/raw/take_home/"
-    "official_nominal_wage_yoy.csv"
-)
+YOY_PATH = Path("data/raw/take_home/official_nominal_wage_yoy.csv")
 
 START_YEAR = 1990
 END_YEAR = 2025
@@ -34,16 +30,10 @@ def create_chained_wage_index(
         "yoy_pct",
     }
 
-    missing = (
-        required_columns
-        - set(yoy_df.columns)
-    )
+    missing = required_columns - set(yoy_df.columns)
 
     if missing:
-        raise ValueError(
-            "前年比データに必要な列がありません: "
-            f"{sorted(missing)}"
-        )
+        raise ValueError(f"前年比データに必要な列がありません: {sorted(missing)}")
 
     data = yoy_df.copy()
 
@@ -57,19 +47,20 @@ def create_chained_wage_index(
         errors="coerce",
     )
 
-    if data[
-        [
-            "year",
-            "yoy_pct",
+    if (
+        data[
+            [
+                "year",
+                "yoy_pct",
+            ]
         ]
-    ].isna().any().any():
-        raise ValueError(
-            "前年比データに不正な値があります。"
-        )
+        .isna()
+        .any()
+        .any()
+    ):
+        raise ValueError("前年比データに不正な値があります。")
 
-    data["year"] = (
-        data["year"].astype(int)
-    )
+    data["year"] = data["year"].astype(int)
 
     expected_years = set(
         range(
@@ -78,20 +69,12 @@ def create_chained_wage_index(
         )
     )
 
-    actual_years = set(
-        data["year"]
-    )
+    actual_years = set(data["year"])
 
-    missing_years = sorted(
-        expected_years
-        - actual_years
-    )
+    missing_years = sorted(expected_years - actual_years)
 
     if missing_years:
-        raise ValueError(
-            "前年比データに不足年があります: "
-            f"{missing_years}"
-        )
+        raise ValueError(f"前年比データに不足年があります: {missing_years}")
 
     data = (
         data.loc[
@@ -113,20 +96,13 @@ def create_chained_wage_index(
 
     current_index = 100.0
 
-    for row in data.itertuples(
-        index=False
-    ):
-        current_index *= (
-            1
-            + float(row.yoy_pct)
-            / 100
-        )
+    for row in data.itertuples(index=False):
+        current_index *= 1 + float(row.yoy_pct) / 100
 
         rows.append(
             {
                 "year": int(row.year),
-                "chained_nominal_wage_index":
-                    current_index,
+                "chained_nominal_wage_index": current_index,
             }
         )
 
@@ -138,30 +114,22 @@ def main() -> None:
     # 1. 公表前年比
     # ----------------------------------------
 
-    yoy_df = pd.read_csv(
-        YOY_PATH
-    )
+    yoy_df = pd.read_csv(YOY_PATH)
 
-    chained = (
-        create_chained_wage_index(
-            yoy_df=yoy_df,
-            base_year=START_YEAR,
-        )
+    chained = create_chained_wage_index(
+        yoy_df=yoy_df,
+        base_year=START_YEAR,
     )
 
     # ----------------------------------------
     # 2. CPI
     # ----------------------------------------
 
-    app_id = st.secrets[
-        "ESTAT_APP_ID"
-    ]
+    app_id = st.secrets["ESTAT_APP_ID"]
 
     cpi_df = load_cpi_dataframe(
         app_id=app_id,
-        series_code=CPI_SERIES[
-            "持家の帰属家賃を除く総合"
-        ],
+        series_code=CPI_SERIES["持家の帰属家賃を除く総合"],
     )
 
     annual_cpi = prepare_annual_cpi(
@@ -176,19 +144,12 @@ def main() -> None:
 
     base_cpi = float(
         annual_cpi.loc[
-            annual_cpi["year"]
-            == START_YEAR,
+            annual_cpi["year"] == START_YEAR,
             "cpi",
         ].iloc[0]
     )
 
-    annual_cpi[
-        "cpi_index_1990"
-    ] = (
-        annual_cpi["cpi"]
-        / base_cpi
-        * 100
-    )
+    annual_cpi["cpi_index_1990"] = annual_cpi["cpi"] / base_cpi * 100
 
     # ----------------------------------------
     # 4. 実質賃金指数
@@ -207,16 +168,8 @@ def main() -> None:
         validate="one_to_one",
     )
 
-    result[
-        "chained_real_wage_index"
-    ] = (
-        result[
-            "chained_nominal_wage_index"
-        ]
-        / result[
-            "cpi_index_1990"
-        ]
-        * 100
+    result["chained_real_wage_index"] = (
+        result["chained_nominal_wage_index"] / result["cpi_index_1990"] * 100
     )
 
     # ----------------------------------------
@@ -228,48 +181,24 @@ def main() -> None:
         (2015, 2025),
     ]
 
-    print(
-        "=== 公表前年比連鎖系列 ==="
-    )
+    print("=== 公表前年比連鎖系列 ===")
 
     for start_year, end_year in periods:
-        start = result.loc[
-            result["year"] == start_year
-        ].iloc[0]
+        start = result.loc[result["year"] == start_year].iloc[0]
 
-        end = result.loc[
-            result["year"] == end_year
-        ].iloc[0]
+        end = result.loc[result["year"] == end_year].iloc[0]
 
         nominal_change = (
-            end[
-                "chained_nominal_wage_index"
-            ]
-            / start[
-                "chained_nominal_wage_index"
-            ]
-            - 1
+            end["chained_nominal_wage_index"] / start["chained_nominal_wage_index"] - 1
         ) * 100
 
         real_change = (
-            end[
-                "chained_real_wage_index"
-            ]
-            / start[
-                "chained_real_wage_index"
-            ]
-            - 1
+            end["chained_real_wage_index"] / start["chained_real_wage_index"] - 1
         ) * 100
 
-        cpi_change = (
-            end["cpi"]
-            / start["cpi"]
-            - 1
-        ) * 100
+        cpi_change = (end["cpi"] / start["cpi"] - 1) * 100
 
-        print(
-            f"{start_year}→{end_year}"
-        )
+        print(f"{start_year}→{end_year}")
 
         print(
             "  nominal:",

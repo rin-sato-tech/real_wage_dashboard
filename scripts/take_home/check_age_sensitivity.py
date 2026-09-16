@@ -22,7 +22,6 @@ from real_wage_dashboard.wage_service import (
     load_wage_csv,
 )
 
-
 START_YEAR = 1990
 END_YEAR = 2025
 
@@ -53,41 +52,21 @@ def create_annual_wage_dataframe(
         "特別給与",
     }
 
-    missing = (
-        required_columns
-        - set(raw_df.columns)
-    )
+    missing = required_columns - set(raw_df.columns)
 
     if missing:
-        raise ValueError(
-            "年平均賃金の作成に必要な列がありません: "
-            f"{sorted(missing)}"
-        )
+        raise ValueError(f"年平均賃金の作成に必要な列がありません: {sorted(missing)}")
 
-    industry = (
-        raw_df["産業分類"]
-        .astype(str)
-        .str.strip()
-    )
+    industry = raw_df["産業分類"].astype(str).str.strip()
 
-    size = (
-        raw_df["規模"]
-        .astype(str)
-        .str.strip()
-    )
+    size = raw_df["規模"].astype(str).str.strip()
 
-    employment = (
-        raw_df["就業形態"]
-        .astype(str)
-        .str.strip()
-    )
+    employment = raw_df["就業形態"].astype(str).str.strip()
 
     # 調査産業計・5人以上・就業形態計
     # CY公表値ではなく、1～12月の月次値を使用する。
     data = raw_df.loc[
-        (industry == "TL")
-        & (size == "T")
-        & (employment == "0"),
+        (industry == "TL") & (size == "T") & (employment == "0"),
         [
             "年",
             "月",
@@ -108,17 +87,12 @@ def create_annual_wage_dataframe(
     )
 
     value_columns = {
-        "現金給与総額":
-            "total_cash_earnings",
-        "きまって支給する給与":
-            "regular_earnings",
-        "特別給与":
-            "special_earnings",
+        "現金給与総額": "total_cash_earnings",
+        "きまって支給する給与": "regular_earnings",
+        "特別給与": "special_earnings",
     }
 
-    for source_column, target_column in (
-        value_columns.items()
-    ):
+    for source_column, target_column in value_columns.items():
         data[target_column] = pd.to_numeric(
             data[source_column]
             .astype(str)
@@ -152,13 +126,9 @@ def create_annual_wage_dataframe(
         ]
     )
 
-    data["year"] = (
-        data["year"].astype(int)
-    )
+    data["year"] = data["year"].astype(int)
 
-    data["month"] = (
-        data["month"].astype(int)
-    )
+    data["month"] = data["month"].astype(int)
 
     # 同一年月に複数行ある場合は、
     # 他の月次抽出処理と同様に末尾を採用する。
@@ -181,22 +151,12 @@ def create_annual_wage_dataframe(
     )
 
     # 各年12か月揃っていることを確認する。
-    month_counts = (
-        data.groupby(
-            "year"
-        )["month"]
-        .nunique()
-    )
+    month_counts = data.groupby("year")["month"].nunique()
 
-    incomplete = month_counts.loc[
-        month_counts != 12
-    ]
+    incomplete = month_counts.loc[month_counts != 12]
 
     if not incomplete.empty:
-        raise ValueError(
-            "12か月揃っていない賃金年があります: "
-            f"{incomplete.to_dict()}"
-        )
+        raise ValueError(f"12か月揃っていない賃金年があります: {incomplete.to_dict()}")
 
     # 月次値の単純平均を年平均月額とする。
     annual = (
@@ -229,46 +189,23 @@ def create_annual_wage_dataframe(
         )
     )
 
-    actual_years = set(
-        annual["year"]
-    )
+    actual_years = set(annual["year"])
 
-    missing_years = sorted(
-        expected_years
-        - actual_years
-    )
+    missing_years = sorted(expected_years - actual_years)
 
     if missing_years:
-        raise ValueError(
-            "年平均賃金に不足年があります: "
-            f"{missing_years}"
-        )
+        raise ValueError(f"年平均賃金に不足年があります: {missing_years}")
 
     # 月次で
     # 現金給与総額 =
     # きまって支給する給与 + 特別給与
     # が成立しているので、年平均でも成立する。
-    identity_diff = (
-        annual[
-            "total_cash_earnings"
-        ]
-        - (
-            annual[
-                "regular_earnings"
-            ]
-            + annual[
-                "special_earnings"
-            ]
-        )
+    identity_diff = annual["total_cash_earnings"] - (
+        annual["regular_earnings"] + annual["special_earnings"]
     )
 
-    if (
-        identity_diff.abs()
-        > 1e-6
-    ).any():
-        raise ValueError(
-            "給与構成の恒等式が成立しない年があります。"
-        )
+    if (identity_diff.abs() > 1e-6).any():
+        raise ValueError("給与構成の恒等式が成立しない年があります。")
 
     return annual
 
@@ -295,9 +232,7 @@ def period_change_pct(
         ].iloc[0]
     )
 
-    return (
-        end / start - 1
-    ) * 100
+    return (end / start - 1) * 100
 
 
 def main() -> None:
@@ -305,15 +240,9 @@ def main() -> None:
     # 1. 賃金データ
     # ----------------------------------------
 
-    raw_wage_df = load_wage_csv(
-        WAGE_DATA_PATH
-    )
+    raw_wage_df = load_wage_csv(WAGE_DATA_PATH)
 
-    annual_wage_df = (
-        create_annual_wage_dataframe(
-            raw_wage_df
-        )
-    )
+    annual_wage_df = create_annual_wage_dataframe(raw_wage_df)
 
     print("=== 賃金系列確認 ===")
 
@@ -321,9 +250,7 @@ def main() -> None:
         1990,
         2025,
     ]:
-        row = annual_wage_df.loc[
-            annual_wage_df["year"] == year
-        ].iloc[0]
+        row = annual_wage_df.loc[annual_wage_df["year"] == year].iloc[0]
 
         print(
             year,
@@ -339,15 +266,11 @@ def main() -> None:
     # 2. CPI
     # ----------------------------------------
 
-    app_id = st.secrets[
-        "ESTAT_APP_ID"
-    ]
+    app_id = st.secrets["ESTAT_APP_ID"]
 
     cpi_df = load_cpi_dataframe(
         app_id=app_id,
-        series_code=CPI_SERIES[
-            "持家の帰属家賃を除く総合"
-        ],
+        series_code=CPI_SERIES["持家の帰属家賃を除く総合"],
     )
 
     annual_cpi_df = prepare_annual_cpi(
@@ -360,34 +283,28 @@ def main() -> None:
     # 3. 制度表
     # ----------------------------------------
 
-    rules = (
-        load_take_home_rule_tables()
-    )
+    rules = load_take_home_rule_tables()
 
     # ----------------------------------------
     # 4. 35歳・45歳
     # ----------------------------------------
 
-    age35 = (
-        calculate_take_home_time_series(
-            annual_wage_df=annual_wage_df,
-            rule_tables=rules,
-            start_year=START_YEAR,
-            end_year=END_YEAR,
-            sex="male",
-            age=35,
-        )
+    age35 = calculate_take_home_time_series(
+        annual_wage_df=annual_wage_df,
+        rule_tables=rules,
+        start_year=START_YEAR,
+        end_year=END_YEAR,
+        sex="male",
+        age=35,
     )
 
-    age45 = (
-        calculate_take_home_time_series(
-            annual_wage_df=annual_wage_df,
-            rule_tables=rules,
-            start_year=START_YEAR,
-            end_year=END_YEAR,
-            sex="male",
-            age=45,
-        )
+    age45 = calculate_take_home_time_series(
+        annual_wage_df=annual_wage_df,
+        rule_tables=rules,
+        start_year=START_YEAR,
+        end_year=END_YEAR,
+        sex="male",
+        age=45,
     )
 
     age35 = add_real_take_home_metrics(
@@ -417,12 +334,9 @@ def main() -> None:
         ]
         .rename(
             columns={
-                "nominal_take_home_yen":
-                    "nominal_take_home_age35",
-                "real_take_home_yen":
-                    "real_take_home_age35",
-                "effective_burden_rate":
-                    "burden_age35",
+                "nominal_take_home_yen": "nominal_take_home_age35",
+                "real_take_home_yen": "real_take_home_age35",
+                "effective_burden_rate": "burden_age35",
             }
         )
         .merge(
@@ -436,12 +350,9 @@ def main() -> None:
                 ]
             ].rename(
                 columns={
-                    "nominal_take_home_yen":
-                        "nominal_take_home_age45",
-                    "real_take_home_yen":
-                        "real_take_home_age45",
-                    "effective_burden_rate":
-                        "burden_age45",
+                    "nominal_take_home_yen": "nominal_take_home_age45",
+                    "real_take_home_yen": "real_take_home_age45",
+                    "effective_burden_rate": "burden_age45",
                 }
             ),
             on="year",
@@ -450,48 +361,27 @@ def main() -> None:
         )
     )
 
-    comparison[
-        "nominal_take_home_diff_yen"
-    ] = (
-        comparison[
-            "nominal_take_home_age45"
-        ]
-        - comparison[
-            "nominal_take_home_age35"
-        ]
+    comparison["nominal_take_home_diff_yen"] = (
+        comparison["nominal_take_home_age45"] - comparison["nominal_take_home_age35"]
     )
 
-    comparison[
-        "real_take_home_diff_yen"
-    ] = (
-        comparison[
-            "real_take_home_age45"
-        ]
-        - comparison[
-            "real_take_home_age35"
-        ]
+    comparison["real_take_home_diff_yen"] = (
+        comparison["real_take_home_age45"] - comparison["real_take_home_age35"]
     )
 
-    comparison[
-        "burden_diff_pt"
-    ] = (
-        comparison["burden_age45"]
-        - comparison["burden_age35"]
+    comparison["burden_diff_pt"] = (
+        comparison["burden_age45"] - comparison["burden_age35"]
     ) * 100
 
     # ----------------------------------------
     # 6. 主要年
     # ----------------------------------------
 
-    print(
-        "=== 35歳 vs 45歳：主要年 ==="
-    )
+    print("=== 35歳 vs 45歳：主要年 ===")
 
     print(
         comparison.loc[
-            comparison["year"].isin(
-                SELECTED_YEARS
-            ),
+            comparison["year"].isin(SELECTED_YEARS),
             [
                 "year",
                 "long_term_care_yen",
@@ -501,8 +391,7 @@ def main() -> None:
             ],
         ].to_string(
             index=False,
-            float_format=lambda x:
-                f"{x:+,.3f}",
+            float_format=lambda x: f"{x:+,.3f}",
         )
     )
 
@@ -510,9 +399,7 @@ def main() -> None:
     # 7. 1990→2025
     # ----------------------------------------
 
-    print(
-        "\n=== 1990→2025 実質手取り ==="
-    )
+    print("\n=== 1990→2025 実質手取り ===")
 
     for label, df in [
         ("age35", age35),
@@ -539,28 +426,17 @@ def main() -> None:
             ].iloc[0]
         )
 
-        print(
-            f"{label}: "
-            f"{start:,.0f}円 → "
-            f"{end:,.0f}円 "
-            f"({change:+.3f}%)"
-        )
+        print(f"{label}: {start:,.0f}円 → {end:,.0f}円 ({change:+.3f}%)")
 
     # ----------------------------------------
     # 8. 2025年の税による相殺
     # ----------------------------------------
 
-    row35 = age35.loc[
-        age35["year"] == 2025
-    ].iloc[0]
+    row35 = age35.loc[age35["year"] == 2025].iloc[0]
 
-    row45 = age45.loc[
-        age45["year"] == 2025
-    ].iloc[0]
+    row45 = age45.loc[age45["year"] == 2025].iloc[0]
 
-    print(
-        "\n=== 2025年 35歳→45歳 ==="
-    )
+    print("\n=== 2025年 35歳→45歳 ===")
 
     print(
         "介護保険料:",

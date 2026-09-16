@@ -1,6 +1,5 @@
-import pytest
-
 import pandas as pd
+import pytest
 
 from real_wage_dashboard.take_home_service import (
     _create_standard_monthly_brackets,
@@ -33,9 +32,7 @@ def test_load_income_tax_brackets(tmp_path):
 
     assert len(result) == 1
     assert result.loc[0, "marginal_rate"] == 0.05
-    assert pd.api.types.is_datetime64_any_dtype(
-        result["effective_from"]
-    )
+    assert pd.api.types.is_datetime64_any_dtype(result["effective_from"])
 
 
 def test_load_income_tax_brackets_rejects_missing_columns(
@@ -63,12 +60,8 @@ def test_create_standard_monthly_brackets():
             98_000,
             104_000,
         ],
-        effective_from=pd.Timestamp(
-            "2016-10-01"
-        ),
-        effective_to=pd.Timestamp(
-            "2020-08-31"
-        ),
+        effective_from=pd.Timestamp("2016-10-01"),
+        effective_to=pd.Timestamp("2020-08-31"),
     )
 
     assert result["grade"].tolist() == [
@@ -77,9 +70,7 @@ def test_create_standard_monthly_brackets():
         3,
     ]
 
-    assert result[
-        "standard_monthly_yen"
-    ].tolist() == [
+    assert result["standard_monthly_yen"].tolist() == [
         88_000,
         98_000,
         104_000,
@@ -124,9 +115,7 @@ def test_create_standard_monthly_brackets_top_grade():
             620_000,
             650_000,
         ],
-        effective_from=pd.Timestamp(
-            "2020-09-01"
-        ),
+        effective_from=pd.Timestamp("2020-09-01"),
         effective_to=pd.NaT,
     )
 
@@ -172,22 +161,15 @@ def test_create_standard_monthly_brackets_rejects_duplicates():
                 98_000,
                 98_000,
             ],
-            effective_from=pd.Timestamp(
-                "2000-10-01"
-            ),
-            effective_to=pd.Timestamp(
-                "2016-09-30"
-            ),
+            effective_from=pd.Timestamp("2000-10-01"),
+            effective_to=pd.Timestamp("2016-09-30"),
         )
 
 
 def test_load_pension_standard_monthly_history(
     tmp_path,
 ):
-    path = (
-        tmp_path
-        / "pension_standard_monthly_history.xlsx"
-    )
+    path = tmp_path / "pension_standard_monthly_history.xlsx"
 
     raw = pd.DataFrame(
         index=range(10),
@@ -217,22 +199,14 @@ def test_load_pension_standard_monthly_history(
     with pd.ExcelWriter(path) as writer:
         raw.to_excel(
             writer,
-            sheet_name=(
-                "厚生年金保険　標準報酬月額等級の変遷"
-            ),
+            sheet_name=("厚生年金保険　標準報酬月額等級の変遷"),
             header=False,
             index=False,
         )
 
-    result = (
-        load_pension_standard_monthly_history(
-            path
-        )
-    )
+    result = load_pension_standard_monthly_history(path)
 
-    assert set(
-        result["effective_from"]
-    ) == {
+    assert set(result["effective_from"]) == {
         pd.Timestamp("1989-12-01"),
         pd.Timestamp("1994-11-01"),
         pd.Timestamp("2000-10-01"),
@@ -244,10 +218,7 @@ def test_load_pension_standard_monthly_history(
 def test_load_pension_standard_monthly_history_2016_boundary(
     tmp_path,
 ):
-    path = (
-        tmp_path
-        / "pension_standard_monthly_history.xlsx"
-    )
+    path = tmp_path / "pension_standard_monthly_history.xlsx"
 
     raw = pd.DataFrame(
         index=range(10),
@@ -268,22 +239,15 @@ def test_load_pension_standard_monthly_history_2016_boundary(
     with pd.ExcelWriter(path) as writer:
         raw.to_excel(
             writer,
-            sheet_name=(
-                "厚生年金保険　標準報酬月額等級の変遷"
-            ),
+            sheet_name=("厚生年金保険　標準報酬月額等級の変遷"),
             header=False,
             index=False,
         )
 
-    result = (
-        load_pension_standard_monthly_history(
-            path
-        )
-    )
+    result = load_pension_standard_monthly_history(path)
 
     period = result.loc[
-        result["effective_from"]
-        == pd.Timestamp("2016-10-01")
+        result["effective_from"] == pd.Timestamp("2016-10-01")
     ].reset_index(drop=True)
 
     assert (
@@ -353,9 +317,7 @@ def _create_health_standard_monthly_data() -> pd.DataFrame:
 def test_validate_health_standard_monthly_history():
     df = _create_health_standard_monthly_data()
 
-    _validate_health_standard_monthly_history(
-        df
-    )
+    _validate_health_standard_monthly_history(df)
 
 
 def test_validate_health_standard_monthly_history_rejects_gap():
@@ -370,9 +332,7 @@ def test_validate_health_standard_monthly_history_rejects_gap():
         ValueError,
         match="等級境界が連続していません",
     ):
-        _validate_health_standard_monthly_history(
-            df
-        )
+        _validate_health_standard_monthly_history(df)
 
 
 def test_validate_health_standard_monthly_history_rejects_duplicate_grade():
@@ -387,18 +347,13 @@ def test_validate_health_standard_monthly_history_rejects_duplicate_grade():
         ValueError,
         match="等級が重複しています",
     ):
-        _validate_health_standard_monthly_history(
-            df
-        )
+        _validate_health_standard_monthly_history(df)
 
 
 def test_load_health_standard_monthly_history(
     tmp_path,
 ):
-    path = (
-        tmp_path
-        / "health_standard_monthly_history.csv"
-    )
+    path = tmp_path / "health_standard_monthly_history.csv"
 
     df = _create_health_standard_monthly_data()
 
@@ -407,11 +362,7 @@ def test_load_health_standard_monthly_history(
         index=False,
     )
 
-    result = (
-        load_health_standard_monthly_history(
-            path
-        )
-    )
+    result = load_health_standard_monthly_history(path)
 
     assert len(result) == 3
 
@@ -431,34 +382,25 @@ def test_load_health_standard_monthly_history(
         == 63_000
     )
 
-    assert pd.api.types.is_datetime64_any_dtype(
-        result["effective_from"]
-    )
+    assert pd.api.types.is_datetime64_any_dtype(result["effective_from"])
 
 
 def test_real_health_standard_monthly_history():
-    result = (
-        load_health_standard_monthly_history()
-    )
+    result = load_health_standard_monthly_history()
 
-    summary = (
-        result.groupby(
-            "effective_from"
-        )
-        .agg(
-            grades=(
-                "grade",
-                "count",
-            ),
-            minimum=(
-                "standard_monthly_yen",
-                "min",
-            ),
-            maximum=(
-                "standard_monthly_yen",
-                "max",
-            ),
-        )
+    summary = result.groupby("effective_from").agg(
+        grades=(
+            "grade",
+            "count",
+        ),
+        minimum=(
+            "standard_monthly_yen",
+            "min",
+        ),
+        maximum=(
+            "standard_monthly_yen",
+            "max",
+        ),
     )
 
     expected = {
@@ -499,115 +441,50 @@ def test_real_health_standard_monthly_history():
         minimum,
         maximum,
     ) in expected.items():
-        row = summary.loc[
-            effective_from
-        ]
+        row = summary.loc[effective_from]
 
         assert row["grades"] == grades
         assert row["minimum"] == minimum
         assert row["maximum"] == maximum
 
-    period_2007 = result.loc[
-        result["effective_from"]
-        == pd.Timestamp("2007-04-01")
-    ]
+    period_2007 = result.loc[result["effective_from"] == pd.Timestamp("2007-04-01")]
 
-    grade_44_2007 = period_2007.loc[
-        period_2007["grade"] == 44
-    ].iloc[0]
+    grade_44_2007 = period_2007.loc[period_2007["grade"] == 44].iloc[0]
 
-    assert (
-        grade_44_2007["standard_monthly_yen"]
-        == 1_030_000
-    )
-    assert (
-        grade_44_2007["remuneration_lower_yen"]
-        == 1_005_000
-    )
-    assert (
-        grade_44_2007["remuneration_upper_yen"]
-        == 1_055_000
-    )
+    assert grade_44_2007["standard_monthly_yen"] == 1_030_000
+    assert grade_44_2007["remuneration_lower_yen"] == 1_005_000
+    assert grade_44_2007["remuneration_upper_yen"] == 1_055_000
 
-    grade_47_2007 = period_2007.loc[
-        period_2007["grade"] == 47
-    ].iloc[0]
+    grade_47_2007 = period_2007.loc[period_2007["grade"] == 47].iloc[0]
 
-    assert (
-        grade_47_2007["standard_monthly_yen"]
-        == 1_210_000
-    )
-    assert (
-        grade_47_2007["remuneration_lower_yen"]
-        == 1_175_000
-    )
-    assert pd.isna(
-        grade_47_2007[
-            "remuneration_upper_yen"
-        ]
-    )
+    assert grade_47_2007["standard_monthly_yen"] == 1_210_000
+    assert grade_47_2007["remuneration_lower_yen"] == 1_175_000
+    assert pd.isna(grade_47_2007["remuneration_upper_yen"])
 
-    period_2016 = result.loc[
-        result["effective_from"]
-        == pd.Timestamp("2016-04-01")
-    ]
+    period_2016 = result.loc[result["effective_from"] == pd.Timestamp("2016-04-01")]
 
-    grade_47_2016 = period_2016.loc[
-        period_2016["grade"] == 47
-    ].iloc[0]
+    grade_47_2016 = period_2016.loc[period_2016["grade"] == 47].iloc[0]
 
-    assert (
-        grade_47_2016["remuneration_lower_yen"]
-        == 1_175_000
-    )
-    assert (
-        grade_47_2016["remuneration_upper_yen"]
-        == 1_235_000
-    )
+    assert grade_47_2016["remuneration_lower_yen"] == 1_175_000
+    assert grade_47_2016["remuneration_upper_yen"] == 1_235_000
 
-    grade_48_2016 = period_2016.loc[
-        period_2016["grade"] == 48
-    ].iloc[0]
+    grade_48_2016 = period_2016.loc[period_2016["grade"] == 48].iloc[0]
 
-    assert (
-        grade_48_2016["standard_monthly_yen"]
-        == 1_270_000
-    )
-    assert (
-        grade_48_2016["remuneration_lower_yen"]
-        == 1_235_000
-    )
-    assert (
-        grade_48_2016["remuneration_upper_yen"]
-        == 1_295_000
-    )
+    assert grade_48_2016["standard_monthly_yen"] == 1_270_000
+    assert grade_48_2016["remuneration_lower_yen"] == 1_235_000
+    assert grade_48_2016["remuneration_upper_yen"] == 1_295_000
 
-    grade_50_2016 = period_2016.loc[
-        period_2016["grade"] == 50
-    ].iloc[0]
+    grade_50_2016 = period_2016.loc[period_2016["grade"] == 50].iloc[0]
 
-    assert (
-        grade_50_2016["standard_monthly_yen"]
-        == 1_390_000
-    )
-    assert (
-        grade_50_2016["remuneration_lower_yen"]
-        == 1_355_000
-    )
-    assert pd.isna(
-        grade_50_2016[
-            "remuneration_upper_yen"
-        ]
-    )
+    assert grade_50_2016["standard_monthly_yen"] == 1_390_000
+    assert grade_50_2016["remuneration_lower_yen"] == 1_355_000
+    assert pd.isna(grade_50_2016["remuneration_upper_yen"])
 
 
 def test_load_long_term_care_insurance_rates(
     tmp_path,
 ):
-    path = (
-        tmp_path
-        / "long_term_care_insurance_rates.csv"
-    )
+    path = tmp_path / "long_term_care_insurance_rates.csv"
 
     pd.DataFrame(
         {
@@ -633,86 +510,49 @@ def test_load_long_term_care_insurance_rates(
         index=False,
     )
 
-    result = (
-        load_long_term_care_insurance_rates(
-            path
-        )
-    )
+    result = load_long_term_care_insurance_rates(path)
 
     assert len(result) == 2
 
     assert result.loc[
         0,
         "total_rate",
-    ] == pytest.approx(
-        0.0160
-    )
+    ] == pytest.approx(0.0160)
 
     assert result.loc[
         1,
         "total_rate",
-    ] == pytest.approx(
-        0.0159
-    )
+    ] == pytest.approx(0.0159)
 
-    assert pd.api.types.is_datetime64_any_dtype(
-        result["effective_from"]
-    )
+    assert pd.api.types.is_datetime64_any_dtype(result["effective_from"])
 
-    assert pd.api.types.is_datetime64_any_dtype(
-        result["effective_to"]
-    )
+    assert pd.api.types.is_datetime64_any_dtype(result["effective_to"])
 
 
 def test_real_long_term_care_insurance_rates():
-    result = (
-        load_long_term_care_insurance_rates()
-    )
+    result = load_long_term_care_insurance_rates()
 
     assert not result.empty
 
-    assert (
-        result["effective_from"].min()
-        == pd.Timestamp("2000-04-01")
-    )
+    assert result["effective_from"].min() == pd.Timestamp("2000-04-01")
 
-    assert (
-        result["total_rate"] > 0
-    ).all()
+    assert (result["total_rate"] > 0).all()
 
-    assert (
-        result["employee_share"]
-        == 0.5
-    ).all()
+    assert (result["employee_share"] == 0.5).all()
 
     rate_2025 = result.loc[
-        (
-            result["effective_from"]
-            <= pd.Timestamp("2025-03-01")
-        )
-        & (
-            result["effective_to"]
-            >= pd.Timestamp("2025-03-01")
-        )
+        (result["effective_from"] <= pd.Timestamp("2025-03-01"))
+        & (result["effective_to"] >= pd.Timestamp("2025-03-01"))
     ]
 
     assert len(rate_2025) == 1
 
-    assert rate_2025.iloc[
-        0
-    ]["total_rate"] == pytest.approx(
-        0.0159
-    )
+    assert rate_2025.iloc[0]["total_rate"] == pytest.approx(0.0159)
 
 
 def test_take_home_rule_tables_include_long_term_care():
     rules = load_take_home_rule_tables()
 
-    assert (
-        "long_term_care_insurance_rates"
-        in rules
-    )
+    assert "long_term_care_insurance_rates" in rules
 
-    assert not rules[
-        "long_term_care_insurance_rates"
-    ].empty
+    assert not rules["long_term_care_insurance_rates"].empty

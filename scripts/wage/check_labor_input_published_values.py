@@ -127,13 +127,11 @@ def create_annual_levels(
     )
 
     yearly["weighted_approx_hourly_wage"] = (
-        yearly["nominal_wage_amount"]
-        / yearly["total_hours"]
+        yearly["nominal_wage_amount"] / yearly["total_hours"]
     )
 
     yearly["scheduled_hours_per_workday"] = (
-        yearly["scheduled_hours"]
-        / yearly["working_days"]
+        yearly["scheduled_hours"] / yearly["working_days"]
     )
 
     yearly.insert(
@@ -167,17 +165,12 @@ def main() -> None:
     print_section("3.2 / 3.3 毎月勤労統計 年平均水準")
 
     annual_levels = pd.concat(
-        [
-            create_annual_levels(df, label)
-            for label, df in labor_input.items()
-        ],
+        [create_annual_levels(df, label) for label, df in labor_input.items()],
         ignore_index=True,
     )
 
     annual_levels = annual_levels.loc[
-        annual_levels["year"].isin(
-            [1990, 1993, 2000, 2015, 2025]
-        )
+        annual_levels["year"].isin([1990, 1993, 2000, 2015, 2025])
     ]
 
     print_df(
@@ -282,9 +275,7 @@ def main() -> None:
     # 3.4 年齢別就業者数・就業率
     # ------------------------------------------------------------
     for start_year, end_year in MAIN_PERIODS:
-        print_section(
-            f"3.4 年齢別就業構造 {start_year}→{end_year}"
-        )
+        print_section(f"3.4 年齢別就業構造 {start_year}→{end_year}")
 
         structure = create_employment_structure_summary(
             employment_df,
@@ -292,9 +283,7 @@ def main() -> None:
             end_year=end_year,
         )
 
-        structure = create_employment_count_decomposition(
-            structure
-        )
+        structure = create_employment_count_decomposition(structure)
 
         print_df(
             structure[
@@ -327,10 +316,7 @@ def main() -> None:
     print_df(age_hours_summary)
 
     for start_year, end_year in MAIN_PERIODS:
-        print_section(
-            f"3.5 年齢別平均週間就業時間分解 "
-            f"{start_year}→{end_year}"
-        )
+        print_section(f"3.5 年齢別平均週間就業時間分解 {start_year}→{end_year}")
 
         decomposition = create_age_hours_decomposition(
             hours_df,
@@ -363,10 +349,7 @@ def main() -> None:
     print_df(total_input)
 
     for start_year, end_year in MAIN_PERIODS:
-        print_section(
-            f"3.7 年齢階級別総労働投入 "
-            f"{start_year}→{end_year}"
-        )
+        print_section(f"3.7 年齢階級別総労働投入 {start_year}→{end_year}")
 
         decomposition = create_total_labor_input_decomposition(
             hours_df,
@@ -399,32 +382,20 @@ def main() -> None:
     # 労働力調査：固定したe-Stat APIレスポンス
     # ============================================================
 
-    distribution_response = load_json(
-        LFS_WORKING_HOURS_DISTRIBUTION_SNAPSHOT_PATH
+    distribution_response = load_json(LFS_WORKING_HOURS_DISTRIBUTION_SNAPSHOT_PATH)
+
+    distribution_df = create_lfs_working_hours_distribution_dataframe(
+        distribution_response
     )
 
-    distribution_df = (
-        create_lfs_working_hours_distribution_dataframe(
-            distribution_response
-        )
-    )
+    sex_response = load_json(LFS_HOURS_BY_AGE_SEX_SNAPSHOT_PATH)
 
-    sex_response = load_json(
-        LFS_HOURS_BY_AGE_SEX_SNAPSHOT_PATH
-    )
+    sex_df = create_lfs_hours_by_age_sex_dataframe(sex_response)
 
-    sex_df = create_lfs_hours_by_age_sex_dataframe(
-        sex_response
-    )
+    employment_type_response = load_json(LFS_EMPLOYMENT_TYPE_HOURS_SNAPSHOT_PATH)
 
-    employment_type_response = load_json(
-        LFS_EMPLOYMENT_TYPE_HOURS_SNAPSHOT_PATH
-    )
-
-    employment_type_hours_df = (
-        create_lfs_employment_type_hours_dataframe(
-            employment_type_response
-        )
+    employment_type_hours_df = create_lfs_employment_type_hours_dataframe(
+        employment_type_response
     )
 
     # ------------------------------------------------------------
@@ -432,21 +403,16 @@ def main() -> None:
     # ------------------------------------------------------------
     print_section("3.6 / 4.2 就業時間3区分 期間要約")
 
-    distribution_summary = (
-        create_working_hours_distribution_period_summary(
-            distribution_df,
-            periods=DISTRIBUTION_PERIODS,
-            age_group="15歳以上",
-        )
+    distribution_summary = create_working_hours_distribution_period_summary(
+        distribution_df,
+        periods=DISTRIBUTION_PERIODS,
+        age_group="15歳以上",
     )
 
     print_df(distribution_summary)
 
     for start_year, end_year in MAIN_PERIODS:
-        print_section(
-            f"3.6 年齢別就業時間3区分 "
-            f"{start_year}→{end_year}"
-        )
+        print_section(f"3.6 年齢別就業時間3区分 {start_year}→{end_year}")
 
         change = create_working_hours_distribution_change(
             distribution_df,
@@ -454,9 +420,7 @@ def main() -> None:
             end_year=end_year,
         )
 
-        change = change.loc[
-            change["age_group"].isin(AGE_GROUPS)
-        ]
+        change = change.loc[change["age_group"].isin(AGE_GROUPS)]
 
         print_df(
             change[
@@ -477,9 +441,7 @@ def main() -> None:
         end_year=2025,
     )
 
-    detailed = detailed.loc[
-        detailed["age_group"] == "15歳以上"
-    ].copy()
+    detailed = detailed.loc[detailed["age_group"] == "15歳以上"].copy()
 
     print_df(
         detailed[
@@ -522,9 +484,7 @@ def main() -> None:
         ("hours_1_34_share", "週1～34時間"),
         ("hours_49_plus_share", "週49時間以上"),
     ]:
-        print_section(
-            f"3.6 / 4.4 正規・非正規別 {label}"
-        )
+        print_section(f"3.6 / 4.4 正規・非正規別 {label}")
 
         result = create_employment_type_hours_period_summary(
             employment_type_hours_df,
@@ -539,9 +499,7 @@ def main() -> None:
             "reconstruction_residual",
         ]
 
-        result[percentage_columns] = (
-            result[percentage_columns] * 100
-        )
+        result[percentage_columns] = result[percentage_columns] * 100
 
         print_df(
             result[

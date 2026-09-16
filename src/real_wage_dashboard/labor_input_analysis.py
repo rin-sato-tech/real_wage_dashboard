@@ -919,9 +919,7 @@ def _summarize_annual_labor_input_level(
     year_df = df.loc[df["date"].dt.year == year]
 
     if len(year_df) != 12:
-        raise ValueError(
-            f"{year}年の年平均計算には12か月分のデータが必要です。"
-        )
+        raise ValueError(f"{year}年の年平均計算には12か月分のデータが必要です。")
 
     worker_exposure = float(year_df["worker_weight"].sum())
 
@@ -1003,14 +1001,8 @@ def create_employment_type_composition_decomposition(
         for name, df in group_dfs.items()
     }
 
-    start_exposure = sum(
-        values["worker_exposure"]
-        for values in group_start.values()
-    )
-    end_exposure = sum(
-        values["worker_exposure"]
-        for values in group_end.values()
-    )
+    start_exposure = sum(values["worker_exposure"] for values in group_start.values())
+    end_exposure = sum(values["worker_exposure"] for values in group_end.values())
 
     start_shares = {
         name: values["worker_exposure"] / start_exposure
@@ -1030,42 +1022,26 @@ def create_employment_type_composition_decomposition(
         published_change = published_end - published_start
 
         reconstructed_start = sum(
-            start_shares[name] * group_start[name][column]
-            for name in group_dfs
+            start_shares[name] * group_start[name][column] for name in group_dfs
         )
 
         reconstructed_end = sum(
-            end_shares[name] * group_end[name][column]
-            for name in group_dfs
+            end_shares[name] * group_end[name][column] for name in group_dfs
         )
 
         within_effect = sum(
             ((start_shares[name] + end_shares[name]) / 2)
-            * (
-                group_end[name][column]
-                - group_start[name][column]
-            )
+            * (group_end[name][column] - group_start[name][column])
             for name in group_dfs
         )
 
         composition_effect = sum(
-            (
-                (
-                    group_start[name][column]
-                    + group_end[name][column]
-                )
-                / 2
-            )
-            * (
-                end_shares[name]
-                - start_shares[name]
-            )
+            ((group_start[name][column] + group_end[name][column]) / 2)
+            * (end_shares[name] - start_shares[name])
             for name in group_dfs
         )
 
-        reconstructed_change = (
-            reconstructed_end - reconstructed_start
-        )
+        reconstructed_change = reconstructed_end - reconstructed_start
 
         residual = published_change - reconstructed_change
 
@@ -1078,35 +1054,21 @@ def create_employment_type_composition_decomposition(
                 "published_start": published_start,
                 "published_end": published_end,
                 "published_change": published_change,
-                "published_change_pct": (
-                    published_change / published_start * 100
-                ),
+                "published_change_pct": (published_change / published_start * 100),
                 "reconstructed_start": reconstructed_start,
                 "reconstructed_end": reconstructed_end,
                 "within_effect": within_effect,
                 "composition_effect": composition_effect,
                 "residual": residual,
-                "within_contribution_pct": (
-                    within_effect / published_start * 100
-                ),
+                "within_contribution_pct": (within_effect / published_start * 100),
                 "composition_contribution_pct": (
                     composition_effect / published_start * 100
                 ),
-                "residual_contribution_pct": (
-                    residual / published_start * 100
-                ),
-                "regular_share_start": (
-                    start_shares["regular"]
-                ),
-                "regular_share_end": (
-                    end_shares["regular"]
-                ),
-                "part_time_share_start": (
-                    start_shares["part_time"]
-                ),
-                "part_time_share_end": (
-                    end_shares["part_time"]
-                ),
+                "residual_contribution_pct": (residual / published_start * 100),
+                "regular_share_start": (start_shares["regular"]),
+                "regular_share_end": (end_shares["regular"]),
+                "part_time_share_start": (start_shares["part_time"]),
+                "part_time_share_end": (end_shares["part_time"]),
             }
         )
 

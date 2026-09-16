@@ -442,11 +442,7 @@ def test_employment_type_composition_decomposition_identity() -> None:
 
     assert np.isclose(
         row["published_change"],
-        (
-            row["within_effect"]
-            + row["composition_effect"]
-            + row["residual"]
-        ),
+        (row["within_effect"] + row["composition_effect"] + row["residual"]),
         atol=1e-10,
     )
 
@@ -489,9 +485,7 @@ def test_employment_type_composition_decomposition_real_data() -> None:
 
     assert error.abs().max() < 1e-10
 
-    total_hours = result.loc[
-        result["column"] == "total_hours"
-    ].iloc[0]
+    total_hours = result.loc[result["column"] == "total_hours"].iloc[0]
 
     assert np.isclose(
         total_hours["published_change_pct"],
@@ -544,9 +538,7 @@ def test_employment_type_composition_period_summary() -> None:
 
     assert len(result) == 15
 
-    assert set(
-        zip(result["start_year"], result["end_year"])
-    ) == {
+    assert set(zip(result["start_year"], result["end_year"])) == {
         (1993, 2025),
         (2000, 2025),
         (2015, 2025),
