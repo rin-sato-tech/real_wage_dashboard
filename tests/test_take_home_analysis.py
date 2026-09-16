@@ -48,13 +48,17 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_salary_income_deduction,
     calculate_standard_monthly_remuneration,
     calculate_standard_worker_income_tax,
+    calculate_standard_worker_income_tax_with_policy_years,
     calculate_standard_worker_resident_tax,
     calculate_standard_worker_take_home,
     calculate_take_home_time_series,
     calculate_take_home_under_policy_year,
+    calculate_take_home_under_policy_years,
     calculate_taxable_income,
     calculate_total_income_tax,
     calculate_total_resident_tax,
+    create_burden_policy_shapley_decomposition,
+    create_burden_three_factor_shapley_decomposition,
     create_constant_monthly_remuneration,
     create_deduction_burden_change_summary,
     create_hundred_yen_allocation,
@@ -5730,4 +5734,662 @@ def test_fixed_policy_time_series_uses_same_policy_year():
         "gross_salary_yen",
     ] == pytest.approx(
         320_000 * 12
+    )
+
+
+def test_create_burden_policy_shapley_decomposition():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = (
+        create_burden_policy_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    assert len(result) == 1
+
+    assert result.loc[
+        0,
+        "period",
+    ] == "2024→2025"
+
+    assert result.loc[
+        0,
+        "shapley_sum_pt",
+    ] == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pt",
+        ]
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(
+        0,
+        abs=1e-10,
+    )
+
+
+def test_burden_policy_shapley_corner_values():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = (
+        create_burden_policy_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    direct = calculate_take_home_under_policy_year(
+        wage_year=2025,
+        policy_year=2024,
+        monthly_regular_pay_yen=270_000,
+        annual_bonus_yen=600_000,
+        rule_tables=rules,
+    )
+
+    assert result.loc[
+        0,
+        "b_w1_p0_pct",
+    ] == pytest.approx(
+        direct[
+            "effective_burden_rate"
+        ]
+        * 100
+    )
+
+
+def test_income_tax_with_policy_years_matches_existing_when_same_year():
+    rules = load_take_home_rule_tables()
+
+    existing = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules["social_insurance_bonus_rules"]
+        ),
+        employment_insurance_rates=(
+            rules["employment_insurance_rates"]
+        ),
+    )
+
+    separated = (
+        calculate_standard_worker_income_tax_with_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=205_000,
+            annual_bonus_yen=1_000_000,
+            income_tax_deductions=(
+                rules["income_tax_deductions"]
+            ),
+            income_tax_brackets=(
+                rules["income_tax_brackets"]
+            ),
+            income_tax_adjustments=(
+                rules["income_tax_adjustments"]
+            ),
+            pension_standard_monthly_rules=(
+                rules["pension_standard_monthly"]
+            ),
+            pension_rates=(
+                rules["pension_rates"]
+            ),
+            health_standard_monthly_rules=(
+                rules["health_standard_monthly"]
+            ),
+            health_insurance_rates=(
+                rules["health_insurance_rates"]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+            employment_insurance_rates=(
+                rules[
+                    "employment_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    for column in [
+        "gross_salary_yen",
+        "pension_yen",
+        "health_insurance_yen",
+        "employment_insurance_yen",
+        "social_insurance_yen",
+        "salary_income_yen",
+        "taxable_income_yen",
+        "income_tax_yen",
+    ]:
+        assert separated[
+            column
+        ] == pytest.approx(
+            existing[column]
+        )
+
+
+def test_income_tax_with_policy_years_separates_tax_and_social_insurance():
+    rules = load_take_home_rule_tables()
+
+    base = (
+        calculate_standard_worker_income_tax_with_policy_years(
+            wage_year=2025,
+            tax_policy_year=1990,
+            social_insurance_policy_year=1990,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=800_000,
+            income_tax_deductions=(
+                rules["income_tax_deductions"]
+            ),
+            income_tax_brackets=(
+                rules["income_tax_brackets"]
+            ),
+            income_tax_adjustments=(
+                rules["income_tax_adjustments"]
+            ),
+            pension_standard_monthly_rules=(
+                rules["pension_standard_monthly"]
+            ),
+            pension_rates=(
+                rules["pension_rates"]
+            ),
+            health_standard_monthly_rules=(
+                rules["health_standard_monthly"]
+            ),
+            health_insurance_rates=(
+                rules["health_insurance_rates"]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+            employment_insurance_rates=(
+                rules[
+                    "employment_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    social_2025 = (
+        calculate_standard_worker_income_tax_with_policy_years(
+            wage_year=2025,
+            tax_policy_year=1990,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=800_000,
+            income_tax_deductions=(
+                rules["income_tax_deductions"]
+            ),
+            income_tax_brackets=(
+                rules["income_tax_brackets"]
+            ),
+            income_tax_adjustments=(
+                rules["income_tax_adjustments"]
+            ),
+            pension_standard_monthly_rules=(
+                rules["pension_standard_monthly"]
+            ),
+            pension_rates=(
+                rules["pension_rates"]
+            ),
+            health_standard_monthly_rules=(
+                rules["health_standard_monthly"]
+            ),
+            health_insurance_rates=(
+                rules["health_insurance_rates"]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+            employment_insurance_rates=(
+                rules[
+                    "employment_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    # 賃金入力は同じ。
+    assert social_2025[
+        "gross_salary_yen"
+    ] == pytest.approx(
+        base["gross_salary_yen"]
+    )
+
+    # 税制度年も同じ。
+    assert social_2025[
+        "tax_policy_year"
+    ] == 1990
+
+    # 社会保険制度のみ変更。
+    assert social_2025[
+        "social_insurance_policy_year"
+    ] == 2025
+
+    assert social_2025[
+        "social_insurance_yen"
+    ] != pytest.approx(
+        base[
+            "social_insurance_yen"
+        ]
+    )
+
+    # 社会保険料控除が変わるため、
+    # 同じ税制度でも所得税額にも波及し得る。
+    assert social_2025[
+        "taxable_income_yen"
+    ] != pytest.approx(
+        base[
+            "taxable_income_yen"
+        ]
+    )
+
+
+def test_take_home_under_policy_years_matches_existing_when_same_year():
+    rules = load_take_home_rule_tables()
+
+    existing = calculate_standard_worker_take_home(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules[
+                "social_insurance_bonus_rules"
+            ]
+        ),
+        employment_insurance_rates=(
+            rules[
+                "employment_insurance_rates"
+            ]
+        ),
+        resident_tax_deductions=(
+            rules["resident_tax_deductions"]
+        ),
+        resident_tax_income_rates=(
+            rules[
+                "resident_tax_income_rates"
+            ]
+        ),
+        resident_tax_adjustments=(
+            rules[
+                "resident_tax_adjustments"
+            ]
+        ),
+        resident_tax_per_capita=(
+            rules[
+                "resident_tax_per_capita"
+            ]
+        ),
+    )
+
+    separated = (
+        calculate_take_home_under_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=205_000,
+            annual_bonus_yen=1_000_000,
+            rule_tables=rules,
+        )
+    )
+
+    for column in [
+        "gross_salary_yen",
+        "pension_yen",
+        "health_insurance_yen",
+        "employment_insurance_yen",
+        "social_insurance_yen",
+        "income_tax_yen",
+        "resident_tax_yen",
+        "total_deductions_yen",
+        "nominal_take_home_yen",
+        "effective_burden_rate",
+    ]:
+        assert separated[
+            column
+        ] == pytest.approx(
+            existing[column]
+        )
+
+    assert separated[
+        "resident_tax_assessment_year"
+    ] == 2026
+
+
+def test_take_home_under_policy_years_separates_tax_policy():
+    rules = load_take_home_rule_tables()
+
+    tax_1990 = (
+        calculate_take_home_under_policy_years(
+            wage_year=2025,
+            tax_policy_year=1990,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=800_000,
+            rule_tables=rules,
+        )
+    )
+
+    tax_2025 = (
+        calculate_take_home_under_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=800_000,
+            rule_tables=rules,
+        )
+    )
+
+    # 社会保険制度は同一なので、
+    # 社会保険料は一致する。
+    assert tax_1990[
+        "social_insurance_yen"
+    ] == pytest.approx(
+        tax_2025[
+            "social_insurance_yen"
+        ]
+    )
+
+    # 税制度は異なる。
+    assert tax_1990[
+        "income_tax_yen"
+    ] != pytest.approx(
+        tax_2025[
+            "income_tax_yen"
+        ]
+    )
+
+    assert tax_1990[
+        "resident_tax_assessment_year"
+    ] == 1991
+
+    assert tax_2025[
+        "resident_tax_assessment_year"
+    ] == 2026
+
+
+def test_take_home_under_policy_years_preserves_social_tax_interaction():
+    rules = load_take_home_rule_tables()
+
+    social_1990 = (
+        calculate_take_home_under_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=1990,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=800_000,
+            rule_tables=rules,
+        )
+    )
+
+    social_2025 = (
+        calculate_take_home_under_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=800_000,
+            rule_tables=rules,
+        )
+    )
+
+    assert social_1990[
+        "social_insurance_yen"
+    ] != pytest.approx(
+        social_2025[
+            "social_insurance_yen"
+        ]
+    )
+
+    assert social_1990[
+        "taxable_income_yen"
+    ] != pytest.approx(
+        social_2025[
+            "taxable_income_yen"
+        ]
+    )
+
+    assert social_1990[
+        "resident_taxable_income_yen"
+    ] != pytest.approx(
+        social_2025[
+            "resident_taxable_income_yen"
+        ]
+    )
+
+    assert social_1990[
+        "total_deductions_yen"
+    ] != pytest.approx(
+        social_2025[
+            "total_deductions_yen"
+        ]
+    )
+
+
+def test_create_burden_three_factor_shapley_decomposition():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = (
+        create_burden_three_factor_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    assert len(result) == 1
+
+    assert result.loc[
+        0,
+        "period",
+    ] == "2024→2025"
+
+    assert result.loc[
+        0,
+        "shapley_sum_pt",
+    ] == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pt",
+        ]
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(
+        0,
+        abs=1e-10,
+    )
+
+
+def test_three_factor_policy_sum_matches_two_factor_policy_effect():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    two_factor = (
+        create_burden_policy_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    three_factor = (
+        create_burden_three_factor_shapley_decomposition(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            periods=[
+                (2024, 2025),
+            ],
+        )
+    )
+
+    assert three_factor.loc[
+        0,
+        "wage_effect_pt",
+    ] == pytest.approx(
+        two_factor.loc[
+            0,
+            "wage_effect_pt",
+        ],
+        abs=1e-10,
+    )
+
+    assert three_factor.loc[
+        0,
+        "policy_effect_pt",
+    ] == pytest.approx(
+        two_factor.loc[
+            0,
+            "policy_effect_pt",
+        ],
+        abs=1e-10,
     )
