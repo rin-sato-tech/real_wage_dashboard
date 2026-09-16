@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from real_wage_dashboard.take_home_export import (
+    create_japanese_tableau_export,
     create_take_home_tableau_export,
 )
 
@@ -84,14 +85,21 @@ def main() -> None:
         )
     )
 
-    result.to_csv(
+    output = (
+        create_japanese_tableau_export(
+            result
+        )
+    )
+
+    output.to_csv(
         OUTPUT_PATH,
         index=False,
+        encoding="utf-8-sig",
     )
 
     print(
         f"saved: {OUTPUT_PATH} "
-        f"({len(result)} rows)"
+        f"({len(output)} rows)"
     )
 
     print(

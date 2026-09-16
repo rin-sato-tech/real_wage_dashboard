@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from real_wage_dashboard.take_home_export import (
+    create_japanese_tableau_export,
     create_take_home_tableau_export,
 )
 
@@ -1432,8 +1433,14 @@ tableau_df = (
     )
 )
 
+tableau_output_df = (
+    create_japanese_tableau_export(
+        tableau_df
+    )
+)
+
 csv_bytes = (
-    tableau_df.to_csv(
+    tableau_output_df.to_csv(
         index=False,
     )
     .encode(
@@ -1454,27 +1461,27 @@ st.download_button(
 )
 
 st.caption(
-    "Tableauでは `record_type` と `metric` を"
-    "主要なディメンションとして利用する"
-    "long形式です。"
+    "Tableauでは「レコード種別」と「指標」を"
+    "主要なディメンションとして利用するlong形式です。"
+    "対応する英語ID列も保持しています。"
 )
 
 with st.expander(
     "Tableau用CSVの構造を見る"
 ):
     st.dataframe(
-        tableau_df.head(50),
+        tableau_output_df.head(50),
         width="stretch",
         hide_index=True,
     )
 
     st.markdown(
         """
-- `annual_main`：1990～2025年の年次主系列
-- `period_log_decomposition`：実質手取りの対数分解
-- `burden_change`：期間別の実効負担率変化
-- `burden_shapley`：負担率の3要因Shapley分解
-- `real_take_home_shapley`：実質手取りの4要因Shapley分解
-- `robustness`：感応度・頑健性確認
-"""
+        - `annual_main`：1990～2025年の年次主系列
+        - `period_log_decomposition`：実質手取りの対数分解
+        - `burden_change`：期間別の実効負担率変化
+        - `burden_shapley`：負担率の3要因Shapley分解
+        - `real_take_home_shapley`：実質手取りの4要因Shapley分解
+        - `robustness`：感応度・頑健性確認
+        """
     )

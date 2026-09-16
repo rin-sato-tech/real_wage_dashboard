@@ -1,6 +1,7 @@
 import pandas as pd
 
 from real_wage_dashboard.take_home_export import (
+    create_japanese_tableau_export,
     create_take_home_tableau_export,
 )
 
@@ -314,4 +315,170 @@ def test_create_take_home_tableau_export() -> None:
     assert (
         fixed_2025.iloc[0]["value"]
         == -120_000.0
+    )
+
+
+def test_create_japanese_tableau_export_keeps_metric_id():
+    source = pd.DataFrame(
+        {
+            "analysis": [
+                "take_home_wage",
+            ],
+            "record_type": [
+                "annual_main",
+            ],
+            "year": [
+                2025,
+            ],
+            "period": [
+                pd.NA,
+            ],
+            "start_year": [
+                pd.NA,
+            ],
+            "end_year": [
+                pd.NA,
+            ],
+            "metric": [
+                "gross_salary_yen",
+            ],
+            "value": [
+                4_267_634.0,
+            ],
+            "unit": [
+                "yen",
+            ],
+            "check": [
+                pd.NA,
+            ],
+            "comparison": [
+                pd.NA,
+            ],
+            "note": [
+                pd.NA,
+            ],
+            "industry": [
+                "調査産業計",
+            ],
+            "establishment_size": [
+                "5人以上",
+            ],
+            "employment_type": [
+                "就業形態計",
+            ],
+            "model_age": [
+                35,
+            ],
+            "model_sex": [
+                "male",
+            ],
+            "resident_tax_timing": [
+                "income_year",
+            ],
+            "cpi_series": [
+                "持家の帰属家賃を除く総合",
+            ],
+            "base_year": [
+                1990,
+            ],
+        }
+    )
+
+    result = (
+        create_japanese_tableau_export(
+            source
+        )
+    )
+
+    assert (
+        result.iloc[0]["指標ID"]
+        == "gross_salary_yen"
+    )
+
+    assert (
+        result.iloc[0]["指標"]
+        == "額面賃金"
+    )
+
+    assert (
+        result.iloc[0]["分析"]
+        == "手取り賃金分析"
+    )
+
+    assert (
+        result.iloc[0]["レコード種別ID"]
+        == "annual_main"
+    )
+
+    assert (
+        result.iloc[0]["レコード種別"]
+        == "年次主系列"
+    )
+
+    assert (
+        result.iloc[0]["単位ID"]
+        == "yen"
+    )
+
+    assert (
+        result.iloc[0]["単位"]
+        == "円"
+    )
+
+    assert (
+        result.iloc[0]["モデル性別"]
+        == "男性"
+    )
+
+    assert (
+        result.iloc[0]["住民税対応"]
+        == "所得年対応"
+    )
+
+
+def test_create_japanese_tableau_export_keeps_unknown_label():
+    source = pd.DataFrame(
+        {
+            "analysis": ["take_home_wage"],
+            "record_type": ["unknown_type"],
+            "year": [2025],
+            "period": [pd.NA],
+            "start_year": [pd.NA],
+            "end_year": [pd.NA],
+            "metric": ["unknown_metric"],
+            "value": [1.0],
+            "unit": ["unknown_unit"],
+            "check": ["unknown_check"],
+            "comparison": ["unknown_case"],
+            "note": [pd.NA],
+            "industry": ["調査産業計"],
+            "establishment_size": ["5人以上"],
+            "employment_type": ["就業形態計"],
+            "model_age": [35],
+            "model_sex": ["male"],
+            "resident_tax_timing": ["income_year"],
+            "cpi_series": ["持家の帰属家賃を除く総合"],
+            "base_year": [1990],
+        }
+    )
+
+    result = (
+        create_japanese_tableau_export(
+            source
+        )
+    )
+
+    assert (
+        result.iloc[0]["レコード種別"]
+        == "unknown_type"
+    )
+
+    assert (
+        result.iloc[0]["指標"]
+        == "unknown_metric"
+    )
+
+    assert (
+        result.iloc[0]["比較ケース"]
+        == "unknown_case"
     )
