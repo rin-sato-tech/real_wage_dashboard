@@ -2,6 +2,28 @@ from pathlib import Path
 
 import pandas as pd
 
+PENSION_STANDARD_MONTHLY_PERIODS = {
+    10: (
+        pd.Timestamp("1989-12-01"),
+        pd.Timestamp("1994-10-31"),
+    ),
+    11: (
+        pd.Timestamp("1994-11-01"),
+        pd.Timestamp("2000-09-30"),
+    ),
+    12: (
+        pd.Timestamp("2000-10-01"),
+        pd.Timestamp("2016-09-30"),
+    ),
+    13: (
+        pd.Timestamp("2016-10-01"),
+        pd.Timestamp("2020-08-31"),
+    ),
+    14: (
+        pd.Timestamp("2020-09-01"),
+        pd.NaT,
+    ),
+}
 
 DATA_DIR = Path("data/raw/take_home")
 
@@ -312,7 +334,12 @@ def load_take_home_rule_tables() -> dict[str, pd.DataFrame]:
         "income_tax_deductions": load_income_tax_deductions(),
         "income_tax_adjustments": load_income_tax_adjustments(),
         "pension_rates": load_pension_rates(),
-        "health_insurance_rates": load_health_insurance_rates(),
+        "pension_standard_monthly": (
+            load_pension_standard_monthly_history()
+        ),
+        "health_insurance_rates": (
+            load_health_insurance_rates()
+        ),
         "social_insurance_bonus_rules": (
             load_social_insurance_bonus_rules()
         ),
@@ -332,3 +359,255 @@ def load_take_home_rule_tables() -> dict[str, pd.DataFrame]:
             load_resident_tax_adjustments()
         ),
     }
+
+
+def _create_standard_monthly_brackets(
+    standard_monthly_values: list[int],
+    effective_from: pd.Timestamp,
+    effective_to: pd.Timestamp | None,
+) -> pd.DataFrame:
+    """標準報酬月額一覧から報酬月額の等級境界を作成する。"""
+
+    if not standard_monthly_values:
+        raise ValueError(
+            "標準報酬月額の一覧が空です。"
+        )
+
+    if any(value <= 0 for value in standard_monthly_values):
+        raise ValueError(
+            "標準報酬月額は正の値である必要があります。"
+        )
+
+    if len(standard_monthly_values) != len(
+        set(standard_monthly_values)
+    ):
+        raise ValueError(
+            "標準報酬月額に重複があります。"
+        )
+
+    values = sorted(
+        standard_monthly_values
+    )
+
+    records: list[dict[str, object]] = []
+
+    for index, standard_monthly_yen in enumerate(values):
+        if index == 0:
+            lower_bound = None
+        else:
+            previous = values[index - 1]
+
+            lower_bound = int(
+                (
+                    previous
+                    + standard_monthly_yen
+                )
+                / 2
+            )
+
+        if index == len(values) - 1:
+            upper_bound = None
+        else:
+            following = values[index + 1]
+
+            upper_bound = int(
+                (
+                    standard_monthly_yen
+                    + following
+                )
+                / 2
+            )
+
+        records.append(
+            {
+                "effective_from": effective_from,
+                "effective_to": effective_to,
+                "grade": index + 1,
+                "standard_monthly_yen": (
+                    standard_monthly_yen
+                ),
+                "remuneration_lower_yen": lower_bound,
+                "remuneration_upper_yen": upper_bound,
+            }
+        )
+
+    return pd.DataFrame(records)
+
+
+def load_pension_standard_monthly_history(
+    path: str | Path = PENSION_STANDARD_MONTHLY_HISTORY_PATH,
+) -> pd.DataFrame:
+    """厚生年金の標準報酬月額等級の変遷表をlong形式で読み込む。"""
+
+    raw = pd.read_excel(
+        path,
+        sheet_name="厚生年金保険　標準報酬月額等級の変遷",
+        header=None,
+    )
+
+    period_frames: list[pd.DataFrame] = []
+
+    for (
+        column_index,
+        (
+            effective_from,
+            effective_to,
+        ),
+    ) in PENSION_STANDARD_MONTHLY_PERIODS.items():
+        values = pd.to_numeric(
+            raw.iloc[:, column_index],
+            errors="coerce",
+        ).dropna()
+
+        # 原表の単位は千円なので円へ変換する。
+        standard_monthly_values = (
+            values
+            .astype(int)
+            .mul(1_000)
+            .tolist()
+        )
+
+        if not standard_monthly_values:
+            raise ValueError(
+                "標準報酬月額を取得できません。"
+                f" column={column_index}"
+            )
+
+        period = _create_standard_monthly_brackets(
+            standard_monthly_values=(
+                standard_monthly_values
+            ),
+            effective_from=effective_from,
+            effective_to=effective_to,
+        )
+
+        period_frames.append(period)
+
+    result = pd.concat(
+        period_frames,
+        ignore_index=True,
+    )
+
+    _validate_pension_standard_monthly_history(
+        result
+    )
+
+    return result
+
+
+def _validate_pension_standard_monthly_history(
+    df: pd.DataFrame,
+) -> None:
+    """厚生年金の標準報酬月額等級データを検証する。"""
+
+    required_columns = {
+        "effective_from",
+        "effective_to",
+        "grade",
+        "standard_monthly_yen",
+        "remuneration_lower_yen",
+        "remuneration_upper_yen",
+    }
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            "標準報酬月額データに必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if df.empty:
+        raise ValueError(
+            "標準報酬月額データが空です。"
+        )
+
+    if df[
+        [
+            "effective_from",
+            "grade",
+            "standard_monthly_yen",
+        ]
+    ].isna().any().any():
+        raise ValueError(
+            "標準報酬月額データの必須項目に欠損があります。"
+        )
+
+    if (
+        df["standard_monthly_yen"]
+        <= 0
+    ).any():
+        raise ValueError(
+            "標準報酬月額は正の値である必要があります。"
+        )
+
+    if df.duplicated(
+        subset=[
+            "effective_from",
+            "grade",
+        ]
+    ).any():
+        raise ValueError(
+            "同一制度期間内で等級が重複しています。"
+        )
+
+    if df.duplicated(
+        subset=[
+            "effective_from",
+            "standard_monthly_yen",
+        ]
+    ).any():
+        raise ValueError(
+            "同一制度期間内で標準報酬月額が"
+            "重複しています。"
+        )
+
+    for effective_from, group in df.groupby(
+        "effective_from",
+        sort=False,
+    ):
+        group = group.sort_values(
+            "grade"
+        ).reset_index(drop=True)
+
+        expected_grades = list(
+            range(
+                1,
+                len(group) + 1,
+            )
+        )
+
+        if group["grade"].tolist() != expected_grades:
+            raise ValueError(
+                "標準報酬月額の等級が連続していません。"
+                f" effective_from={effective_from}"
+            )
+
+        if not group[
+            "standard_monthly_yen"
+        ].is_monotonic_increasing:
+            raise ValueError(
+                "標準報酬月額が昇順ではありません。"
+                f" effective_from={effective_from}"
+            )
+
+        for index in range(
+            len(group) - 1
+        ):
+            current_upper = group.loc[
+                index,
+                "remuneration_upper_yen",
+            ]
+
+            next_lower = group.loc[
+                index + 1,
+                "remuneration_lower_yen",
+            ]
+
+            if current_upper != next_lower:
+                raise ValueError(
+                    "標準報酬月額の等級境界が"
+                    "連続していません。"
+                    f" effective_from={effective_from},"
+                    f" grade={index + 1}"
+                )
