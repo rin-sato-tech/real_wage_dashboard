@@ -1,3 +1,4 @@
+import math
 from datetime import date
 
 import pandas as pd
@@ -349,3 +350,55 @@ def calculate_basic_deduction(
         )
 
     return float(fixed_yen)
+
+
+def _floor_to_thousand_yen(
+    amount_yen: float,
+) -> float:
+    """金額の1,000円未満を切り捨てる。"""
+
+    if amount_yen < 0:
+        raise ValueError(
+            "切り捨て対象金額は0以上である必要があります。"
+        )
+
+    return float(
+        math.floor(amount_yen / 1_000) * 1_000
+    )
+
+
+def calculate_taxable_income(
+    salary_income_yen: float,
+    basic_deduction_yen: float,
+    social_insurance_deduction_yen: float,
+    other_income_deductions_yen: float = 0.0,
+) -> float:
+    """給与所得と所得控除から所得税の課税所得金額を計算する。"""
+
+    values = {
+        "給与所得": salary_income_yen,
+        "基礎控除": basic_deduction_yen,
+        "社会保険料控除": social_insurance_deduction_yen,
+        "その他所得控除": other_income_deductions_yen,
+    }
+
+    for name, value in values.items():
+        if value < 0:
+            raise ValueError(
+                f"{name}は0以上である必要があります。"
+            )
+
+    total_deductions = (
+        basic_deduction_yen
+        + social_insurance_deduction_yen
+        + other_income_deductions_yen
+    )
+
+    taxable_before_rounding = max(
+        salary_income_yen - total_deductions,
+        0,
+    )
+
+    return _floor_to_thousand_yen(
+        taxable_before_rounding
+    )

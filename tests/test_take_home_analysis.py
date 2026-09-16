@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from real_wage_dashboard.take_home_analysis import (
+    _floor_to_thousand_yen,
     _select_assessment_year_rules,
     _select_effective_rules,
     _select_single_assessment_year_rule,
@@ -9,6 +10,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_basic_deduction,
     calculate_salary_income,
     calculate_salary_income_deduction,
+    calculate_taxable_income,
 )
 
 
@@ -679,4 +681,131 @@ def test_calculate_basic_deduction_rejects_missing_rule():
             total_income_yen=3_000_000,
             target_date="1990-01-01",
             deduction_rules=rules,
+        )
+
+
+def test_floor_to_thousand_yen():
+    result = _floor_to_thousand_yen(
+        1_234_567,
+    )
+
+    assert result == 1_234_000
+
+
+def test_floor_to_thousand_yen_exact():
+    result = _floor_to_thousand_yen(
+        1_234_000,
+    )
+
+    assert result == 1_234_000
+
+
+def test_floor_to_thousand_yen_below_thousand():
+    result = _floor_to_thousand_yen(
+        999,
+    )
+
+    assert result == 0
+
+
+def test_floor_to_thousand_yen_rejects_negative():
+    with pytest.raises(
+        ValueError,
+        match="切り捨て対象金額は0以上",
+    ):
+        _floor_to_thousand_yen(
+            -1,
+        )
+
+
+def test_calculate_taxable_income():
+    result = calculate_taxable_income(
+        salary_income_yen=2_760_000,
+        basic_deduction_yen=480_000,
+        social_insurance_deduction_yen=600_123,
+    )
+
+    assert result == 1_679_000
+
+
+def test_calculate_taxable_income_floor_at_zero():
+    result = calculate_taxable_income(
+        salary_income_yen=500_000,
+        basic_deduction_yen=950_000,
+        social_insurance_deduction_yen=100_000,
+    )
+
+    assert result == 0
+
+
+def test_calculate_taxable_income_with_other_deductions():
+    result = calculate_taxable_income(
+        salary_income_yen=3_000_000,
+        basic_deduction_yen=480_000,
+        social_insurance_deduction_yen=500_000,
+        other_income_deductions_yen=100_500,
+    )
+
+    assert result == 1_919_000
+
+
+@pytest.mark.parametrize(
+    (
+        "salary_income_yen",
+        "basic_deduction_yen",
+        "social_insurance_deduction_yen",
+        "other_income_deductions_yen",
+        "message",
+    ),
+    [
+        (
+            -1,
+            0,
+            0,
+            0,
+            "給与所得は0以上",
+        ),
+        (
+            0,
+            -1,
+            0,
+            0,
+            "基礎控除は0以上",
+        ),
+        (
+            0,
+            0,
+            -1,
+            0,
+            "社会保険料控除は0以上",
+        ),
+        (
+            0,
+            0,
+            0,
+            -1,
+            "その他所得控除は0以上",
+        ),
+    ],
+)
+def test_calculate_taxable_income_rejects_negative_values(
+    salary_income_yen,
+    basic_deduction_yen,
+    social_insurance_deduction_yen,
+    other_income_deductions_yen,
+    message,
+):
+    with pytest.raises(
+        ValueError,
+        match=message,
+    ):
+        calculate_taxable_income(
+            salary_income_yen=salary_income_yen,
+            basic_deduction_yen=basic_deduction_yen,
+            social_insurance_deduction_yen=(
+                social_insurance_deduction_yen
+            ),
+            other_income_deductions_yen=(
+                other_income_deductions_yen
+            ),
         )
