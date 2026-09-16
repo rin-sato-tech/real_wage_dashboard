@@ -3401,6 +3401,10 @@ def calculate_standard_worker_take_home(
     分析上の対応付けである。
     """
 
+    # ----------------------------------------
+    # 1. 所得税・社会保険料
+    # ----------------------------------------
+
     income_tax_result = calculate_standard_worker_income_tax(
         year=year,
         monthly_regular_pay_yen=monthly_regular_pay_yen,
@@ -3431,10 +3435,17 @@ def calculate_standard_worker_take_home(
         policy_mode=policy_mode,
     )
 
+    # ----------------------------------------
+    # 2. 住民税
+    #
+    # 所得年 t に対応する住民税として、
+    # 翌年度 t+1 の制度を適用する。
+    # ----------------------------------------
+
     assessment_year = year + 1
 
-    resident_taxable = (
-        calculate_resident_taxable_income(
+    resident_tax_result = (
+        calculate_standard_worker_resident_tax(
             salary_income_yen=(
                 income_tax_result[
                     "salary_income_yen"
@@ -3449,81 +3460,56 @@ def calculate_standard_worker_take_home(
             resident_tax_deductions=(
                 resident_tax_deductions
             ),
+            resident_tax_income_rates=(
+                resident_tax_income_rates
+            ),
+            resident_tax_adjustments=(
+                resident_tax_adjustments
+            ),
+            resident_tax_per_capita=(
+                resident_tax_per_capita
+            ),
+            dependent_count=dependent_count,
             other_income_deductions_yen=(
                 resident_other_income_deductions_yen
             ),
-        )
-    )
-
-    resident_taxable_income_yen = (
-        resident_taxable[
-            "resident_taxable_income_yen"
-        ]
-    )
-
-    base_resident_income_levy_yen = (
-        calculate_base_resident_income_levy(
-            taxable_income_yen=(
-                resident_taxable_income_yen
-            ),
-            assessment_year=assessment_year,
-            income_rate_rules=(
-                resident_tax_income_rates
-            ),
-        )
-    )
-
-    adjusted_resident = (
-        calculate_resident_income_levy_after_adjustments(
-            base_income_levy_yen=(
-                base_resident_income_levy_yen
-            ),
-            taxable_income_yen=(
-                resident_taxable_income_yen
-            ),
-            total_income_yen=(
-                income_tax_result[
-                    "salary_income_yen"
-                ]
-            ),
-            assessment_year=assessment_year,
-            adjustment_rules=(
-                resident_tax_adjustments
-            ),
-            dependent_count=dependent_count,
             human_deduction_difference_yen=(
                 human_deduction_difference_yen
+            ),
+            municipality_band=(
+                municipality_band
             ),
             policy_mode=policy_mode,
         )
     )
 
-    resident_tax = calculate_total_resident_tax(
-        income_levy_after_adjustments_yen=(
-            adjusted_resident[
-                "resident_income_levy_after_adjustments_yen"
-            ]
-        ),
-        assessment_year=assessment_year,
-        per_capita_rules=resident_tax_per_capita,
-        municipality_band=municipality_band,
+    # ----------------------------------------
+    # 3. 総控除額
+    # ----------------------------------------
+
+    gross_salary_yen = float(
+        income_tax_result[
+            "gross_salary_yen"
+        ]
     )
 
-    gross_salary_yen = income_tax_result[
-        "gross_salary_yen"
-    ]
+    social_insurance_yen = float(
+        income_tax_result[
+            "social_insurance_yen"
+        ]
+    )
 
-    social_insurance_yen = income_tax_result[
-        "social_insurance_yen"
-    ]
+    income_tax_yen = float(
+        income_tax_result[
+            "income_tax_yen"
+        ]
+    )
 
-    income_tax_yen = income_tax_result[
-        "income_tax_yen"
-    ]
-
-    resident_tax_yen = resident_tax[
-        "total_resident_tax_yen"
-    ]
+    resident_tax_yen = float(
+        resident_tax_result[
+            "resident_tax_yen"
+        ]
+    )
 
     total_deductions_yen = (
         social_insurance_yen
@@ -3531,69 +3517,41 @@ def calculate_standard_worker_take_home(
         + resident_tax_yen
     )
 
+    # ----------------------------------------
+    # 4. 名目手取り
+    # ----------------------------------------
+
     nominal_take_home_yen = (
         gross_salary_yen
         - total_deductions_yen
     )
 
-    effective_burden_rate = (
-        total_deductions_yen
-        / gross_salary_yen
-        if gross_salary_yen > 0
-        else 0.0
-    )
+    # ----------------------------------------
+    # 5. 実効負担率・手取り率
+    # ----------------------------------------
 
-    take_home_rate = (
-        nominal_take_home_yen
-        / gross_salary_yen
-        if gross_salary_yen > 0
-        else 0.0
-    )
+    if gross_salary_yen > 0:
+        effective_burden_rate = (
+            total_deductions_yen
+            / gross_salary_yen
+        )
+
+        take_home_rate = (
+            nominal_take_home_yen
+            / gross_salary_yen
+        )
+
+    else:
+        effective_burden_rate = 0.0
+        take_home_rate = 0.0
+
+    # ----------------------------------------
+    # 6. 結果
+    # ----------------------------------------
 
     return {
         **income_tax_result,
-        "resident_tax_assessment_year": (
-            assessment_year
-        ),
-        "resident_basic_deduction_yen": float(
-            resident_taxable[
-                "resident_basic_deduction_yen"
-            ]
-        ),
-        "resident_taxable_income_yen": float(
-            resident_taxable_income_yen
-        ),
-        "base_resident_income_levy_yen": float(
-            base_resident_income_levy_yen
-        ),
-        "resident_adjustment_credit_yen": float(
-            adjusted_resident[
-                "resident_adjustment_credit_yen"
-            ]
-        ),
-        "resident_other_reduction_yen": float(
-            adjusted_resident[
-                "resident_other_reduction_yen"
-            ]
-        ),
-        "resident_income_levy_yen": float(
-            resident_tax[
-                "resident_income_levy_yen"
-            ]
-        ),
-        "resident_per_capita_yen": float(
-            resident_tax[
-                "resident_per_capita_yen"
-            ]
-        ),
-        "forest_environment_tax_yen": float(
-            resident_tax[
-                "forest_environment_tax_yen"
-            ]
-        ),
-        "resident_tax_yen": float(
-            resident_tax_yen
-        ),
+        **resident_tax_result,
         "total_deductions_yen": float(
             round(
                 total_deductions_yen,
@@ -3611,5 +3569,701 @@ def calculate_standard_worker_take_home(
         ),
         "take_home_rate": float(
             take_home_rate
+        ),
+    }
+
+
+def calculate_take_home_time_series(
+    annual_wage_df: pd.DataFrame,
+    rule_tables: dict[str, pd.DataFrame],
+    start_year: int = 1990,
+    end_year: int = 2025,
+    sex: str = "male",
+    business_type: str = "general",
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    resident_other_income_deductions_yen: float = 0.0,
+    human_deduction_difference_yen: float = 50_000.0,
+    municipality_band: str | None = None,
+    policy_mode: str = "actual_policy",
+    timing: str = "income_year",
+) -> pd.DataFrame:
+    """年平均賃金から標準労働者の手取り時系列を作成する。
+
+    Parameters
+    ----------
+    timing:
+        "income_year"
+            所得年 t の所得に対して、
+            assessment_year = t + 1 の住民税を対応させる。
+            制度負担を所得年に帰属させる主分析用系列。
+
+        "cash_flow"
+            年 t の給与・所得税・社会保険料に対して、
+            前年 t - 1 の所得を基礎として
+            assessment_year = t に課される住民税を対応させる。
+
+            これは年税額ベースのキャッシュフロー近似であり、
+            6月～翌5月の月別特別徴収そのものは再現しない。
+
+    Notes
+    -----
+    annual_wage_df は毎月勤労統計の年平均値を想定し、
+    regular_earnings を月例賃金、
+    special_earnings × 12 を年間賞与として使用する。
+    """
+
+    # ----------------------------------------
+    # 1. 入力検証
+    # ----------------------------------------
+
+    required_columns = {
+        "year",
+        "total_cash_earnings",
+        "regular_earnings",
+        "special_earnings",
+    }
+
+    missing = (
+        required_columns
+        - set(annual_wage_df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "手取り時系列の作成に必要な"
+            "賃金列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    required_rule_tables = {
+        "income_tax_deductions",
+        "income_tax_brackets",
+        "income_tax_adjustments",
+        "pension_standard_monthly",
+        "pension_rates",
+        "health_standard_monthly",
+        "health_insurance_rates",
+        "social_insurance_bonus_rules",
+        "employment_insurance_rates",
+        "resident_tax_deductions",
+        "resident_tax_income_rates",
+        "resident_tax_adjustments",
+        "resident_tax_per_capita",
+    }
+
+    missing_rules = (
+        required_rule_tables
+        - set(rule_tables)
+    )
+
+    if missing_rules:
+        raise ValueError(
+            "手取り計算に必要な制度表がありません: "
+            f"{sorted(missing_rules)}"
+        )
+
+    if start_year > end_year:
+        raise ValueError(
+            "start_year は end_year 以下で"
+            "ある必要があります。"
+        )
+
+    if timing not in {
+        "income_year",
+        "cash_flow",
+    }:
+        raise ValueError(
+            "timing は income_year または "
+            "cash_flow である必要があります。"
+        )
+
+    # ----------------------------------------
+    # 2. 年平均賃金を正規化
+    # ----------------------------------------
+
+    data = annual_wage_df.copy()
+
+    numeric_columns = [
+        "year",
+        "total_cash_earnings",
+        "regular_earnings",
+        "special_earnings",
+    ]
+
+    for column in numeric_columns:
+        data[column] = pd.to_numeric(
+            data[column],
+            errors="coerce",
+        )
+
+    if data[numeric_columns].isna().any().any():
+        raise ValueError(
+            "年平均賃金データに不正な数値があります。"
+        )
+
+    if (
+        data[
+            [
+                "total_cash_earnings",
+                "regular_earnings",
+                "special_earnings",
+            ]
+        ]
+        < 0
+    ).any().any():
+        raise ValueError(
+            "賃金額は0以上である必要があります。"
+        )
+
+    if (
+        data["year"]
+        != data["year"].astype(int)
+    ).any():
+        raise ValueError(
+            "year は整数である必要があります。"
+        )
+
+    data["year"] = (
+        data["year"]
+        .astype(int)
+    )
+
+    if data["year"].duplicated().any():
+        duplicated = (
+            data.loc[
+                data["year"].duplicated(
+                    keep=False
+                ),
+                "year",
+            ]
+            .sort_values()
+            .unique()
+            .tolist()
+        )
+
+        raise ValueError(
+            "年平均賃金データに重複年があります: "
+            f"{duplicated}"
+        )
+
+    # ----------------------------------------
+    # 3. 計算に必要な期間を決定
+    #
+    # cash_flow の場合、
+    # start_year の住民税計算に
+    # start_year - 1 の所得が必要。
+    # ----------------------------------------
+
+    if timing == "income_year":
+        required_start_year = start_year
+    else:
+        required_start_year = start_year - 1
+
+    required_years = set(
+        range(
+            required_start_year,
+            end_year + 1,
+        )
+    )
+
+    actual_years = set(
+        data["year"].tolist()
+    )
+
+    missing_years = sorted(
+        required_years
+        - actual_years
+    )
+
+    if missing_years:
+        raise ValueError(
+            "手取り時系列に必要な年が"
+            "欠けています: "
+            f"{missing_years}"
+        )
+
+    calculation_data = data.loc[
+        data["year"].between(
+            required_start_year,
+            end_year,
+        )
+    ].copy()
+
+    calculation_data = (
+        calculation_data
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
+
+    # ----------------------------------------
+    # 4. 給与構成恒等式
+    # ----------------------------------------
+
+    identity_diff = (
+        calculation_data[
+            "total_cash_earnings"
+        ]
+        - (
+            calculation_data[
+                "regular_earnings"
+            ]
+            + calculation_data[
+                "special_earnings"
+            ]
+        )
+    )
+
+    invalid_identity = (
+        identity_diff.abs() > 1e-6
+    )
+
+    if invalid_identity.any():
+        bad = calculation_data.loc[
+            invalid_identity,
+            [
+                "year",
+                "total_cash_earnings",
+                "regular_earnings",
+                "special_earnings",
+            ],
+        ].copy()
+
+        raise ValueError(
+            "給与構成の恒等式が成立しません: "
+            f"{bad.to_dict('records')}"
+        )
+
+    # ----------------------------------------
+    # 5. 各所得年について
+    #    所得税・社会保険料を先に計算
+    #
+    # cash_flow では前年所得を住民税計算に
+    # 使用するため、2段階計算とする。
+    # ----------------------------------------
+
+    core_results: dict[
+        int,
+        dict[str, float | int],
+    ] = {}
+
+    wage_inputs: dict[
+        int,
+        dict[str, float],
+    ] = {}
+
+    for row in calculation_data.itertuples(
+        index=False
+    ):
+        year = int(row.year)
+
+        monthly_total_cash_earnings_yen = float(
+            row.total_cash_earnings
+        )
+
+        monthly_regular_pay_yen = float(
+            row.regular_earnings
+        )
+
+        monthly_special_earnings_yen = float(
+            row.special_earnings
+        )
+
+        annual_bonus_yen = (
+            monthly_special_earnings_yen
+            * 12
+        )
+
+        expected_gross_yen = (
+            monthly_total_cash_earnings_yen
+            * 12
+        )
+
+        core = calculate_standard_worker_income_tax(
+            year=year,
+            monthly_regular_pay_yen=(
+                monthly_regular_pay_yen
+            ),
+            annual_bonus_yen=(
+                annual_bonus_yen
+            ),
+            income_tax_deductions=(
+                rule_tables[
+                    "income_tax_deductions"
+                ]
+            ),
+            income_tax_brackets=(
+                rule_tables[
+                    "income_tax_brackets"
+                ]
+            ),
+            income_tax_adjustments=(
+                rule_tables[
+                    "income_tax_adjustments"
+                ]
+            ),
+            pension_standard_monthly_rules=(
+                rule_tables[
+                    "pension_standard_monthly"
+                ]
+            ),
+            pension_rates=(
+                rule_tables[
+                    "pension_rates"
+                ]
+            ),
+            health_standard_monthly_rules=(
+                rule_tables[
+                    "health_standard_monthly"
+                ]
+            ),
+            health_insurance_rates=(
+                rule_tables[
+                    "health_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rule_tables[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+            employment_insurance_rates=(
+                rule_tables[
+                    "employment_insurance_rates"
+                ]
+            ),
+            sex=sex,
+            business_type=business_type,
+            dependent_count=dependent_count,
+            other_income_deductions_yen=(
+                other_income_deductions_yen
+            ),
+            policy_mode=policy_mode,
+        )
+
+        if not math.isclose(
+            float(
+                core["gross_salary_yen"]
+            ),
+            expected_gross_yen,
+            rel_tol=0.0,
+            abs_tol=1e-6,
+        ):
+            raise ValueError(
+                "年間額面賃金の恒等式が"
+                "成立しません。"
+                f" year={year},"
+                f" expected={expected_gross_yen},"
+                f" calculated="
+                f"{core['gross_salary_yen']}"
+            )
+
+        core_results[year] = core
+
+        wage_inputs[year] = {
+            "monthly_total_cash_earnings_yen": (
+                monthly_total_cash_earnings_yen
+            ),
+            "monthly_regular_earnings_yen": (
+                monthly_regular_pay_yen
+            ),
+            "monthly_special_earnings_yen": (
+                monthly_special_earnings_yen
+            ),
+        }
+
+    # ----------------------------------------
+    # 6. 各年の住民税を対応させ、
+    #    最終的な手取りを計算
+    # ----------------------------------------
+
+    result_rows: list[
+        dict[str, float | int | str]
+    ] = []
+
+    for year in range(
+        start_year,
+        end_year + 1,
+    ):
+        current = core_results[year]
+
+        if timing == "income_year":
+            # 所得年 t の所得に
+            # 課税年度 t+1 を対応。
+            resident_tax_income_year = year
+            assessment_year = year + 1
+
+        else:
+            # 年 t に対応する住民税として、
+            # t-1 年所得に基づく
+            # 課税年度 t の年税額を使用。
+            resident_tax_income_year = year - 1
+            assessment_year = year
+
+        resident_source = core_results[
+            resident_tax_income_year
+        ]
+
+        resident = (
+            calculate_standard_worker_resident_tax(
+                salary_income_yen=float(
+                    resident_source[
+                        "salary_income_yen"
+                    ]
+                ),
+                social_insurance_deduction_yen=float(
+                    resident_source[
+                        "social_insurance_yen"
+                    ]
+                ),
+                assessment_year=assessment_year,
+                resident_tax_deductions=(
+                    rule_tables[
+                        "resident_tax_deductions"
+                    ]
+                ),
+                resident_tax_income_rates=(
+                    rule_tables[
+                        "resident_tax_income_rates"
+                    ]
+                ),
+                resident_tax_adjustments=(
+                    rule_tables[
+                        "resident_tax_adjustments"
+                    ]
+                ),
+                resident_tax_per_capita=(
+                    rule_tables[
+                        "resident_tax_per_capita"
+                    ]
+                ),
+                dependent_count=dependent_count,
+                other_income_deductions_yen=(
+                    resident_other_income_deductions_yen
+                ),
+                human_deduction_difference_yen=(
+                    human_deduction_difference_yen
+                ),
+                municipality_band=(
+                    municipality_band
+                ),
+                policy_mode=policy_mode,
+            )
+        )
+
+        gross_salary_yen = float(
+            current[
+                "gross_salary_yen"
+            ]
+        )
+
+        social_insurance_yen = float(
+            current[
+                "social_insurance_yen"
+            ]
+        )
+
+        income_tax_yen = float(
+            current[
+                "income_tax_yen"
+            ]
+        )
+
+        resident_tax_yen = float(
+            resident[
+                "resident_tax_yen"
+            ]
+        )
+
+        total_deductions_yen = (
+            social_insurance_yen
+            + income_tax_yen
+            + resident_tax_yen
+        )
+
+        nominal_take_home_yen = (
+            gross_salary_yen
+            - total_deductions_yen
+        )
+
+        if gross_salary_yen > 0:
+            effective_burden_rate = (
+                total_deductions_yen
+                / gross_salary_yen
+            )
+
+            take_home_rate = (
+                nominal_take_home_yen
+                / gross_salary_yen
+            )
+
+        else:
+            effective_burden_rate = 0.0
+            take_home_rate = 0.0
+
+        result_rows.append(
+            {
+                "year": year,
+                "timing": timing,
+                "resident_tax_income_year": (
+                    resident_tax_income_year
+                ),
+                **wage_inputs[year],
+                **current,
+                **resident,
+                "total_deductions_yen": float(
+                    round(
+                        total_deductions_yen,
+                        10,
+                    )
+                ),
+                "nominal_take_home_yen": float(
+                    round(
+                        nominal_take_home_yen,
+                        10,
+                    )
+                ),
+                "effective_burden_rate": float(
+                    effective_burden_rate
+                ),
+                "take_home_rate": float(
+                    take_home_rate
+                ),
+            }
+        )
+
+    return pd.DataFrame(
+        result_rows
+    ).sort_values(
+        "year"
+    ).reset_index(
+        drop=True
+    )
+
+
+def calculate_standard_worker_resident_tax(
+    salary_income_yen: float,
+    social_insurance_deduction_yen: float,
+    assessment_year: int,
+    resident_tax_deductions: pd.DataFrame,
+    resident_tax_income_rates: pd.DataFrame,
+    resident_tax_adjustments: pd.DataFrame,
+    resident_tax_per_capita: pd.DataFrame,
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    human_deduction_difference_yen: float = 50_000.0,
+    municipality_band: str | None = None,
+    policy_mode: str = "actual_policy",
+) -> dict[str, float | int]:
+    """ある所得を基礎とする年間住民税を計算する。"""
+
+    resident_taxable = calculate_resident_taxable_income(
+        salary_income_yen=salary_income_yen,
+        social_insurance_deduction_yen=(
+            social_insurance_deduction_yen
+        ),
+        assessment_year=assessment_year,
+        resident_tax_deductions=(
+            resident_tax_deductions
+        ),
+        other_income_deductions_yen=(
+            other_income_deductions_yen
+        ),
+    )
+
+    taxable_income_yen = resident_taxable[
+        "resident_taxable_income_yen"
+    ]
+
+    base_income_levy_yen = (
+        calculate_base_resident_income_levy(
+            taxable_income_yen=taxable_income_yen,
+            assessment_year=assessment_year,
+            income_rate_rules=(
+                resident_tax_income_rates
+            ),
+        )
+    )
+
+    adjusted = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=(
+                base_income_levy_yen
+            ),
+            taxable_income_yen=(
+                taxable_income_yen
+            ),
+            total_income_yen=(
+                salary_income_yen
+            ),
+            assessment_year=assessment_year,
+            adjustment_rules=(
+                resident_tax_adjustments
+            ),
+            dependent_count=dependent_count,
+            human_deduction_difference_yen=(
+                human_deduction_difference_yen
+            ),
+            policy_mode=policy_mode,
+        )
+    )
+
+    total = calculate_total_resident_tax(
+        income_levy_after_adjustments_yen=(
+            adjusted[
+                "resident_income_levy_after_adjustments_yen"
+            ]
+        ),
+        assessment_year=assessment_year,
+        per_capita_rules=(
+            resident_tax_per_capita
+        ),
+        municipality_band=municipality_band,
+    )
+
+    return {
+        "resident_tax_assessment_year": (
+            assessment_year
+        ),
+        "resident_basic_deduction_yen": float(
+            resident_taxable[
+                "resident_basic_deduction_yen"
+            ]
+        ),
+        "resident_taxable_income_yen": float(
+            taxable_income_yen
+        ),
+        "base_resident_income_levy_yen": float(
+            base_income_levy_yen
+        ),
+        "resident_adjustment_credit_yen": float(
+            adjusted[
+                "resident_adjustment_credit_yen"
+            ]
+        ),
+        "resident_other_reduction_yen": float(
+            adjusted[
+                "resident_other_reduction_yen"
+            ]
+        ),
+        "resident_income_levy_yen": float(
+            total[
+                "resident_income_levy_yen"
+            ]
+        ),
+        "resident_per_capita_yen": float(
+            total[
+                "resident_per_capita_yen"
+            ]
+        ),
+        "forest_environment_tax_yen": float(
+            total[
+                "forest_environment_tax_yen"
+            ]
+        ),
+        "resident_tax_yen": float(
+            total[
+                "total_resident_tax_yen"
+            ]
         ),
     }

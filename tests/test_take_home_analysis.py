@@ -42,7 +42,9 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_salary_income_deduction,
     calculate_standard_monthly_remuneration,
     calculate_standard_worker_income_tax,
+    calculate_standard_worker_resident_tax,
     calculate_standard_worker_take_home,
+    calculate_take_home_time_series,
     calculate_taxable_income,
     calculate_total_income_tax,
     calculate_total_resident_tax,
@@ -4493,3 +4495,404 @@ def test_standard_worker_take_home_identity():
         result["take_home_rate"]
         + result["effective_burden_rate"]
     ) == pytest.approx(1.0)
+
+
+def test_calculate_take_home_time_series():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                2025,
+            ],
+            "total_cash_earnings": [
+                3_939_398 / 12,
+                4_267_634 / 12,
+            ],
+            "regular_earnings": [
+                2_993_174 / 12,
+                3_448_900 / 12,
+            ],
+            "special_earnings": [
+                946_224 / 12,
+                818_734 / 12,
+            ],
+        }
+    )
+
+    # 途中年を要求しないよう、
+    # 各端点をそれぞれ計算する。
+    result_1990 = (
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=1990,
+            end_year=1990,
+        )
+    )
+
+    result_2025 = (
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+        )
+    )
+
+    assert len(result_1990) == 1
+    assert len(result_2025) == 1
+
+    assert result_1990.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        3_939_398
+    )
+
+    assert result_2025.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        4_267_634
+    )
+
+    assert result_1990.loc[
+        0,
+        "resident_tax_assessment_year",
+    ] == 1991
+
+    assert result_2025.loc[
+        0,
+        "resident_tax_assessment_year",
+    ] == 2026
+
+    for result in [
+        result_1990,
+        result_2025,
+    ]:
+        assert (
+            result.loc[
+                0,
+                "nominal_take_home_yen",
+            ]
+            == pytest.approx(
+                result.loc[
+                    0,
+                    "gross_salary_yen",
+                ]
+                - result.loc[
+                    0,
+                    "total_deductions_yen",
+                ]
+            )
+        )
+
+        assert (
+            result.loc[
+                0,
+                "take_home_rate",
+            ]
+            + result.loc[
+                0,
+                "effective_burden_rate",
+            ]
+        ) == pytest.approx(1.0)
+
+
+def test_take_home_time_series_rejects_missing_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2023,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2024",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2023,
+            end_year=2025,
+        )
+
+
+def test_take_home_time_series_rejects_wage_identity_error():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2025,
+            ],
+            "total_cash_earnings": [
+                320_000,
+            ],
+            "regular_earnings": [
+                270_000,
+            ],
+            "special_earnings": [
+                40_000,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="給与構成の恒等式",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+        )
+
+
+def test_calculate_standard_worker_resident_tax_2026():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_resident_tax(
+        salary_income_yen=2_342_000,
+        social_insurance_deduction_yen=500_437.5,
+        assessment_year=2026,
+        resident_tax_deductions=(
+            rules["resident_tax_deductions"]
+        ),
+        resident_tax_income_rates=(
+            rules["resident_tax_income_rates"]
+        ),
+        resident_tax_adjustments=(
+            rules["resident_tax_adjustments"]
+        ),
+        resident_tax_per_capita=(
+            rules["resident_tax_per_capita"]
+        ),
+    )
+
+    assert result[
+        "resident_tax_assessment_year"
+    ] == 2026
+
+    assert result[
+        "resident_taxable_income_yen"
+    ] == 1_411_000
+
+    assert result[
+        "resident_adjustment_credit_yen"
+    ] == 2_500
+
+    assert result[
+        "resident_tax_yen"
+    ] == 143_600
+
+
+def test_take_home_time_series_cash_flow_uses_previous_year_income():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+        timing="cash_flow",
+    )
+
+    assert len(result) == 1
+
+    assert result.loc[
+        0,
+        "timing",
+    ] == "cash_flow"
+
+    assert result.loc[
+        0,
+        "resident_tax_income_year",
+    ] == 2024
+
+    assert result.loc[
+        0,
+        "resident_tax_assessment_year",
+    ] == 2025
+
+    # 当年の額面賃金は2025年給与。
+    assert result.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        320_000 * 12
+    )
+
+
+def test_take_home_time_series_cash_flow_requires_previous_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2025,
+            ],
+            "total_cash_earnings": [
+                320_000,
+            ],
+            "regular_earnings": [
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2024",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+            timing="cash_flow",
+        )
+
+
+def test_cash_flow_aligns_2024_resident_fixed_reduction():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2023,
+                2024,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    cash_flow = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2024,
+        end_year=2024,
+        timing="cash_flow",
+    )
+
+    income_year = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2024,
+        end_year=2024,
+        timing="income_year",
+    )
+
+    # cash_flow:
+    # 2023年所得 → 2024年度住民税
+    assert cash_flow.loc[
+        0,
+        "resident_tax_income_year",
+    ] == 2023
+
+    assert cash_flow.loc[
+        0,
+        "resident_tax_assessment_year",
+    ] == 2024
+
+    assert cash_flow.loc[
+        0,
+        "resident_other_reduction_yen",
+    ] == 10_000
+
+    # income_year:
+    # 2024年所得 → 2025年度住民税
+    assert income_year.loc[
+        0,
+        "resident_tax_income_year",
+    ] == 2024
+
+    assert income_year.loc[
+        0,
+        "resident_tax_assessment_year",
+    ] == 2025
+
+    assert income_year.loc[
+        0,
+        "resident_other_reduction_yen",
+    ] == 0
+
+
+def test_take_home_time_series_rejects_invalid_timing():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [2025],
+            "total_cash_earnings": [320_000],
+            "regular_earnings": [270_000],
+            "special_earnings": [50_000],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="timing",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+            timing="invalid",
+        )
