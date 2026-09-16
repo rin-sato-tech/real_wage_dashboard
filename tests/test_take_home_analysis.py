@@ -6,6 +6,8 @@ from real_wage_dashboard.take_home_analysis import (
     _select_effective_rules,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
+    calculate_salary_income,
+    calculate_salary_income_deduction,
 )
 
 
@@ -237,3 +239,191 @@ def test_select_single_assessment_year_rule_with_filter():
     )
 
     assert result["municipal_yen"] == 3000
+
+
+def _create_salary_income_deduction_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "deduction_type": [
+                "salary_income",
+                "salary_income",
+                "salary_income",
+                "salary_income",
+                "salary_income",
+                "salary_income",
+            ],
+            "effective_from": [
+                "2017-01-01",
+                "2017-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2025-01-01",
+                "2025-01-01",
+            ],
+            "effective_to": [
+                "2019-12-31",
+                "2019-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                None,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                4,
+                1,
+                4,
+                1,
+                3,
+            ],
+            "basis": [
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+            ],
+            "lower_bound_yen": [
+                0,
+                3_600_001,
+                0,
+                3_600_001,
+                0,
+                3_600_001,
+            ],
+            "upper_bound_yen": [
+                1_625_000,
+                6_600_000,
+                1_625_000,
+                6_600_000,
+                1_900_000,
+                6_600_000,
+            ],
+            "rate": [
+                None,
+                0.20,
+                None,
+                0.20,
+                None,
+                0.20,
+            ],
+            "add_yen": [
+                None,
+                540_000,
+                None,
+                440_000,
+                None,
+                440_000,
+            ],
+            "fixed_yen": [
+                650_000,
+                None,
+                550_000,
+                None,
+                650_000,
+                None,
+            ],
+            "source_key": ["test"] * 6,
+        }
+    )
+
+
+def test_calculate_salary_income_deduction_fixed_amount():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=1_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 550_000
+
+
+def test_calculate_salary_income_deduction_does_not_exceed_salary():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=300_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 300_000
+
+
+def test_calculate_salary_income_deduction_2019():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=4_000_000,
+        target_date="2019-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 1_340_000
+
+
+def test_calculate_salary_income_deduction_2020():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=4_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 1_240_000
+
+
+def test_calculate_salary_income_deduction_2025():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=4_000_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 1_240_000
+
+
+def test_calculate_salary_income():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income(
+        gross_salary_yen=4_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 2_760_000
+
+
+def test_calculate_salary_income_deduction_rejects_negative_salary():
+    rules = _create_salary_income_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="給与収入は0以上",
+    ):
+        calculate_salary_income_deduction(
+            gross_salary_yen=-1,
+            target_date="2020-06-01",
+            deduction_rules=rules,
+        )
+
+
+def test_calculate_salary_income_deduction_rejects_missing_rule():
+    rules = _create_salary_income_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な給与所得控除ルールがありません",
+    ):
+        calculate_salary_income_deduction(
+            gross_salary_yen=1_000_000,
+            target_date="2010-01-01",
+            deduction_rules=rules,
+        )
