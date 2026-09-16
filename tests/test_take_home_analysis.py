@@ -4,6 +4,7 @@ import pytest
 from real_wage_dashboard.take_home_analysis import (
     _floor_to_hundred_yen,
     _floor_to_thousand_yen,
+    _get_fiscal_year,
     _select_assessment_year_rules,
     _select_effective_rules,
     _select_health_insurance_rate_rule,
@@ -12,6 +13,7 @@ from real_wage_dashboard.take_home_analysis import (
     _select_single_effective_rule,
     _select_standard_monthly_remuneration_rule,
     calculate_annual_employment_insurance,
+    calculate_annual_health_bonus_contribution,
     calculate_annual_pension_bonus_contribution,
     calculate_annual_pension_contribution,
     calculate_annual_regular_health_insurance_contribution,
@@ -19,6 +21,8 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_base_income_tax,
     calculate_basic_deduction,
     calculate_employment_insurance,
+    calculate_health_bonus_base,
+    calculate_health_bonus_contribution,
     calculate_income_tax_after_adjustments,
     calculate_monthly_health_insurance_contribution,
     calculate_monthly_pension_contribution,
@@ -2597,6 +2601,15 @@ def _create_health_insurance_rates() -> pd.DataFrame:
                 0.0950,
                 0.1000,
             ],
+            "bonus_employee_rate": [
+                0.003,
+                0.003,
+                0.003,
+                None,
+                None,
+                None,
+                None,
+            ],
             "employee_share": [
                 0.5,
                 0.5,
@@ -2876,3 +2889,177 @@ def test_annual_health_insurance_handles_rate_change():
 
     assert result == expected
     assert result == 99_600
+
+
+def _create_health_bonus_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "scheme": [
+                "health",
+                "health",
+                "health",
+                "health",
+            ],
+            "effective_from": [
+                "1990-01-01",
+                "2003-04-01",
+                "2007-04-01",
+                "2016-04-01",
+            ],
+            "effective_to": [
+                "2003-03-31",
+                "2007-03-31",
+                "2016-03-31",
+                None,
+            ],
+            "cap_type": [
+                "none",
+                "per_payment",
+                "fiscal_year",
+                "fiscal_year",
+            ],
+            "cap_yen": [
+                None,
+                2_000_000,
+                5_400_000,
+                5_730_000,
+            ],
+            "rounding_unit_yen": [
+                100,
+                1_000,
+                1_000,
+                1_000,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_health_bonus_contribution_before_total_remuneration():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    result = calculate_health_bonus_contribution(
+        bonus_yen=500_099,
+        target_date="1990-06-01",
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 1_500
+
+
+def test_health_bonus_contribution_after_2003():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    result = calculate_health_bonus_contribution(
+        bonus_yen=500_999,
+        target_date="2003-06-01",
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 20_500
+
+
+def test_health_bonus_2003_per_payment_cap():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    result = calculate_health_bonus_contribution(
+        bonus_yen=2_500_000,
+        target_date="2005-06-01",
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 82_000
+
+
+def test_annual_health_bonus_uses_5400000_cap():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2015-06-01",
+                "2015-12-01",
+            ],
+            "bonus_yen": [
+                3_000_000,
+                3_000_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_bonus_contribution(
+        bonus_payments=bonuses,
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 270_000
+
+
+def test_annual_health_bonus_uses_5730000_cap():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                3_000_000,
+                3_000_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_bonus_contribution(
+        bonus_payments=bonuses,
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 286_500
+
+
+def test_health_bonus_cap_resets_in_april():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-03-01",
+                "2025-04-01",
+            ],
+            "bonus_yen": [
+                4_000_000,
+                4_000_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_bonus_contribution(
+        bonus_payments=bonuses,
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 400_000
+
+
+def test_get_fiscal_year():
+    assert _get_fiscal_year("2025-03-31") == 2024
+    assert _get_fiscal_year("2025-04-01") == 2025

@@ -1770,3 +1770,328 @@ def calculate_annual_regular_health_insurance_contribution(
             10,
         )
     )
+
+
+def calculate_health_bonus_base(
+    bonus_yen: float,
+    target_date: str | date | pd.Timestamp,
+    bonus_rules: pd.DataFrame,
+    prior_fiscal_year_standard_bonus_yen: float = 0.0,
+) -> float:
+    """健康保険の賞与保険料算定基礎額を計算する。"""
+
+    if bonus_yen < 0:
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    if prior_fiscal_year_standard_bonus_yen < 0:
+        raise ValueError(
+            "年度累計標準賞与額は0以上である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        bonus_rules,
+        target_date=target_date,
+    )
+
+    rules = rules.loc[
+        rules["scheme"] == "health"
+    ].copy()
+
+    if len(rules) != 1:
+        raise ValueError(
+            "健康保険の賞与ルールを一意に取得できません。"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(rules)}"
+        )
+
+    rule = rules.iloc[0]
+
+    rounding_unit = pd.to_numeric(
+        pd.Series([rule["rounding_unit_yen"]]),
+        errors="coerce",
+    ).iloc[0]
+
+    if (
+        pd.isna(rounding_unit)
+        or rounding_unit <= 0
+    ):
+        raise ValueError(
+            "健康保険賞与ルールの rounding_unit_yen に"
+            "不正な値があります。"
+        )
+
+    bonus_base = (
+        math.floor(
+            bonus_yen / float(rounding_unit)
+        )
+        * float(rounding_unit)
+    )
+
+    cap_type = str(
+        rule["cap_type"]
+    )
+
+    if cap_type == "none":
+        return float(bonus_base)
+
+    cap_yen = pd.to_numeric(
+        pd.Series([rule["cap_yen"]]),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(cap_yen):
+        raise ValueError(
+            "健康保険の賞与上限額が設定されていません。"
+        )
+
+    cap_yen = float(cap_yen)
+
+    if cap_type == "per_payment":
+        return float(
+            min(
+                bonus_base,
+                cap_yen,
+            )
+        )
+
+    if cap_type == "fiscal_year":
+        remaining_cap = max(
+            cap_yen
+            - prior_fiscal_year_standard_bonus_yen,
+            0.0,
+        )
+
+        return float(
+            min(
+                bonus_base,
+                remaining_cap,
+            )
+        )
+
+    raise ValueError(
+        f"未対応の健康保険賞与上限方式です: {cap_type}"
+    )
+
+
+def calculate_health_bonus_contribution(
+    bonus_yen: float,
+    target_date: str | date | pd.Timestamp,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    prior_fiscal_year_standard_bonus_yen: float = 0.0,
+) -> float:
+    """賞与にかかる健康保険本人負担額を計算する。"""
+
+    if bonus_yen < 0:
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    rule = _select_health_insurance_rate_rule(
+        target_date=target_date,
+        health_insurance_rates=health_insurance_rates,
+    )
+
+    bonus_base = calculate_health_bonus_base(
+        bonus_yen=bonus_yen,
+        target_date=target_date,
+        bonus_rules=bonus_rules,
+        prior_fiscal_year_standard_bonus_yen=(
+            prior_fiscal_year_standard_bonus_yen
+        ),
+    )
+
+    target = pd.Timestamp(
+        target_date
+    )
+
+    # 総報酬制導入前：
+    # 月給保険料率とは別に賞与特別保険料の本人率を直接適用。
+    if target < pd.Timestamp("2003-04-01"):
+        bonus_employee_rate = pd.to_numeric(
+            pd.Series(
+                [rule["bonus_employee_rate"]]
+            ),
+            errors="coerce",
+        ).iloc[0]
+
+        if pd.isna(bonus_employee_rate):
+            raise ValueError(
+                "総報酬制導入前の"
+                " bonus_employee_rate がありません。"
+            )
+
+        if bonus_employee_rate < 0:
+            raise ValueError(
+                "健康保険の賞与本人負担率は"
+                "0以上である必要があります。"
+            )
+
+        contribution = (
+            bonus_base
+            * float(bonus_employee_rate)
+        )
+
+    else:
+        total_rate = pd.to_numeric(
+            pd.Series(
+                [rule["regular_total_rate"]]
+            ),
+            errors="coerce",
+        ).iloc[0]
+
+        employee_share = pd.to_numeric(
+            pd.Series(
+                [rule["employee_share"]]
+            ),
+            errors="coerce",
+        ).iloc[0]
+
+        if pd.isna(total_rate):
+            raise ValueError(
+                "健康保険料率に不正な値があります。"
+            )
+
+        if pd.isna(employee_share):
+            raise ValueError(
+                "健康保険本人負担割合に不正な値があります。"
+            )
+
+        contribution = (
+            bonus_base
+            * float(total_rate)
+            * float(employee_share)
+        )
+
+    return float(
+        round(
+            contribution,
+            10,
+        )
+    )
+
+
+def _get_fiscal_year(
+    target_date: str | date | pd.Timestamp,
+) -> int:
+    """4月始まりの年度を返す。"""
+
+    target = pd.Timestamp(
+        target_date
+    )
+
+    if target.month >= 4:
+        return target.year
+
+    return target.year - 1
+
+
+def calculate_annual_health_bonus_contribution(
+    bonus_payments: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+) -> float:
+    """年間の賞与にかかる健康保険本人負担額を計算する。"""
+
+    required_columns = {
+        "date",
+        "bonus_yen",
+    }
+
+    missing = required_columns - set(
+        bonus_payments.columns
+    )
+
+    if missing:
+        raise ValueError(
+            "年間健康保険賞与計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if bonus_payments.empty:
+        return 0.0
+
+    data = bonus_payments.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    if data["date"].isna().any():
+        raise ValueError(
+            "賞与データの date に不正な値があります。"
+        )
+
+    data["bonus_yen"] = pd.to_numeric(
+        data["bonus_yen"],
+        errors="coerce",
+    )
+
+    if data["bonus_yen"].isna().any():
+        raise ValueError(
+            "bonus_yen に不正な値があります。"
+        )
+
+    if (data["bonus_yen"] < 0).any():
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    data = data.sort_values(
+        "date"
+    ).reset_index(drop=True)
+
+    fiscal_year_cumulative: dict[int, float] = {}
+    contributions: list[float] = []
+
+    for row in data.itertuples(
+        index=False
+    ):
+        fiscal_year = _get_fiscal_year(
+            row.date
+        )
+
+        prior = fiscal_year_cumulative.get(
+            fiscal_year,
+            0.0,
+        )
+
+        bonus_base = calculate_health_bonus_base(
+            bonus_yen=float(row.bonus_yen),
+            target_date=row.date,
+            bonus_rules=bonus_rules,
+            prior_fiscal_year_standard_bonus_yen=prior,
+        )
+
+        contribution = (
+            calculate_health_bonus_contribution(
+                bonus_yen=float(row.bonus_yen),
+                target_date=row.date,
+                health_insurance_rates=(
+                    health_insurance_rates
+                ),
+                bonus_rules=bonus_rules,
+                prior_fiscal_year_standard_bonus_yen=prior,
+            )
+        )
+
+        contributions.append(
+            contribution
+        )
+
+        fiscal_year_cumulative[
+            fiscal_year
+        ] = (
+            prior
+            + bonus_base
+        )
+
+    return float(
+        round(
+            sum(contributions),
+            10,
+        )
+    )

@@ -189,19 +189,21 @@ def load_pension_rates(
 def load_health_insurance_rates(
     path: str | Path = HEALTH_INSURANCE_RATES_PATH,
 ) -> pd.DataFrame:
-    """健康保険料率を読み込む。"""
+    """健康保険料率の履歴を読み込む。"""
+
+    required_columns = {
+        "effective_from",
+        "effective_to",
+        "regular_total_rate",
+        "employee_share",
+        "bonus_employee_rate",
+        "source_key",
+        "notes",
+    }
 
     return _load_rule_csv(
-        path,
-        required_columns={
-            "effective_from",
-            "effective_to",
-            "scheme",
-            "regular_total_rate",
-            "regular_employee_share",
-            "rate_type",
-            "source_key",
-        },
+        path=path,
+        required_columns=required_columns,
         date_columns=(
             "effective_from",
             "effective_to",
