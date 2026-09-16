@@ -57,6 +57,11 @@ PENSION_STANDARD_MONTHLY_HISTORY_PATH = (
     DATA_DIR / "pension_standard_monthly_history.xlsx"
 )
 
+HEALTH_STANDARD_MONTHLY_HISTORY_PATH = (
+    DATA_DIR / "health_standard_monthly_history.csv"
+)
+
+
 def _load_rule_csv(
     path: str | Path,
     required_columns: set[str],
@@ -330,15 +335,26 @@ def load_take_home_rule_tables() -> dict[str, pd.DataFrame]:
     """手取り分析で使用する制度パラメータを一括で読み込む。"""
 
     return {
-        "income_tax_brackets": load_income_tax_brackets(),
-        "income_tax_deductions": load_income_tax_deductions(),
-        "income_tax_adjustments": load_income_tax_adjustments(),
-        "pension_rates": load_pension_rates(),
+        "income_tax_brackets": (
+            load_income_tax_brackets()
+        ),
+        "income_tax_deductions": (
+            load_income_tax_deductions()
+        ),
+        "income_tax_adjustments": (
+            load_income_tax_adjustments()
+        ),
+        "pension_rates": (
+            load_pension_rates()
+        ),
         "pension_standard_monthly": (
             load_pension_standard_monthly_history()
         ),
         "health_insurance_rates": (
             load_health_insurance_rates()
+        ),
+        "health_standard_monthly": (
+            load_health_standard_monthly_history()
         ),
         "social_insurance_bonus_rules": (
             load_social_insurance_bonus_rules()
@@ -608,6 +624,270 @@ def _validate_pension_standard_monthly_history(
                 raise ValueError(
                     "標準報酬月額の等級境界が"
                     "連続していません。"
+                    f" effective_from={effective_from},"
+                    f" grade={index + 1}"
+                )
+
+
+def load_health_standard_monthly_history(
+    path: str | Path = HEALTH_STANDARD_MONTHLY_HISTORY_PATH,
+) -> pd.DataFrame:
+    """健康保険の標準報酬月額等級履歴を読み込む。"""
+
+    required_columns = {
+        "effective_from",
+        "effective_to",
+        "grade",
+        "standard_monthly_yen",
+        "remuneration_lower_yen",
+        "remuneration_upper_yen",
+        "source_key",
+        "notes",
+    }
+
+    df = _load_rule_csv(
+        path=path,
+        required_columns=required_columns,
+        date_columns=(
+            "effective_from",
+            "effective_to",
+        ),
+    )
+
+    numeric_columns = [
+        "grade",
+        "standard_monthly_yen",
+        "remuneration_lower_yen",
+        "remuneration_upper_yen",
+    ]
+
+    for column in numeric_columns:
+        df[column] = pd.to_numeric(
+            df[column],
+            errors="coerce",
+        )
+
+    _validate_health_standard_monthly_history(
+        df
+    )
+
+    return df.reset_index(
+        drop=True
+    )
+
+
+def _validate_health_standard_monthly_history(
+    df: pd.DataFrame,
+) -> None:
+    """健康保険の標準報酬月額等級データを検証する。"""
+
+    required_columns = {
+        "effective_from",
+        "effective_to",
+        "grade",
+        "standard_monthly_yen",
+        "remuneration_lower_yen",
+        "remuneration_upper_yen",
+    }
+
+    missing = required_columns - set(
+        df.columns
+    )
+
+    if missing:
+        raise ValueError(
+            "健康保険標準報酬月額データに"
+            "必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if df.empty:
+        raise ValueError(
+            "健康保険標準報酬月額データが空です。"
+        )
+
+    if df[
+        [
+            "effective_from",
+            "grade",
+            "standard_monthly_yen",
+        ]
+    ].isna().any().any():
+        raise ValueError(
+            "健康保険標準報酬月額データの"
+            "必須項目に欠損があります。"
+        )
+
+    if (
+        df["grade"] <= 0
+    ).any():
+        raise ValueError(
+            "健康保険の等級は"
+            "正の値である必要があります。"
+        )
+
+    if (
+        df["standard_monthly_yen"] <= 0
+    ).any():
+        raise ValueError(
+            "健康保険の標準報酬月額は"
+            "正の値である必要があります。"
+        )
+
+    if df.duplicated(
+        subset=[
+            "effective_from",
+            "grade",
+        ]
+    ).any():
+        raise ValueError(
+            "同一制度期間内で"
+            "健康保険の等級が重複しています。"
+        )
+
+    if df.duplicated(
+        subset=[
+            "effective_from",
+            "standard_monthly_yen",
+        ]
+    ).any():
+        raise ValueError(
+            "同一制度期間内で"
+            "健康保険の標準報酬月額が"
+            "重複しています。"
+        )
+
+    periods = (
+        df[
+            [
+                "effective_from",
+                "effective_to",
+            ]
+        ]
+        .drop_duplicates()
+        .sort_values(
+            "effective_from"
+        )
+        .reset_index(drop=True)
+    )
+
+    for index in range(
+        len(periods) - 1
+    ):
+        current_end = periods.loc[
+            index,
+            "effective_to",
+        ]
+
+        next_start = periods.loc[
+            index + 1,
+            "effective_from",
+        ]
+
+        if pd.isna(current_end):
+            raise ValueError(
+                "最終期間以外の effective_to が"
+                "欠損しています。"
+            )
+
+        expected_next = (
+            current_end
+            + pd.Timedelta(days=1)
+        )
+
+        if next_start != expected_next:
+            raise ValueError(
+                "健康保険標準報酬月額の"
+                "制度期間が連続していません。"
+                f" current_end={current_end.date()},"
+                f" next_start={next_start.date()}"
+            )
+
+    for effective_from, group in df.groupby(
+        "effective_from",
+        sort=False,
+    ):
+        group = (
+            group.sort_values(
+                "grade"
+            )
+            .reset_index(drop=True)
+        )
+
+        expected_grades = list(
+            range(
+                1,
+                len(group) + 1,
+            )
+        )
+
+        actual_grades = (
+            group["grade"]
+            .astype(int)
+            .tolist()
+        )
+
+        if actual_grades != expected_grades:
+            raise ValueError(
+                "健康保険標準報酬月額の"
+                "等級が連続していません。"
+                f" effective_from={effective_from}"
+            )
+
+        if not group[
+            "standard_monthly_yen"
+        ].is_monotonic_increasing:
+            raise ValueError(
+                "健康保険の標準報酬月額が"
+                "昇順ではありません。"
+                f" effective_from={effective_from}"
+            )
+
+        # 最下位等級には下限なし。
+        if pd.notna(
+            group.loc[
+                0,
+                "remuneration_lower_yen",
+            ]
+        ):
+            raise ValueError(
+                "健康保険の最下位等級には"
+                "報酬月額下限を設定しません。"
+            )
+
+        # 最上位等級には上限なし。
+        if pd.notna(
+            group.loc[
+                len(group) - 1,
+                "remuneration_upper_yen",
+            ]
+        ):
+            raise ValueError(
+                "健康保険の最上位等級には"
+                "報酬月額上限を設定しません。"
+            )
+
+        for index in range(
+            len(group) - 1
+        ):
+            current_upper = group.loc[
+                index,
+                "remuneration_upper_yen",
+            ]
+
+            next_lower = group.loc[
+                index + 1,
+                "remuneration_lower_yen",
+            ]
+
+            if (
+                pd.isna(current_upper)
+                or pd.isna(next_lower)
+                or current_upper != next_lower
+            ):
+                raise ValueError(
+                    "健康保険標準報酬月額の"
+                    "等級境界が連続していません。"
                     f" effective_from={effective_from},"
                     f" grade={index + 1}"
                 )

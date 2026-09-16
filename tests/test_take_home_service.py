@@ -4,6 +4,8 @@ import pandas as pd
 
 from real_wage_dashboard.take_home_service import (
     _create_standard_monthly_brackets,
+    _validate_health_standard_monthly_history,
+    load_health_standard_monthly_history,
     load_income_tax_brackets,
     load_pension_standard_monthly_history,
 )
@@ -297,3 +299,208 @@ def test_load_pension_standard_monthly_history_2016_boundary(
         ]
         == 93_000
     )
+
+
+def _create_health_standard_monthly_data() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "2007-04-01",
+                "2007-04-01",
+                "2007-04-01",
+            ],
+            "effective_to": [
+                "2016-03-31",
+                "2016-03-31",
+                "2016-03-31",
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+            ],
+            "standard_monthly_yen": [
+                58_000,
+                68_000,
+                78_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                63_000,
+                73_000,
+            ],
+            "remuneration_upper_yen": [
+                63_000,
+                73_000,
+                None,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+            ],
+            "notes": [
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_validate_health_standard_monthly_history():
+    df = _create_health_standard_monthly_data()
+
+    _validate_health_standard_monthly_history(
+        df
+    )
+
+
+def test_validate_health_standard_monthly_history_rejects_gap():
+    df = _create_health_standard_monthly_data()
+
+    df.loc[
+        1,
+        "remuneration_lower_yen",
+    ] = 64_000
+
+    with pytest.raises(
+        ValueError,
+        match="等級境界が連続していません",
+    ):
+        _validate_health_standard_monthly_history(
+            df
+        )
+
+
+def test_validate_health_standard_monthly_history_rejects_duplicate_grade():
+    df = _create_health_standard_monthly_data()
+
+    df.loc[
+        1,
+        "grade",
+    ] = 1
+
+    with pytest.raises(
+        ValueError,
+        match="等級が重複しています",
+    ):
+        _validate_health_standard_monthly_history(
+            df
+        )
+
+
+def test_load_health_standard_monthly_history(
+    tmp_path,
+):
+    path = (
+        tmp_path
+        / "health_standard_monthly_history.csv"
+    )
+
+    df = _create_health_standard_monthly_data()
+
+    df.to_csv(
+        path,
+        index=False,
+    )
+
+    result = (
+        load_health_standard_monthly_history(
+            path
+        )
+    )
+
+    assert len(result) == 3
+
+    assert (
+        result.loc[
+            0,
+            "standard_monthly_yen",
+        ]
+        == 58_000
+    )
+
+    assert (
+        result.loc[
+            1,
+            "remuneration_lower_yen",
+        ]
+        == 63_000
+    )
+
+    assert pd.api.types.is_datetime64_any_dtype(
+        result["effective_from"]
+    )
+
+
+def test_real_health_standard_monthly_history():
+    result = (
+        load_health_standard_monthly_history()
+    )
+
+    summary = (
+        result.groupby(
+            "effective_from"
+        )
+        .agg(
+            grades=(
+                "grade",
+                "count",
+            ),
+            minimum=(
+                "standard_monthly_yen",
+                "min",
+            ),
+            maximum=(
+                "standard_monthly_yen",
+                "max",
+            ),
+        )
+    )
+
+    expected = {
+        pd.Timestamp("1984-10-01"): (
+            39,
+            68_000,
+            710_000,
+        ),
+        pd.Timestamp("1992-10-01"): (
+            42,
+            80_000,
+            980_000,
+        ),
+        pd.Timestamp("1994-11-01"): (
+            40,
+            92_000,
+            980_000,
+        ),
+        pd.Timestamp("2001-01-01"): (
+            39,
+            98_000,
+            980_000,
+        ),
+        pd.Timestamp("2007-04-01"): (
+            47,
+            58_000,
+            1_210_000,
+        ),
+        pd.Timestamp("2016-04-01"): (
+            50,
+            58_000,
+            1_390_000,
+        ),
+    }
+
+    for effective_from, (
+        grades,
+        minimum,
+        maximum,
+    ) in expected.items():
+        row = summary.loc[
+            effective_from
+        ]
+
+        assert row["grades"] == grades
+        assert row["minimum"] == minimum
+        assert row["maximum"] == maximum
