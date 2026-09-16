@@ -8,6 +8,7 @@ from real_wage_dashboard.take_home_analysis import (
     _select_effective_rules,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
+    _select_standard_monthly_remuneration_rule,
     calculate_annual_employment_insurance,
     calculate_base_income_tax,
     calculate_basic_deduction,
@@ -16,6 +17,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_reconstruction_special_income_tax,
     calculate_salary_income,
     calculate_salary_income_deduction,
+    calculate_standard_monthly_remuneration,
     calculate_taxable_income,
     calculate_total_income_tax,
 )
@@ -1579,4 +1581,217 @@ def test_calculate_annual_employment_insurance_rejects_empty_data():
         calculate_annual_employment_insurance(
             monthly_wages=monthly_wages,
             employment_insurance_rates=rates,
+        )
+
+
+def _create_standard_monthly_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "2000-10-01",
+                "2000-10-01",
+                "2000-10-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2020-09-01",
+                "2020-09-01",
+                "2020-09-01",
+            ],
+            "effective_to": [
+                "2016-09-30",
+                "2016-09-30",
+                "2016-09-30",
+                "2020-08-31",
+                "2020-08-31",
+                "2020-08-31",
+                None,
+                None,
+                None,
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+                30,
+                31,
+                32,
+            ],
+            "standard_monthly_yen": [
+                98_000,
+                104_000,
+                110_000,
+                88_000,
+                98_000,
+                104_000,
+                590_000,
+                620_000,
+                650_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                101_000,
+                107_000,
+                None,
+                93_000,
+                101_000,
+                575_000,
+                605_000,
+                635_000,
+            ],
+            "remuneration_upper_yen": [
+                101_000,
+                107_000,
+                None,
+                93_000,
+                101_000,
+                None,
+                605_000,
+                635_000,
+                None,
+            ],
+        }
+    )
+
+
+def test_calculate_standard_monthly_remuneration():
+    rules = _create_standard_monthly_rules()
+
+    result = calculate_standard_monthly_remuneration(
+        remuneration_yen=97_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert result == 98_000
+
+
+def test_calculate_standard_monthly_remuneration_2016_boundary():
+    rules = _create_standard_monthly_rules()
+
+    below = calculate_standard_monthly_remuneration(
+        remuneration_yen=92_999,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    boundary = calculate_standard_monthly_remuneration(
+        remuneration_yen=93_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert below == 88_000
+    assert boundary == 98_000
+
+
+def test_calculate_standard_monthly_remuneration_second_boundary():
+    rules = _create_standard_monthly_rules()
+
+    below = calculate_standard_monthly_remuneration(
+        remuneration_yen=100_999,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    boundary = calculate_standard_monthly_remuneration(
+        remuneration_yen=101_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert below == 98_000
+    assert boundary == 104_000
+
+
+def test_calculate_standard_monthly_remuneration_below_bottom():
+    rules = _create_standard_monthly_rules()
+
+    result = calculate_standard_monthly_remuneration(
+        remuneration_yen=50_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert result == 88_000
+
+
+def test_calculate_standard_monthly_remuneration_above_top():
+    rules = _create_standard_monthly_rules()
+
+    result = calculate_standard_monthly_remuneration(
+        remuneration_yen=800_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert result == 650_000
+
+
+def test_calculate_standard_monthly_remuneration_2020_top_boundary():
+    rules = _create_standard_monthly_rules()
+
+    below = calculate_standard_monthly_remuneration(
+        remuneration_yen=634_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    boundary = calculate_standard_monthly_remuneration(
+        remuneration_yen=635_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert below == 620_000
+    assert boundary == 650_000
+
+
+def test_standard_monthly_remuneration_changes_by_period():
+    rules = _create_standard_monthly_rules()
+
+    before = calculate_standard_monthly_remuneration(
+        remuneration_yen=90_000,
+        target_date="2015-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    after = calculate_standard_monthly_remuneration(
+        remuneration_yen=90_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert before == 98_000
+    assert after == 88_000
+
+
+def test_calculate_standard_monthly_remuneration_rejects_negative():
+    rules = _create_standard_monthly_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="報酬月額は0以上",
+    ):
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=-1,
+            target_date="2025-06-01",
+            standard_monthly_rules=rules,
+        )
+
+
+def test_calculate_standard_monthly_remuneration_rejects_missing_period():
+    rules = _create_standard_monthly_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な標準報酬月額ルールがありません",
+    ):
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=300_000,
+            target_date="1990-01-01",
+            standard_monthly_rules=rules,
         )

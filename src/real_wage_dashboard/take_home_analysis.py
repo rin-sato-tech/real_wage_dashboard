@@ -928,3 +928,103 @@ def calculate_annual_employment_insurance(
     ]
 
     return float(sum(premiums))
+
+
+def _select_standard_monthly_remuneration_rule(
+    remuneration_yen: float,
+    target_date: str | date | pd.Timestamp,
+    standard_monthly_rules: pd.DataFrame,
+) -> pd.Series:
+    """報酬月額と適用日から標準報酬月額の等級を取得する。"""
+
+    if remuneration_yen < 0:
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        standard_monthly_rules,
+        target_date=target_date,
+    )
+
+    if rules.empty:
+        raise ValueError(
+            "指定日に有効な標準報酬月額ルールがありません。"
+        )
+
+    lower = pd.to_numeric(
+        rules["remuneration_lower_yen"],
+        errors="coerce",
+    )
+
+    upper = pd.to_numeric(
+        rules["remuneration_upper_yen"],
+        errors="coerce",
+    )
+
+    standard_monthly = pd.to_numeric(
+        rules["standard_monthly_yen"],
+        errors="coerce",
+    )
+
+    if standard_monthly.isna().any():
+        raise ValueError(
+            "standard_monthly_yen に不正な値があります。"
+        )
+
+    # 下限なしの最下位等級、
+    # 上限なしの最上位等級も扱う。
+    #
+    # 等級境界は
+    # lower <= remuneration < upper
+    # とする。
+    mask = (
+        (
+            lower.isna()
+            | (lower <= remuneration_yen)
+        )
+        & (
+            upper.isna()
+            | (remuneration_yen < upper)
+        )
+    )
+
+    matched = rules.loc[mask].copy()
+
+    if len(matched) != 1:
+        raise ValueError(
+            "標準報酬月額の等級を一意に取得できません。"
+            f" remuneration_yen={remuneration_yen},"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(matched)}"
+        )
+
+    return matched.iloc[0]
+
+
+def calculate_standard_monthly_remuneration(
+    remuneration_yen: float,
+    target_date: str | date | pd.Timestamp,
+    standard_monthly_rules: pd.DataFrame,
+) -> float:
+    """実際の報酬月額から標準報酬月額を取得する。"""
+
+    rule = _select_standard_monthly_remuneration_rule(
+        remuneration_yen=remuneration_yen,
+        target_date=target_date,
+        standard_monthly_rules=standard_monthly_rules,
+    )
+
+    standard_monthly_yen = pd.to_numeric(
+        pd.Series(
+            [rule["standard_monthly_yen"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(standard_monthly_yen):
+        raise ValueError(
+            "standard_monthly_yen に不正な値があります。"
+        )
+
+    return float(standard_monthly_yen)
