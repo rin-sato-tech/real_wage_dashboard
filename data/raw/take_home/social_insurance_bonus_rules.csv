@@ -1,4 +1,5 @@
-scheme,effective_from,effective_to,cap_type,cap_yen,rounding_unit_yen
+scheme,effective_from,effective_to,cap_type,cap_yen,rounding_unit_yen,source_key,notes
 health,2003-04-01,2007-03-31,per_payment,2000000,1000
 health,2007-04-01,,annual,5400000,1000
-pension,2003-04-01,,per_payment,1500000,1000
+pension,1995-04-01,2003-03-31,none,,100,mhlw_1995_special_premium,賞与特別保険料
+pension,2003-04-01,,per_month,1500000,1000,jps_standard_bonus,総報酬制による標準賞与額

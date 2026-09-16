@@ -1244,3 +1244,167 @@ def calculate_annual_regular_pension_contribution(
     return float(
         sum(contributions)
     )
+
+
+def calculate_pension_bonus_base(
+    bonus_yen: float,
+    target_date: str | date | pd.Timestamp,
+    bonus_rules: pd.DataFrame,
+) -> float:
+    """賞与額から厚生年金保険料の算定基礎額を計算する。"""
+
+    if bonus_yen < 0:
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        bonus_rules,
+        target_date=target_date,
+    )
+
+    rules = rules.loc[
+        rules["scheme"] == "pension"
+    ].copy()
+
+    if len(rules) != 1:
+        raise ValueError(
+            "厚生年金の賞与ルールを一意に取得できません。"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(rules)}"
+        )
+
+    rule = rules.iloc[0]
+
+    rounding_unit = pd.to_numeric(
+        pd.Series([rule["rounding_unit_yen"]]),
+        errors="coerce",
+    ).iloc[0]
+
+    if (
+        pd.isna(rounding_unit)
+        or rounding_unit <= 0
+    ):
+        raise ValueError(
+            "賞与ルールの rounding_unit_yen に"
+            "不正な値があります。"
+        )
+
+    bonus_base = (
+        math.floor(
+            bonus_yen / float(rounding_unit)
+        )
+        * float(rounding_unit)
+    )
+
+    cap_type = str(rule["cap_type"])
+
+    if cap_type == "none":
+        return float(bonus_base)
+
+    if cap_type in {
+        "per_payment",
+        "per_month",
+    }:
+        cap_yen = pd.to_numeric(
+            pd.Series([rule["cap_yen"]]),
+            errors="coerce",
+        ).iloc[0]
+
+        if pd.isna(cap_yen):
+            raise ValueError(
+                "賞与上限額が設定されていません。"
+            )
+
+        return float(
+            min(
+                bonus_base,
+                float(cap_yen),
+            )
+        )
+
+    raise ValueError(
+        f"未対応の賞与上限方式です: {cap_type}"
+    )
+
+
+def calculate_pension_bonus_contribution(
+    bonus_yen: float,
+    target_date: str | date | pd.Timestamp,
+    pension_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    sex: str = "male",
+) -> float:
+    """1回の賞与にかかる厚生年金本人負担額を計算する。"""
+
+    if bonus_yen < 0:
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    rate_rule = _select_pension_rate_rule(
+        target_date=target_date,
+        pension_rates=pension_rates,
+        sex=sex,
+    )
+
+    bonus_total_rate = pd.to_numeric(
+        pd.Series(
+            [rate_rule["bonus_total_rate"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    employee_share = pd.to_numeric(
+        pd.Series(
+            [rate_rule["employee_share"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(bonus_total_rate):
+        raise ValueError(
+            "厚生年金の bonus_total_rate に"
+            "不正な値があります。"
+        )
+
+    if pd.isna(employee_share):
+        raise ValueError(
+            "厚生年金の employee_share に"
+            "不正な値があります。"
+        )
+
+    if bonus_total_rate < 0:
+        raise ValueError(
+            "厚生年金の賞与保険料率は"
+            "0以上である必要があります。"
+        )
+
+    if not 0 <= employee_share <= 1:
+        raise ValueError(
+            "厚生年金の本人負担割合は"
+            "0以上1以下である必要があります。"
+        )
+
+    # 1995年3月以前は賞与保険料なし。
+    if bonus_total_rate == 0:
+        return 0.0
+
+    bonus_base = calculate_pension_bonus_base(
+        bonus_yen=bonus_yen,
+        target_date=target_date,
+        bonus_rules=bonus_rules,
+    )
+
+    contribution = (
+        bonus_base
+        * float(bonus_total_rate)
+        * float(employee_share)
+    )
+
+    return float(
+        round(
+            contribution,
+            10,
+        )
+    )

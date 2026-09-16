@@ -17,6 +17,8 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_employment_insurance,
     calculate_income_tax_after_adjustments,
     calculate_monthly_pension_contribution,
+    calculate_pension_bonus_base,
+    calculate_pension_bonus_contribution,
     calculate_reconstruction_special_income_tax,
     calculate_salary_income,
     calculate_salary_income_deduction,
@@ -2160,3 +2162,193 @@ def test_select_pension_rate_rejects_invalid_sex():
             pension_rates=rates,
             sex="other",
         )
+
+
+def _create_pension_bonus_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1994-11-01",
+                "1995-04-01",
+                "2003-04-01",
+                "2017-09-01",
+            ],
+            "effective_to": [
+                "1995-03-31",
+                "2003-03-31",
+                "2017-08-31",
+                None,
+            ],
+            "insured_category": [
+                "general",
+                "general",
+                "general",
+                "general",
+            ],
+            "regular_total_rate": [
+                0.1650,
+                0.1735,
+                0.1358,
+                0.1830,
+            ],
+            "bonus_total_rate": [
+                0.0,
+                0.0100,
+                0.1358,
+                0.1830,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_pension_bonus_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "scheme": [
+                "pension",
+                "pension",
+            ],
+            "effective_from": [
+                "1995-04-01",
+                "2003-04-01",
+            ],
+            "effective_to": [
+                "2003-03-31",
+                None,
+            ],
+            "cap_type": [
+                "none",
+                "per_month",
+            ],
+            "cap_yen": [
+                None,
+                1_500_000,
+            ],
+            "rounding_unit_yen": [
+                100,
+                1_000,
+            ],
+            "source_key": [
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_calculate_pension_bonus_base_special_premium():
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_base(
+        bonus_yen=500_099,
+        target_date="2000-06-01",
+        bonus_rules=rules,
+    )
+
+    assert result == 500_000
+
+
+def test_calculate_pension_bonus_base_after_2003():
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_base(
+        bonus_yen=500_999,
+        target_date="2025-06-01",
+        bonus_rules=rules,
+    )
+
+    assert result == 500_000
+
+
+def test_calculate_pension_bonus_base_cap():
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_base(
+        bonus_yen=2_000_000,
+        target_date="2025-06-01",
+        bonus_rules=rules,
+    )
+
+    assert result == 1_500_000
+
+
+def test_calculate_pension_bonus_contribution_before_1995():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_000,
+        target_date="1995-03-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_pension_bonus_contribution_special_premium():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_099,
+        target_date="2000-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 2_500
+
+
+def test_calculate_pension_bonus_contribution_after_2003():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_999,
+        target_date="2003-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 33_950
+
+
+def test_calculate_pension_bonus_contribution_current():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_000,
+        target_date="2025-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 45_750
+
+
+def test_calculate_pension_bonus_contribution_uses_cap():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=2_000_000,
+        target_date="2025-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 137_250
