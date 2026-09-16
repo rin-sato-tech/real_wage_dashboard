@@ -1,8 +1,8 @@
-effective_from,effective_to,scheme,regular_total_rate,regular_employee_share,bonus_employee_rate,rate_type,source_key,notes
-1984-03-01,1992-03-31,government_managed,0.084,0.5,0.003,national,mhlw_health_rate_history,賞与は特別保険料
-1992-04-01,1997-08-31,government_managed,0.082,0.5,0.003,national,mhlw_1992_health_reform,賞与は特別保険料
-1997-09-01,2003-03-31,government_managed,0.085,0.5,0.003,national,mhlw_1997_health_reform,賞与は特別保険料
-2003-04-01,2010-02-28,government_managed_or_association,0.082,0.5,,national_average,mhlw_2002_health_reform,総報酬制・賞与もregular_total_rateを適用
-2010-03-01,2011-02-28,association,0.0934,0.5,,national_average,kyoukaikenpo_rate_history,全国平均
-2011-03-01,2012-02-29,association,0.0950,0.5,,national_average,kyoukaikenpo_rate_history,全国平均
-2012-03-01,,association,0.1000,0.5,,national_average,kyoukaikenpo_rate_history,全国平均
+effective_from,effective_to,scheme,regular_total_rate,employee_share,regular_employee_share,bonus_employee_rate,rate_type,source_key,notes
+1984-03-01,1992-03-31,government_managed,0.084,0.5,0.5,0.003,national,mhlw_health_rate_history,賞与は特別保険料
+1992-04-01,1997-08-31,government_managed,0.082,0.5,0.5,0.003,national,mhlw_1992_health_reform,賞与は特別保険料
+1997-09-01,2003-03-31,government_managed,0.085,0.5,0.5,0.003,national,mhlw_1997_health_reform,賞与は特別保険料
+2003-04-01,2010-02-28,government_managed_or_association,0.082,0.5,0.5,,national_average,mhlw_2002_health_reform,総報酬制・賞与もregular_total_rateを適用
+2010-03-01,2011-02-28,association,0.0934,0.5,0.5,,national_average,kyoukaikenpo_rate_history,全国平均
+2011-03-01,2012-02-29,association,0.095,0.5,0.5,,national_average,kyoukaikenpo_rate_history,全国平均
+2012-03-01,,association,0.1,0.5,0.5,,national_average,kyoukaikenpo_rate_history,全国平均

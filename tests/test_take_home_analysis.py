@@ -35,9 +35,14 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_salary_income,
     calculate_salary_income_deduction,
     calculate_standard_monthly_remuneration,
+    calculate_standard_worker_income_tax,
     calculate_taxable_income,
     calculate_total_income_tax,
+    create_constant_monthly_remuneration,
     create_semiannual_bonus_payments,
+)
+from real_wage_dashboard.take_home_service import (
+    load_take_home_rule_tables,
 )
 
 
@@ -3486,3 +3491,160 @@ def test_annual_social_insurance_total_identity():
     assert result[
         "total_social_insurance_yen"
     ] == pytest.approx(expected)
+
+
+def test_create_constant_monthly_remuneration():
+    result = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+    )
+
+    assert len(result) == 12
+
+    assert result[
+        "regular_pay_yen"
+    ].sum() == 2_460_000
+
+    assert result.loc[
+        0,
+        "date",
+    ] == pd.Timestamp("2025-01-01")
+
+    assert result.loc[
+        11,
+        "date",
+    ] == pd.Timestamp("2025-12-01")
+
+
+def test_calculate_standard_worker_income_tax_2025():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules["social_insurance_bonus_rules"]
+        ),
+        employment_insurance_rates=(
+            rules["employment_insurance_rates"]
+        ),
+    )
+
+    assert result[
+        "annual_regular_pay_yen"
+    ] == 2_460_000
+
+    assert result[
+        "annual_bonus_yen"
+    ] == 1_000_000
+
+    assert result[
+        "gross_salary_yen"
+    ] == 3_460_000
+
+    assert result[
+        "social_insurance_yen"
+    ] == pytest.approx(
+        500_437.5
+    )
+
+    assert result[
+        "salary_income_deduction_yen"
+    ] == 1_118_000
+
+    assert result[
+        "salary_income_yen"
+    ] == 2_342_000
+
+    assert result[
+        "basic_deduction_yen"
+    ] == 880_000
+
+    assert result[
+        "taxable_income_yen"
+    ] == 961_000
+
+    assert result[
+        "base_income_tax_yen"
+    ] == 48_050
+
+    assert result[
+        "income_tax_yen"
+    ] == 49_000
+
+    assert result[
+        "after_income_tax_and_social_insurance_yen"
+    ] == pytest.approx(
+        2_910_562.5
+    )
+
+
+def test_standard_worker_income_tax_identity():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules["social_insurance_bonus_rules"]
+        ),
+        employment_insurance_rates=(
+            rules["employment_insurance_rates"]
+        ),
+    )
+
+    expected = (
+        result["gross_salary_yen"]
+        - result["social_insurance_yen"]
+        - result["income_tax_yen"]
+    )
+
+    assert result[
+        "after_income_tax_and_social_insurance_yen"
+    ] == pytest.approx(
+        expected
+    )

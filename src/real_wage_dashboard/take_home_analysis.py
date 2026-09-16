@@ -2424,3 +2424,249 @@ def calculate_annual_social_insurance(
             )
         ),
     }
+
+
+def create_constant_monthly_remuneration(
+    year: int,
+    monthly_regular_pay_yen: float,
+) -> pd.DataFrame:
+    """年間を通じて一定の月例賃金を受け取る標準モデルを作成する。"""
+
+    if not isinstance(year, int):
+        raise ValueError(
+            "year は整数である必要があります。"
+        )
+
+    if monthly_regular_pay_yen < 0:
+        raise ValueError(
+            "月例賃金は0以上である必要があります。"
+        )
+
+    return pd.DataFrame(
+        {
+            "date": pd.date_range(
+                start=f"{year}-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                float(monthly_regular_pay_yen)
+            ] * 12,
+        }
+    )
+
+
+def calculate_standard_worker_income_tax(
+    year: int,
+    monthly_regular_pay_yen: float,
+    annual_bonus_yen: float,
+    income_tax_deductions: pd.DataFrame,
+    income_tax_brackets: pd.DataFrame,
+    income_tax_adjustments: pd.DataFrame,
+    pension_standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    health_standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    employment_insurance_rates: pd.DataFrame,
+    sex: str = "male",
+    business_type: str = "general",
+    dependent_count: int = 0,
+    other_income_deductions_yen: float = 0.0,
+    policy_mode: str = "actual_policy",
+) -> dict[str, float]:
+    """標準労働者モデルの年間所得税までの計算を行う。
+
+    想定する所得は給与所得のみ。
+    住民税はこの関数には含めない。
+    """
+
+    if annual_bonus_yen < 0:
+        raise ValueError(
+            "年間賞与額は0以上である必要があります。"
+        )
+
+    if other_income_deductions_yen < 0:
+        raise ValueError(
+            "その他所得控除は0以上である必要があります。"
+        )
+
+    monthly_remuneration = (
+        create_constant_monthly_remuneration(
+            year=year,
+            monthly_regular_pay_yen=(
+                monthly_regular_pay_yen
+            ),
+        )
+    )
+
+    bonus_payments = (
+        create_semiannual_bonus_payments(
+            year=year,
+            annual_bonus_yen=annual_bonus_yen,
+        )
+    )
+
+    annual_regular_pay_yen = float(
+        monthly_remuneration[
+            "regular_pay_yen"
+        ].sum()
+    )
+
+    gross_salary_yen = (
+        annual_regular_pay_yen
+        + float(annual_bonus_yen)
+    )
+
+    social_insurance = (
+        calculate_annual_social_insurance(
+            monthly_remuneration=monthly_remuneration,
+            bonus_payments=bonus_payments,
+            pension_standard_monthly_rules=(
+                pension_standard_monthly_rules
+            ),
+            pension_rates=pension_rates,
+            health_standard_monthly_rules=(
+                health_standard_monthly_rules
+            ),
+            health_insurance_rates=(
+                health_insurance_rates
+            ),
+            bonus_rules=bonus_rules,
+            employment_insurance_rates=(
+                employment_insurance_rates
+            ),
+            sex=sex,
+            business_type=business_type,
+        )
+    )
+
+    social_insurance_yen = (
+        social_insurance[
+            "total_social_insurance_yen"
+        ]
+    )
+
+    # 所得税は暦年単位なので、
+    # 当該年末時点でその年の税制ルールを選択する。
+    tax_date = pd.Timestamp(
+        year=year,
+        month=12,
+        day=31,
+    )
+
+    salary_income_deduction_yen = (
+        calculate_salary_income_deduction(
+            gross_salary_yen=gross_salary_yen,
+            target_date=tax_date,
+            deduction_rules=income_tax_deductions,
+        )
+    )
+
+    salary_income_yen = max(
+        gross_salary_yen
+        - salary_income_deduction_yen,
+        0.0,
+    )
+
+    basic_deduction_yen = (
+        calculate_basic_deduction(
+            total_income_yen=salary_income_yen,
+            target_date=tax_date,
+            deduction_rules=income_tax_deductions,
+        )
+    )
+
+    taxable_income_yen = (
+        calculate_taxable_income(
+            salary_income_yen=salary_income_yen,
+            basic_deduction_yen=(
+                basic_deduction_yen
+            ),
+            social_insurance_deduction_yen=(
+                social_insurance_yen
+            ),
+            other_income_deductions_yen=(
+                other_income_deductions_yen
+            ),
+        )
+    )
+
+    base_income_tax_yen = (
+        calculate_base_income_tax(
+            taxable_income_yen=taxable_income_yen,
+            target_date=tax_date,
+            tax_brackets=income_tax_brackets,
+        )
+    )
+
+    income_tax_yen = (
+        calculate_total_income_tax(
+            base_income_tax_yen=base_income_tax_yen,
+            total_income_yen=salary_income_yen,
+            target_date=tax_date,
+            adjustment_rules=income_tax_adjustments,
+            dependent_count=dependent_count,
+            policy_mode=policy_mode,
+        )
+    )
+
+    after_income_tax_and_social_insurance_yen = (
+        gross_salary_yen
+        - social_insurance_yen
+        - income_tax_yen
+    )
+
+    return {
+        "annual_regular_pay_yen": float(
+            annual_regular_pay_yen
+        ),
+        "annual_bonus_yen": float(
+            annual_bonus_yen
+        ),
+        "gross_salary_yen": float(
+            gross_salary_yen
+        ),
+        "pension_yen": float(
+            social_insurance[
+                "total_pension_yen"
+            ]
+        ),
+        "health_insurance_yen": float(
+            social_insurance[
+                "total_health_yen"
+            ]
+        ),
+        "employment_insurance_yen": float(
+            social_insurance[
+                "employment_insurance_yen"
+            ]
+        ),
+        "social_insurance_yen": float(
+            social_insurance_yen
+        ),
+        "salary_income_deduction_yen": float(
+            salary_income_deduction_yen
+        ),
+        "salary_income_yen": float(
+            salary_income_yen
+        ),
+        "basic_deduction_yen": float(
+            basic_deduction_yen
+        ),
+        "other_income_deductions_yen": float(
+            other_income_deductions_yen
+        ),
+        "taxable_income_yen": float(
+            taxable_income_yen
+        ),
+        "base_income_tax_yen": float(
+            base_income_tax_yen
+        ),
+        "income_tax_yen": float(
+            income_tax_yen
+        ),
+        "after_income_tax_and_social_insurance_yen": float(
+            after_income_tax_and_social_insurance_yen
+        ),
+    }
