@@ -7197,3 +7197,757 @@ def create_real_take_home_four_factor_shapley_decomposition(
         )
 
     return pd.DataFrame(rows)
+
+
+def _is_long_term_care_second_insured(
+    age: int,
+) -> bool:
+    """介護保険第2号被保険者の年齢範囲か判定する。"""
+
+    if not isinstance(age, int):
+        raise ValueError(
+            "age は整数である必要があります。"
+        )
+
+    if age < 0:
+        raise ValueError(
+            "age は0以上である必要があります。"
+        )
+
+    return 40 <= age < 65
+
+
+def _select_long_term_care_rate_rule(
+    target_date: str | date | pd.Timestamp,
+    long_term_care_insurance_rates: pd.DataFrame,
+) -> pd.Series | None:
+    """適用日時点の介護保険料率を取得する。
+
+    介護保険制度導入前は None を返す。
+    制度導入後にルールが欠けている場合はエラーとする。
+    """
+
+    target = pd.Timestamp(
+        target_date
+    )
+
+    if long_term_care_insurance_rates.empty:
+        raise ValueError(
+            "介護保険料率データが空です。"
+        )
+
+    effective_from = pd.to_datetime(
+        long_term_care_insurance_rates[
+            "effective_from"
+        ],
+        errors="coerce",
+    )
+
+    if effective_from.isna().any():
+        raise ValueError(
+            "介護保険料率の effective_from に"
+            "不正な日付があります。"
+        )
+
+    first_effective_date = (
+        effective_from.min()
+    )
+
+    if target < first_effective_date:
+        return None
+
+    rules = _select_effective_rules(
+        long_term_care_insurance_rates,
+        target_date=target,
+    )
+
+    if len(rules) != 1:
+        raise ValueError(
+            "介護保険料率を一意に取得できません。"
+            f" date={target.date()},"
+            f" rows={len(rules)}"
+        )
+
+    return rules.iloc[0]
+
+
+def calculate_monthly_long_term_care_contribution(
+    remuneration_yen: float,
+    target_date: str | date | pd.Timestamp,
+    age: int,
+    standard_monthly_rules: pd.DataFrame,
+    long_term_care_insurance_rates: pd.DataFrame,
+) -> float:
+    """月額報酬から介護保険の月額本人負担額を計算する。"""
+
+    if remuneration_yen < 0:
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    if not _is_long_term_care_second_insured(
+        age
+    ):
+        return 0.0
+
+    rule = _select_long_term_care_rate_rule(
+        target_date=target_date,
+        long_term_care_insurance_rates=(
+            long_term_care_insurance_rates
+        ),
+    )
+
+    # 2000年4月の制度導入前。
+    if rule is None:
+        return 0.0
+
+    standard_monthly_yen = (
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=remuneration_yen,
+            target_date=target_date,
+            standard_monthly_rules=(
+                standard_monthly_rules
+            ),
+        )
+    )
+
+    total_rate = pd.to_numeric(
+        pd.Series(
+            [
+                rule[
+                    "total_rate"
+                ]
+            ]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    employee_share = pd.to_numeric(
+        pd.Series(
+            [
+                rule[
+                    "employee_share"
+                ]
+            ]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(total_rate):
+        raise ValueError(
+            "介護保険料率に不正な値があります。"
+        )
+
+    if pd.isna(employee_share):
+        raise ValueError(
+            "介護保険本人負担割合に"
+            "不正な値があります。"
+        )
+
+    if total_rate < 0:
+        raise ValueError(
+            "介護保険料率は0以上である必要があります。"
+        )
+
+    if not 0 <= employee_share <= 1:
+        raise ValueError(
+            "介護保険の本人負担割合は"
+            "0以上1以下である必要があります。"
+        )
+
+    contribution = (
+        standard_monthly_yen
+        * float(total_rate)
+        * float(employee_share)
+    )
+
+    return float(
+        round(
+            contribution,
+            10,
+        )
+    )
+
+
+def calculate_annual_regular_long_term_care_contribution(
+    monthly_remuneration: pd.DataFrame,
+    age: int,
+    standard_monthly_rules: pd.DataFrame,
+    long_term_care_insurance_rates: pd.DataFrame,
+) -> float:
+    """月次報酬から年間介護保険本人負担額（月給部分）を計算する。"""
+
+    required_columns = {
+        "date",
+        "regular_pay_yen",
+    }
+
+    missing = (
+        required_columns
+        - set(monthly_remuneration.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "年間介護保険料の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if monthly_remuneration.empty:
+        raise ValueError(
+            "月次報酬データが空です。"
+        )
+
+    data = monthly_remuneration.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    if data["date"].isna().any():
+        raise ValueError(
+            "月次報酬データの date に不正な値があります。"
+        )
+
+    data["regular_pay_yen"] = pd.to_numeric(
+        data["regular_pay_yen"],
+        errors="coerce",
+    )
+
+    if data["regular_pay_yen"].isna().any():
+        raise ValueError(
+            "regular_pay_yen に不正な値があります。"
+        )
+
+    if (
+        data["regular_pay_yen"] < 0
+    ).any():
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    contributions = [
+        calculate_monthly_long_term_care_contribution(
+            remuneration_yen=float(
+                row.regular_pay_yen
+            ),
+            target_date=row.date,
+            age=age,
+            standard_monthly_rules=(
+                standard_monthly_rules
+            ),
+            long_term_care_insurance_rates=(
+                long_term_care_insurance_rates
+            ),
+        )
+        for row in data.itertuples(
+            index=False
+        )
+    ]
+
+    return float(
+        round(
+            sum(contributions),
+            10,
+        )
+    )
+
+
+def calculate_long_term_care_bonus_contribution(
+    bonus_yen: float,
+    target_date: str | date | pd.Timestamp,
+    age: int,
+    long_term_care_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    prior_fiscal_year_standard_bonus_yen: float = 0.0,
+) -> float:
+    """賞与にかかる介護保険本人負担額を計算する。"""
+
+    if bonus_yen < 0:
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    if not _is_long_term_care_second_insured(
+        age
+    ):
+        return 0.0
+
+    target = pd.Timestamp(
+        target_date
+    )
+
+    # 政府管掌健康保険では、
+    # 2003年4月の総報酬制導入前は
+    # 賞与に介護保険料率を適用しない。
+    if target < pd.Timestamp(
+        "2003-04-01"
+    ):
+        return 0.0
+
+    rule = _select_long_term_care_rate_rule(
+        target_date=target,
+        long_term_care_insurance_rates=(
+            long_term_care_insurance_rates
+        ),
+    )
+
+    if rule is None:
+        return 0.0
+
+    bonus_base = calculate_health_bonus_base(
+        bonus_yen=bonus_yen,
+        target_date=target,
+        bonus_rules=bonus_rules,
+        prior_fiscal_year_standard_bonus_yen=(
+            prior_fiscal_year_standard_bonus_yen
+        ),
+    )
+
+    total_rate = pd.to_numeric(
+        pd.Series(
+            [
+                rule[
+                    "total_rate"
+                ]
+            ]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    employee_share = pd.to_numeric(
+        pd.Series(
+            [
+                rule[
+                    "employee_share"
+                ]
+            ]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(total_rate):
+        raise ValueError(
+            "介護保険料率に不正な値があります。"
+        )
+
+    if pd.isna(employee_share):
+        raise ValueError(
+            "介護保険本人負担割合に"
+            "不正な値があります。"
+        )
+
+    if total_rate < 0:
+        raise ValueError(
+            "介護保険料率は0以上である必要があります。"
+        )
+
+    if not 0 <= employee_share <= 1:
+        raise ValueError(
+            "介護保険の本人負担割合は"
+            "0以上1以下である必要があります。"
+        )
+
+    contribution = (
+        bonus_base
+        * float(total_rate)
+        * float(employee_share)
+    )
+
+    return float(
+        round(
+            contribution,
+            10,
+        )
+    )
+
+
+def calculate_annual_long_term_care_bonus_contribution(
+    bonus_payments: pd.DataFrame,
+    age: int,
+    long_term_care_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+) -> float:
+    """年間賞与にかかる介護保険本人負担額を計算する。"""
+
+    required_columns = {
+        "date",
+        "bonus_yen",
+    }
+
+    missing = (
+        required_columns
+        - set(bonus_payments.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "年間介護保険賞与計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if bonus_payments.empty:
+        return 0.0
+
+    data = bonus_payments.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    if data["date"].isna().any():
+        raise ValueError(
+            "賞与データの date に不正な値があります。"
+        )
+
+    data["bonus_yen"] = pd.to_numeric(
+        data["bonus_yen"],
+        errors="coerce",
+    )
+
+    if data["bonus_yen"].isna().any():
+        raise ValueError(
+            "bonus_yen に不正な値があります。"
+        )
+
+    if (
+        data["bonus_yen"] < 0
+    ).any():
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    data = (
+        data
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+    fiscal_year_cumulative: dict[
+        int,
+        float,
+    ] = {}
+
+    contributions: list[
+        float
+    ] = []
+
+    for row in data.itertuples(
+        index=False
+    ):
+        fiscal_year = _get_fiscal_year(
+            row.date
+        )
+
+        prior = (
+            fiscal_year_cumulative.get(
+                fiscal_year,
+                0.0,
+            )
+        )
+
+        # 健康保険と介護保険は
+        # 同じ標準賞与額を算定基礎とする。
+        bonus_base = calculate_health_bonus_base(
+            bonus_yen=float(
+                row.bonus_yen
+            ),
+            target_date=row.date,
+            bonus_rules=bonus_rules,
+            prior_fiscal_year_standard_bonus_yen=(
+                prior
+            ),
+        )
+
+        contribution = (
+            calculate_long_term_care_bonus_contribution(
+                bonus_yen=float(
+                    row.bonus_yen
+                ),
+                target_date=row.date,
+                age=age,
+                long_term_care_insurance_rates=(
+                    long_term_care_insurance_rates
+                ),
+                bonus_rules=bonus_rules,
+                prior_fiscal_year_standard_bonus_yen=(
+                    prior
+                ),
+            )
+        )
+
+        contributions.append(
+            contribution
+        )
+
+        # 総報酬制前は介護保険の賞与対象外なので、
+        # 年度累計へ加える必要もない。
+        if (
+            pd.Timestamp(row.date)
+            >= pd.Timestamp(
+                "2003-04-01"
+            )
+        ):
+            fiscal_year_cumulative[
+                fiscal_year
+            ] = (
+                prior
+                + bonus_base
+            )
+
+    return float(
+        round(
+            sum(contributions),
+            10,
+        )
+    )
+
+
+def calculate_annual_long_term_care_contribution(
+    monthly_remuneration: pd.DataFrame,
+    bonus_payments: pd.DataFrame,
+    age: int,
+    standard_monthly_rules: pd.DataFrame,
+    long_term_care_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+) -> dict[str, float]:
+    """月給・賞与を合わせた年間介護保険本人負担額を計算する。"""
+
+    regular_contribution = (
+        calculate_annual_regular_long_term_care_contribution(
+            monthly_remuneration=monthly_remuneration,
+            age=age,
+            standard_monthly_rules=(
+                standard_monthly_rules
+            ),
+            long_term_care_insurance_rates=(
+                long_term_care_insurance_rates
+            ),
+        )
+    )
+
+    bonus_contribution = (
+        calculate_annual_long_term_care_bonus_contribution(
+            bonus_payments=bonus_payments,
+            age=age,
+            long_term_care_insurance_rates=(
+                long_term_care_insurance_rates
+            ),
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    total_contribution = (
+        regular_contribution
+        + bonus_contribution
+    )
+
+    return {
+        "regular_long_term_care_yen": float(
+            round(
+                regular_contribution,
+                10,
+            )
+        ),
+        "bonus_long_term_care_yen": float(
+            round(
+                bonus_contribution,
+                10,
+            )
+        ),
+        "total_long_term_care_yen": float(
+            round(
+                total_contribution,
+                10,
+            )
+        ),
+    }
+
+
+def calculate_annual_social_insurance(
+    monthly_remuneration: pd.DataFrame,
+    bonus_payments: pd.DataFrame,
+    pension_standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    health_standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    employment_insurance_rates: pd.DataFrame,
+    long_term_care_insurance_rates: pd.DataFrame | None = None,
+    age: int = 35,
+    sex: str = "male",
+    business_type: str = "general",
+) -> dict[str, float]:
+    """標準労働者の年間社会保険本人負担額を計算する。
+
+    40～64歳では介護保険料を加算する。
+    35歳を既定値とし、従来の標準モデルとの互換性を維持する。
+    """
+
+    pension = calculate_annual_pension_contribution(
+        monthly_remuneration=monthly_remuneration,
+        bonus_payments=bonus_payments,
+        standard_monthly_rules=(
+            pension_standard_monthly_rules
+        ),
+        pension_rates=pension_rates,
+        bonus_rules=bonus_rules,
+        sex=sex,
+    )
+
+    health = (
+        calculate_annual_health_insurance_contribution(
+            monthly_remuneration=monthly_remuneration,
+            bonus_payments=bonus_payments,
+            standard_monthly_rules=(
+                health_standard_monthly_rules
+            ),
+            health_insurance_rates=(
+                health_insurance_rates
+            ),
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    employment_wages = (
+        _create_employment_insurance_wage_payments(
+            monthly_remuneration=monthly_remuneration,
+            bonus_payments=bonus_payments,
+        )
+    )
+
+    employment = (
+        calculate_annual_employment_insurance(
+            monthly_wages=employment_wages,
+            employment_insurance_rates=(
+                employment_insurance_rates
+            ),
+            business_type=business_type,
+        )
+    )
+
+    # ----------------------------------------
+    # 介護保険
+    # ----------------------------------------
+
+    if _is_long_term_care_second_insured(
+        age
+    ):
+        if long_term_care_insurance_rates is None:
+            raise ValueError(
+                "40～64歳の介護保険料計算には "
+                "long_term_care_insurance_rates "
+                "が必要です。"
+            )
+
+        long_term_care = (
+            calculate_annual_long_term_care_contribution(
+                monthly_remuneration=(
+                    monthly_remuneration
+                ),
+                bonus_payments=(
+                    bonus_payments
+                ),
+                age=age,
+                standard_monthly_rules=(
+                    health_standard_monthly_rules
+                ),
+                long_term_care_insurance_rates=(
+                    long_term_care_insurance_rates
+                ),
+                bonus_rules=bonus_rules,
+            )
+        )
+
+    else:
+        long_term_care = {
+            "regular_long_term_care_yen": 0.0,
+            "bonus_long_term_care_yen": 0.0,
+            "total_long_term_care_yen": 0.0,
+        }
+
+    total = (
+        pension["total_pension_yen"]
+        + health["total_health_yen"]
+        + long_term_care[
+            "total_long_term_care_yen"
+        ]
+        + employment
+    )
+
+    return {
+        "regular_pension_yen": float(
+            round(
+                pension["regular_pension_yen"],
+                10,
+            )
+        ),
+        "bonus_pension_yen": float(
+            round(
+                pension["bonus_pension_yen"],
+                10,
+            )
+        ),
+        "total_pension_yen": float(
+            round(
+                pension["total_pension_yen"],
+                10,
+            )
+        ),
+        "regular_health_yen": float(
+            round(
+                health["regular_health_yen"],
+                10,
+            )
+        ),
+        "bonus_health_yen": float(
+            round(
+                health["bonus_health_yen"],
+                10,
+            )
+        ),
+        "total_health_yen": float(
+            round(
+                health["total_health_yen"],
+                10,
+            )
+        ),
+        "regular_long_term_care_yen": float(
+            round(
+                long_term_care[
+                    "regular_long_term_care_yen"
+                ],
+                10,
+            )
+        ),
+        "bonus_long_term_care_yen": float(
+            round(
+                long_term_care[
+                    "bonus_long_term_care_yen"
+                ],
+                10,
+            )
+        ),
+        "total_long_term_care_yen": float(
+            round(
+                long_term_care[
+                    "total_long_term_care_yen"
+                ],
+                10,
+            )
+        ),
+        "employment_insurance_yen": float(
+            round(
+                employment,
+                10,
+            )
+        ),
+        "total_social_insurance_yen": float(
+            round(
+                total,
+                10,
+            )
+        ),
+    }

@@ -7,6 +7,7 @@ from real_wage_dashboard.take_home_analysis import (
     _create_employment_insurance_wage_payments,
     _floor_to_hundred_yen,
     _floor_to_thousand_yen,
+    _is_long_term_care_second_insured,
     _get_fiscal_year,
     _select_assessment_year_rules,
     _select_effective_rules,
@@ -21,6 +22,9 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_annual_employment_insurance,
     calculate_annual_health_bonus_contribution,
     calculate_annual_health_insurance_contribution,
+    calculate_annual_long_term_care_bonus_contribution,
+    calculate_annual_long_term_care_contribution,
+    calculate_annual_regular_long_term_care_contribution,
     calculate_annual_pension_bonus_contribution,
     calculate_annual_pension_contribution,
     calculate_annual_regular_health_insurance_contribution,
@@ -34,7 +38,9 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_health_bonus_base,
     calculate_health_bonus_contribution,
     calculate_income_tax_after_adjustments,
+    calculate_long_term_care_bonus_contribution,
     calculate_monthly_health_insurance_contribution,
+    calculate_monthly_long_term_care_contribution,
     calculate_monthly_pension_contribution,
     calculate_pension_bonus_base,
     calculate_pension_bonus_contribution,
@@ -6640,3 +6646,678 @@ def test_four_factor_shapley_endpoint_real_take_home():
         ]
         / 1.10
     )
+
+
+def test_long_term_care_second_insured_age():
+    assert not _is_long_term_care_second_insured(
+        39
+    )
+
+    assert _is_long_term_care_second_insured(
+        40
+    )
+
+    assert _is_long_term_care_second_insured(
+        64
+    )
+
+    assert not _is_long_term_care_second_insured(
+        65
+    )
+
+
+def test_monthly_long_term_care_before_introduction_is_zero():
+    rules = load_take_home_rule_tables()
+
+    result = (
+        calculate_monthly_long_term_care_contribution(
+            remuneration_yen=300_000,
+            target_date="1999-12-01",
+            age=45,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        0
+    )
+
+
+def test_monthly_long_term_care_outside_age_range_is_zero():
+    rules = load_take_home_rule_tables()
+
+    result = (
+        calculate_monthly_long_term_care_contribution(
+            remuneration_yen=300_000,
+            target_date="2025-03-01",
+            age=35,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        0
+    )
+
+
+def test_monthly_long_term_care_2025():
+    rules = load_take_home_rule_tables()
+
+    result = (
+        calculate_monthly_long_term_care_contribution(
+            remuneration_yen=300_000,
+            target_date="2025-03-01",
+            age=45,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    # 標準報酬月額30万円
+    # × 介護保険料率1.59%
+    # × 本人負担1/2
+    assert result == pytest.approx(
+        2_385
+    )
+
+
+def test_annual_regular_long_term_care_2025():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    result = (
+        calculate_annual_regular_long_term_care_contribution(
+            monthly_remuneration=monthly,
+            age=45,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        28_650
+    )
+
+
+def test_annual_regular_long_term_care_2000_partial_year():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2000,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    result = (
+        calculate_annual_regular_long_term_care_contribution(
+            monthly_remuneration=monthly,
+            age=45,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        8_100
+    )
+
+
+def test_annual_regular_long_term_care_age_35_is_zero():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    result = (
+        calculate_annual_regular_long_term_care_contribution(
+            monthly_remuneration=monthly,
+            age=35,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        0
+    )
+
+
+def test_long_term_care_bonus_before_total_remuneration_is_zero():
+    rules = load_take_home_rule_tables()
+
+    result = (
+        calculate_long_term_care_bonus_contribution(
+            bonus_yen=500_000,
+            target_date="2002-12-01",
+            age=45,
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        0
+    )
+
+
+def test_long_term_care_bonus_2025():
+    rules = load_take_home_rule_tables()
+
+    result = (
+        calculate_long_term_care_bonus_contribution(
+            bonus_yen=500_000,
+            target_date="2025-06-01",
+            age=45,
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        3_975
+    )
+
+
+def test_annual_long_term_care_bonus_2025():
+    rules = load_take_home_rule_tables()
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = (
+        calculate_annual_long_term_care_bonus_contribution(
+            bonus_payments=bonuses,
+            age=45,
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        7_950
+    )
+
+
+def test_annual_long_term_care_bonus_age_35_is_zero():
+    rules = load_take_home_rule_tables()
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = (
+        calculate_annual_long_term_care_bonus_contribution(
+            bonus_payments=bonuses,
+            age=35,
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result == pytest.approx(
+        0
+    )
+
+
+def test_annual_long_term_care_contribution_2025_age_45():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = (
+        calculate_annual_long_term_care_contribution(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            age=45,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result[
+        "regular_long_term_care_yen"
+    ] == pytest.approx(
+        28_650
+    )
+
+    assert result[
+        "bonus_long_term_care_yen"
+    ] == pytest.approx(
+        7_950
+    )
+
+    assert result[
+        "total_long_term_care_yen"
+    ] == pytest.approx(
+        36_600
+    )
+
+
+def test_annual_long_term_care_contribution_2000():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2000,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2000,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = (
+        calculate_annual_long_term_care_contribution(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            age=45,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result[
+        "regular_long_term_care_yen"
+    ] == pytest.approx(
+        8_100
+    )
+
+    assert result[
+        "bonus_long_term_care_yen"
+    ] == pytest.approx(
+        0
+    )
+
+    assert result[
+        "total_long_term_care_yen"
+    ] == pytest.approx(
+        8_100
+    )
+
+
+def test_annual_long_term_care_contribution_age_35_is_zero():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = (
+        calculate_annual_long_term_care_contribution(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            age=35,
+            standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+        )
+    )
+
+    assert result[
+        "regular_long_term_care_yen"
+    ] == pytest.approx(0)
+
+    assert result[
+        "bonus_long_term_care_yen"
+    ] == pytest.approx(0)
+
+    assert result[
+        "total_long_term_care_yen"
+    ] == pytest.approx(0)
+
+
+def test_annual_social_insurance_age_35_has_no_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_social_insurance(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules[
+                "social_insurance_bonus_rules"
+            ]
+        ),
+        employment_insurance_rates=(
+            rules[
+                "employment_insurance_rates"
+            ]
+        ),
+        long_term_care_insurance_rates=(
+            rules[
+                "long_term_care_insurance_rates"
+            ]
+        ),
+        age=35,
+    )
+
+    assert result[
+        "total_long_term_care_yen"
+    ] == pytest.approx(0)
+
+    # 既存テストで確認済みの2025年標準例
+    assert result[
+        "total_social_insurance_yen"
+    ] == pytest.approx(
+        500_437.5
+    )
+
+
+def test_annual_social_insurance_age_45_adds_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    common_kwargs = {
+        "monthly_remuneration": monthly,
+        "bonus_payments": bonuses,
+        "pension_standard_monthly_rules": (
+            rules[
+                "pension_standard_monthly"
+            ]
+        ),
+        "pension_rates": (
+            rules["pension_rates"]
+        ),
+        "health_standard_monthly_rules": (
+            rules[
+                "health_standard_monthly"
+            ]
+        ),
+        "health_insurance_rates": (
+            rules[
+                "health_insurance_rates"
+            ]
+        ),
+        "bonus_rules": (
+            rules[
+                "social_insurance_bonus_rules"
+            ]
+        ),
+        "employment_insurance_rates": (
+            rules[
+                "employment_insurance_rates"
+            ]
+        ),
+        "long_term_care_insurance_rates": (
+            rules[
+                "long_term_care_insurance_rates"
+            ]
+        ),
+    }
+
+    age_35 = calculate_annual_social_insurance(
+        **common_kwargs,
+        age=35,
+    )
+
+    age_45 = calculate_annual_social_insurance(
+        **common_kwargs,
+        age=45,
+    )
+
+    assert age_45[
+        "total_long_term_care_yen"
+    ] == pytest.approx(
+        36_600
+    )
+
+    assert (
+        age_45[
+            "total_social_insurance_yen"
+        ]
+        - age_35[
+            "total_social_insurance_yen"
+        ]
+    ) == pytest.approx(
+        36_600
+    )
+
+    # 年金・健康保険・雇用保険そのものは
+    # 年齢変更では変化しない。
+    assert age_45[
+        "total_pension_yen"
+    ] == pytest.approx(
+        age_35[
+            "total_pension_yen"
+        ]
+    )
+
+    assert age_45[
+        "total_health_yen"
+    ] == pytest.approx(
+        age_35[
+            "total_health_yen"
+        ]
+    )
+
+    assert age_45[
+        "employment_insurance_yen"
+    ] == pytest.approx(
+        age_35[
+            "employment_insurance_yen"
+        ]
+    )
+
+
+def test_annual_social_insurance_age_45_requires_long_term_care_rates():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="long_term_care_insurance_rates",
+    ):
+        calculate_annual_social_insurance(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            pension_standard_monthly_rules=(
+                rules[
+                    "pension_standard_monthly"
+                ]
+            ),
+            pension_rates=(
+                rules["pension_rates"]
+            ),
+            health_standard_monthly_rules=(
+                rules[
+                    "health_standard_monthly"
+                ]
+            ),
+            health_insurance_rates=(
+                rules[
+                    "health_insurance_rates"
+                ]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+            employment_insurance_rates=(
+                rules[
+                    "employment_insurance_rates"
+                ]
+            ),
+            age=45,
+        )

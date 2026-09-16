@@ -7,7 +7,9 @@ from real_wage_dashboard.take_home_service import (
     _validate_health_standard_monthly_history,
     load_health_standard_monthly_history,
     load_income_tax_brackets,
+    load_long_term_care_insurance_rates,
     load_pension_standard_monthly_history,
+    load_take_home_rule_tables,
 )
 
 
@@ -597,3 +599,120 @@ def test_real_health_standard_monthly_history():
             "remuneration_upper_yen"
         ]
     )
+
+
+def test_load_long_term_care_insurance_rates(
+    tmp_path,
+):
+    path = (
+        tmp_path
+        / "long_term_care_insurance_rates.csv"
+    )
+
+    pd.DataFrame(
+        {
+            "effective_from": [
+                "2024-03-01",
+                "2025-03-01",
+            ],
+            "effective_to": [
+                "2025-02-28",
+                "2026-02-28",
+            ],
+            "total_rate": [
+                0.0160,
+                0.0159,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+            ],
+        }
+    ).to_csv(
+        path,
+        index=False,
+    )
+
+    result = (
+        load_long_term_care_insurance_rates(
+            path
+        )
+    )
+
+    assert len(result) == 2
+
+    assert result.loc[
+        0,
+        "total_rate",
+    ] == pytest.approx(
+        0.0160
+    )
+
+    assert result.loc[
+        1,
+        "total_rate",
+    ] == pytest.approx(
+        0.0159
+    )
+
+    assert pd.api.types.is_datetime64_any_dtype(
+        result["effective_from"]
+    )
+
+    assert pd.api.types.is_datetime64_any_dtype(
+        result["effective_to"]
+    )
+
+
+def test_real_long_term_care_insurance_rates():
+    result = (
+        load_long_term_care_insurance_rates()
+    )
+
+    assert not result.empty
+
+    assert (
+        result["effective_from"].min()
+        == pd.Timestamp("2000-04-01")
+    )
+
+    assert (
+        result["total_rate"] > 0
+    ).all()
+
+    assert (
+        result["employee_share"]
+        == 0.5
+    ).all()
+
+    rate_2025 = result.loc[
+        (
+            result["effective_from"]
+            <= pd.Timestamp("2025-03-01")
+        )
+        & (
+            result["effective_to"]
+            >= pd.Timestamp("2025-03-01")
+        )
+    ]
+
+    assert len(rate_2025) == 1
+
+    assert rate_2025.iloc[
+        0
+    ]["total_rate"] == pytest.approx(
+        0.0159
+    )
+
+
+def test_take_home_rule_tables_include_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    assert (
+        "long_term_care_insurance_rates"
+        in rules
+    )
+
+    assert not rules[
+        "long_term_care_insurance_rates"
+    ].empty

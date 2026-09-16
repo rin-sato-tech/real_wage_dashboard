@@ -61,6 +61,10 @@ HEALTH_STANDARD_MONTHLY_HISTORY_PATH = (
     DATA_DIR / "health_standard_monthly_history.csv"
 )
 
+LONG_TERM_CARE_INSURANCE_RATES_PATH = (
+    DATA_DIR / "long_term_care_insurance_rates.csv"
+)
+
 
 def _load_rule_csv(
     path: str | Path,
@@ -204,6 +208,26 @@ def load_health_insurance_rates(
     return _load_rule_csv(
         path=path,
         required_columns=required_columns,
+        date_columns=(
+            "effective_from",
+            "effective_to",
+        ),
+    )
+
+
+def load_long_term_care_insurance_rates(
+    path: str | Path = LONG_TERM_CARE_INSURANCE_RATES_PATH,
+) -> pd.DataFrame:
+    """介護保険第2号被保険者の介護保険料率履歴を読み込む。"""
+
+    return _load_rule_csv(
+        path,
+        required_columns={
+            "effective_from",
+            "effective_to",
+            "total_rate",
+            "employee_share",
+        },
         date_columns=(
             "effective_from",
             "effective_to",
@@ -363,6 +387,15 @@ def load_take_home_rule_tables() -> dict[str, pd.DataFrame]:
         ),
         "employment_insurance_rates": (
             load_employment_insurance_rates()
+        ),
+        "health_insurance_rates": (
+            load_health_insurance_rates()
+        ),
+        "long_term_care_insurance_rates": (
+            load_long_term_care_insurance_rates()
+        ),
+        "health_standard_monthly": (
+            load_health_standard_monthly_history()
         ),
         "resident_tax_income_rates": (
             load_resident_tax_income_rates()
