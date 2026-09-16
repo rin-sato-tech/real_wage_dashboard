@@ -8,8 +8,10 @@ from real_wage_dashboard.take_home_analysis import (
     _select_effective_rules,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
+    calculate_annual_employment_insurance,
     calculate_base_income_tax,
     calculate_basic_deduction,
+    calculate_employment_insurance,
     calculate_income_tax_after_adjustments,
     calculate_reconstruction_special_income_tax,
     calculate_salary_income,
@@ -1379,3 +1381,202 @@ def test_calculate_total_income_tax_2024():
     )
 
     assert result == 71_400
+
+
+def _create_employment_insurance_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "2017-04-01",
+                "2022-10-01",
+                "2023-04-01",
+                "2025-04-01",
+                "2017-04-01",
+            ],
+            "effective_to": [
+                "2022-09-30",
+                "2023-03-31",
+                "2025-03-31",
+                None,
+                None,
+            ],
+            "business_type": [
+                "general",
+                "general",
+                "general",
+                "general",
+                "construction",
+            ],
+            "employee_rate": [
+                0.0030,
+                0.0050,
+                0.0060,
+                0.0055,
+                0.0040,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_calculate_employment_insurance():
+    rates = _create_employment_insurance_rates()
+
+    result = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2024-06-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert result == 1_800
+
+
+def test_calculate_employment_insurance_2022_rate_change():
+    rates = _create_employment_insurance_rates()
+
+    september = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2022-09-30",
+        employment_insurance_rates=rates,
+    )
+
+    october = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2022-10-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert september == 900
+    assert october == 1_500
+
+
+def test_calculate_employment_insurance_2025_rate_change():
+    rates = _create_employment_insurance_rates()
+
+    march = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2025-03-31",
+        employment_insurance_rates=rates,
+    )
+
+    april = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2025-04-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert march == 1_800
+    assert april == 1_650
+
+
+def test_calculate_employment_insurance_business_type():
+    rates = _create_employment_insurance_rates()
+
+    result = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2020-06-01",
+        employment_insurance_rates=rates,
+        business_type="construction",
+    )
+
+    assert result == 1_200
+
+
+def test_calculate_employment_insurance_zero_wage():
+    rates = _create_employment_insurance_rates()
+
+    result = calculate_employment_insurance(
+        wage_yen=0,
+        target_date="2024-06-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert result == 0
+
+
+def test_calculate_employment_insurance_rejects_negative_wage():
+    rates = _create_employment_insurance_rates()
+
+    with pytest.raises(
+        ValueError,
+        match="対象賃金は0以上",
+    ):
+        calculate_employment_insurance(
+            wage_yen=-1,
+            target_date="2024-06-01",
+            employment_insurance_rates=rates,
+        )
+
+
+def test_calculate_annual_employment_insurance_2025():
+    rates = _create_employment_insurance_rates()
+
+    monthly_wages = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "cash_earnings_yen": [
+                300_000,
+            ] * 12,
+        }
+    )
+
+    result = calculate_annual_employment_insurance(
+        monthly_wages=monthly_wages,
+        employment_insurance_rates=rates,
+    )
+
+    expected = (
+        300_000 * 0.0060 * 3
+        + 300_000 * 0.0055 * 9
+    )
+
+    assert result == expected
+
+
+def test_calculate_annual_employment_insurance_rejects_missing_columns():
+    rates = _create_employment_insurance_rates()
+
+    monthly_wages = pd.DataFrame(
+        {
+            "date": ["2025-01-01"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        calculate_annual_employment_insurance(
+            monthly_wages=monthly_wages,
+            employment_insurance_rates=rates,
+        )
+
+
+def test_calculate_annual_employment_insurance_rejects_empty_data():
+    rates = _create_employment_insurance_rates()
+
+    monthly_wages = pd.DataFrame(
+        columns=[
+            "date",
+            "cash_earnings_yen",
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="月次賃金データが空です",
+    ):
+        calculate_annual_employment_insurance(
+            monthly_wages=monthly_wages,
+            employment_insurance_rates=rates,
+        )

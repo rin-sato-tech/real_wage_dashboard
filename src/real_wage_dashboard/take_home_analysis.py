@@ -819,3 +819,112 @@ def calculate_total_income_tax(
     return _floor_to_hundred_yen(
         total_tax
     )
+
+
+def calculate_employment_insurance(
+    wage_yen: float,
+    target_date: str | date | pd.Timestamp,
+    employment_insurance_rates: pd.DataFrame,
+    business_type: str = "general",
+) -> float:
+    """賃金額と適用日時点の本人負担率から雇用保険料を計算する。"""
+
+    if wage_yen < 0:
+        raise ValueError(
+            "雇用保険の対象賃金は0以上である必要があります。"
+        )
+
+    rule = _select_single_effective_rule(
+        employment_insurance_rates,
+        target_date=target_date,
+        filters={
+            "business_type": business_type,
+        },
+    )
+
+    employee_rate = pd.to_numeric(
+        pd.Series([rule["employee_rate"]]),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(employee_rate):
+        raise ValueError(
+            "雇用保険ルールの employee_rate に"
+            "不正な値があります。"
+        )
+
+    if employee_rate < 0:
+        raise ValueError(
+            "雇用保険の本人負担率は0以上である必要があります。"
+        )
+
+    return float(
+        wage_yen * float(employee_rate)
+    )
+
+
+def calculate_annual_employment_insurance(
+    monthly_wages: pd.DataFrame,
+    employment_insurance_rates: pd.DataFrame,
+    business_type: str = "general",
+) -> float:
+    """月次賃金から年間の雇用保険本人負担額を計算する。"""
+
+    required_columns = {
+        "date",
+        "cash_earnings_yen",
+    }
+
+    missing = required_columns - set(monthly_wages.columns)
+
+    if missing:
+        raise ValueError(
+            "年間雇用保険料の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if monthly_wages.empty:
+        raise ValueError(
+            "月次賃金データが空です。"
+        )
+
+    wages = monthly_wages.copy()
+
+    wages["date"] = pd.to_datetime(
+        wages["date"],
+        errors="coerce",
+    )
+
+    if wages["date"].isna().any():
+        raise ValueError(
+            "月次賃金データの date に不正な値があります。"
+        )
+
+    wages["cash_earnings_yen"] = pd.to_numeric(
+        wages["cash_earnings_yen"],
+        errors="coerce",
+    )
+
+    if wages["cash_earnings_yen"].isna().any():
+        raise ValueError(
+            "cash_earnings_yen に不正な値があります。"
+        )
+
+    if (wages["cash_earnings_yen"] < 0).any():
+        raise ValueError(
+            "雇用保険の対象賃金は0以上である必要があります。"
+        )
+
+    premiums = [
+        calculate_employment_insurance(
+            wage_yen=float(row.cash_earnings_yen),
+            target_date=row.date,
+            employment_insurance_rates=(
+                employment_insurance_rates
+            ),
+            business_type=business_type,
+        )
+        for row in wages.itertuples(index=False)
+    ]
+
+    return float(sum(premiums))
