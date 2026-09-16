@@ -1,0 +1,7 @@
+deduction_type,assessment_year_from,assessment_year_to,bracket_order,basis,lower_bound_yen,upper_bound_yen,fixed_yen,source_key
+basic,1991,1994,1,total_income,0,,310000,local_tax_history
+basic,1995,2020,1,total_income,0,,330000,local_tax_history
+basic,2021,,1,total_income,0,24000000,430000,local_tax_2021_reform
+basic,2021,,2,total_income,24000001,24500000,290000,local_tax_2021_reform
+basic,2021,,3,total_income,24500001,25000000,150000,local_tax_2021_reform
+basic,2021,,4,total_income,25000001,,0,local_tax_2021_reform

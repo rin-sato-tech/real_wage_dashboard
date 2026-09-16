@@ -1,0 +1,14 @@
+assessment_year_from,assessment_year_to,bracket_order,lower_bound_yen,upper_bound_yen,marginal_rate,quick_deduction_yen,source_key
+1991,1994,1,0,1600000,0.05,0,local_tax_history
+1991,1994,2,1600000,5500000,0.10,80000,local_tax_history
+1991,1994,3,5500000,,0.15,355000,local_tax_history
+
+1995,1998,1,0,2000000,0.05,0,local_tax_history
+1995,1998,2,2000000,7000000,0.10,100000,local_tax_history
+1995,1998,3,7000000,,0.15,450000,local_tax_history
+
+1999,2006,1,0,2000000,0.05,0,local_tax_history
+1999,2006,2,2000000,7000000,0.10,100000,local_tax_history
+1999,2006,3,7000000,,0.13,310000,local_tax_history
+
+2007,,1,0,,0.10,0,local_tax_2007_reform
