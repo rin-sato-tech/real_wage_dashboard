@@ -504,3 +504,96 @@ def test_real_health_standard_monthly_history():
         assert row["grades"] == grades
         assert row["minimum"] == minimum
         assert row["maximum"] == maximum
+
+    period_2007 = result.loc[
+        result["effective_from"]
+        == pd.Timestamp("2007-04-01")
+    ]
+
+    grade_44_2007 = period_2007.loc[
+        period_2007["grade"] == 44
+    ].iloc[0]
+
+    assert (
+        grade_44_2007["standard_monthly_yen"]
+        == 1_030_000
+    )
+    assert (
+        grade_44_2007["remuneration_lower_yen"]
+        == 1_005_000
+    )
+    assert (
+        grade_44_2007["remuneration_upper_yen"]
+        == 1_055_000
+    )
+
+    grade_47_2007 = period_2007.loc[
+        period_2007["grade"] == 47
+    ].iloc[0]
+
+    assert (
+        grade_47_2007["standard_monthly_yen"]
+        == 1_210_000
+    )
+    assert (
+        grade_47_2007["remuneration_lower_yen"]
+        == 1_175_000
+    )
+    assert pd.isna(
+        grade_47_2007[
+            "remuneration_upper_yen"
+        ]
+    )
+
+    period_2016 = result.loc[
+        result["effective_from"]
+        == pd.Timestamp("2016-04-01")
+    ]
+
+    grade_47_2016 = period_2016.loc[
+        period_2016["grade"] == 47
+    ].iloc[0]
+
+    assert (
+        grade_47_2016["remuneration_lower_yen"]
+        == 1_175_000
+    )
+    assert (
+        grade_47_2016["remuneration_upper_yen"]
+        == 1_235_000
+    )
+
+    grade_48_2016 = period_2016.loc[
+        period_2016["grade"] == 48
+    ].iloc[0]
+
+    assert (
+        grade_48_2016["standard_monthly_yen"]
+        == 1_270_000
+    )
+    assert (
+        grade_48_2016["remuneration_lower_yen"]
+        == 1_235_000
+    )
+    assert (
+        grade_48_2016["remuneration_upper_yen"]
+        == 1_295_000
+    )
+
+    grade_50_2016 = period_2016.loc[
+        period_2016["grade"] == 50
+    ].iloc[0]
+
+    assert (
+        grade_50_2016["standard_monthly_yen"]
+        == 1_390_000
+    )
+    assert (
+        grade_50_2016["remuneration_lower_yen"]
+        == 1_355_000
+    )
+    assert pd.isna(
+        grade_50_2016[
+            "remuneration_upper_yen"
+        ]
+    )
