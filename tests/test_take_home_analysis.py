@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from real_wage_dashboard.take_home_analysis import (
+    _create_employment_insurance_wage_payments,
     _floor_to_hundred_yen,
     _floor_to_thousand_yen,
     _get_fiscal_year,
@@ -19,6 +20,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_annual_pension_contribution,
     calculate_annual_regular_health_insurance_contribution,
     calculate_annual_regular_pension_contribution,
+    calculate_annual_social_insurance,
     calculate_base_income_tax,
     calculate_basic_deduction,
     calculate_employment_insurance,
@@ -3229,3 +3231,258 @@ def test_calculate_annual_health_insurance_without_bonus():
     assert result[
         "total_health_yen"
     ] == 120_000
+
+
+def test_create_employment_insurance_wage_payments():
+    monthly = pd.DataFrame(
+        {
+            "date": [
+                "2025-05-01",
+                "2025-06-01",
+            ],
+            "regular_pay_yen": [
+                205_000,
+                205_000,
+            ],
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-15",
+            ],
+            "bonus_yen": [
+                500_000,
+            ],
+        }
+    )
+
+    result = (
+        _create_employment_insurance_wage_payments(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+        )
+    )
+
+    assert len(result) == 3
+
+    assert (
+        result["cash_earnings_yen"].sum()
+        == 910_000
+    )
+
+    assert result["cash_earnings_yen"].tolist() == [
+        205_000,
+        205_000,
+        500_000,
+    ]
+
+
+def test_create_employment_insurance_wage_payments_without_bonus():
+    monthly = pd.DataFrame(
+        {
+            "date": [
+                "2025-01-01",
+                "2025-02-01",
+            ],
+            "regular_pay_yen": [
+                205_000,
+                205_000,
+            ],
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        columns=[
+            "date",
+            "bonus_yen",
+        ]
+    )
+
+    result = (
+        _create_employment_insurance_wage_payments(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+        )
+    )
+
+    assert len(result) == 2
+    assert (
+        result["cash_earnings_yen"].sum()
+        == 410_000
+    )
+
+
+def test_calculate_annual_social_insurance():
+    pension_standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    pension_rates = pd.concat(
+        [
+            _create_pension_rates(),
+            _create_pension_bonus_rates(),
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    health_standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+
+    health_rates = (
+        _create_health_insurance_rates()
+    )
+
+    pension_bonus_rules = (
+        _create_pension_bonus_rules()
+    )
+
+    health_bonus_rules = (
+        _create_health_bonus_rules()
+    )
+
+    bonus_rules = pd.concat(
+        [
+            pension_bonus_rules,
+            health_bonus_rules,
+        ],
+        ignore_index=True,
+    )
+
+    employment_rates = (
+        _create_employment_insurance_rates()
+    )
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_social_insurance(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        pension_standard_monthly_rules=(
+            pension_standard_rules
+        ),
+        pension_rates=pension_rates,
+        health_standard_monthly_rules=(
+            health_standard_rules
+        ),
+        health_insurance_rates=health_rates,
+        bonus_rules=bonus_rules,
+        employment_insurance_rates=(
+            employment_rates
+        ),
+    )
+
+    assert result[
+        "total_pension_yen"
+    ] == 311_100
+
+    assert result[
+        "total_health_yen"
+    ] == 170_000
+
+    assert result[
+        "employment_insurance_yen"
+    ] == pytest.approx(
+        19_337.5
+    )
+
+    assert result[
+        "total_social_insurance_yen"
+    ] == pytest.approx(
+        500_437.5
+    )
+
+
+def test_annual_social_insurance_total_identity():
+    pension_standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    pension_rates = pd.concat(
+        [
+            _create_pension_rates(),
+            _create_pension_bonus_rates(),
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    bonus_rules = pd.concat(
+        [
+            _create_pension_bonus_rules(),
+            _create_health_bonus_rules(),
+        ],
+        ignore_index=True,
+    )
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_social_insurance(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        pension_standard_monthly_rules=(
+            pension_standard_rules
+        ),
+        pension_rates=pension_rates,
+        health_standard_monthly_rules=(
+            _create_health_standard_monthly_rules()
+        ),
+        health_insurance_rates=(
+            _create_health_insurance_rates()
+        ),
+        bonus_rules=bonus_rules,
+        employment_insurance_rates=(
+            _create_employment_insurance_rates()
+        ),
+    )
+
+    expected = (
+        result["total_pension_yen"]
+        + result["total_health_yen"]
+        + result["employment_insurance_yen"]
+    )
+
+    assert result[
+        "total_social_insurance_yen"
+    ] == pytest.approx(expected)

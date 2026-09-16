@@ -2153,3 +2153,274 @@ def calculate_annual_health_insurance_contribution(
             )
         ),
     }
+
+
+def _create_employment_insurance_wage_payments(
+    monthly_remuneration: pd.DataFrame,
+    bonus_payments: pd.DataFrame,
+) -> pd.DataFrame:
+    """月給・賞与から雇用保険料計算用の賃金支払データを作成する。"""
+
+    required_monthly_columns = {
+        "date",
+        "regular_pay_yen",
+    }
+
+    missing_monthly = (
+        required_monthly_columns
+        - set(monthly_remuneration.columns)
+    )
+
+    if missing_monthly:
+        raise ValueError(
+            "雇用保険用月次賃金データに"
+            "必要な列がありません: "
+            f"{sorted(missing_monthly)}"
+        )
+
+    if monthly_remuneration.empty:
+        raise ValueError(
+            "月次報酬データが空です。"
+        )
+
+    monthly = monthly_remuneration.copy()
+
+    monthly["date"] = pd.to_datetime(
+        monthly["date"],
+        errors="coerce",
+    )
+
+    if monthly["date"].isna().any():
+        raise ValueError(
+            "月次報酬データの date に不正な値があります。"
+        )
+
+    monthly["regular_pay_yen"] = pd.to_numeric(
+        monthly["regular_pay_yen"],
+        errors="coerce",
+    )
+
+    if monthly["regular_pay_yen"].isna().any():
+        raise ValueError(
+            "regular_pay_yen に不正な値があります。"
+        )
+
+    if (
+        monthly["regular_pay_yen"] < 0
+    ).any():
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    regular_wages = (
+        monthly[
+            [
+                "date",
+                "regular_pay_yen",
+            ]
+        ]
+        .rename(
+            columns={
+                "regular_pay_yen": (
+                    "cash_earnings_yen"
+                ),
+            }
+        )
+    )
+
+    required_bonus_columns = {
+        "date",
+        "bonus_yen",
+    }
+
+    missing_bonus = (
+        required_bonus_columns
+        - set(bonus_payments.columns)
+    )
+
+    if missing_bonus:
+        raise ValueError(
+            "雇用保険用賞与データに"
+            "必要な列がありません: "
+            f"{sorted(missing_bonus)}"
+        )
+
+    if bonus_payments.empty:
+        return (
+            regular_wages
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+
+    bonuses = bonus_payments.copy()
+
+    bonuses["date"] = pd.to_datetime(
+        bonuses["date"],
+        errors="coerce",
+    )
+
+    if bonuses["date"].isna().any():
+        raise ValueError(
+            "賞与データの date に不正な値があります。"
+        )
+
+    bonuses["bonus_yen"] = pd.to_numeric(
+        bonuses["bonus_yen"],
+        errors="coerce",
+    )
+
+    if bonuses["bonus_yen"].isna().any():
+        raise ValueError(
+            "bonus_yen に不正な値があります。"
+        )
+
+    if (
+        bonuses["bonus_yen"] < 0
+    ).any():
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    bonus_wages = (
+        bonuses[
+            [
+                "date",
+                "bonus_yen",
+            ]
+        ]
+        .rename(
+            columns={
+                "bonus_yen": (
+                    "cash_earnings_yen"
+                ),
+            }
+        )
+    )
+
+    result = pd.concat(
+        [
+            regular_wages,
+            bonus_wages,
+        ],
+        ignore_index=True,
+    )
+
+    return (
+        result
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+
+def calculate_annual_social_insurance(
+    monthly_remuneration: pd.DataFrame,
+    bonus_payments: pd.DataFrame,
+    pension_standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    health_standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    employment_insurance_rates: pd.DataFrame,
+    sex: str = "male",
+    business_type: str = "general",
+) -> dict[str, float]:
+    """標準労働者の年間社会保険本人負担額を計算する。"""
+
+    pension = calculate_annual_pension_contribution(
+        monthly_remuneration=monthly_remuneration,
+        bonus_payments=bonus_payments,
+        standard_monthly_rules=(
+            pension_standard_monthly_rules
+        ),
+        pension_rates=pension_rates,
+        bonus_rules=bonus_rules,
+        sex=sex,
+    )
+
+    health = (
+        calculate_annual_health_insurance_contribution(
+            monthly_remuneration=monthly_remuneration,
+            bonus_payments=bonus_payments,
+            standard_monthly_rules=(
+                health_standard_monthly_rules
+            ),
+            health_insurance_rates=(
+                health_insurance_rates
+            ),
+            bonus_rules=bonus_rules,
+        )
+    )
+
+    employment_wages = (
+        _create_employment_insurance_wage_payments(
+            monthly_remuneration=monthly_remuneration,
+            bonus_payments=bonus_payments,
+        )
+    )
+
+    employment = (
+        calculate_annual_employment_insurance(
+            monthly_wages=employment_wages,
+            employment_insurance_rates=(
+                employment_insurance_rates
+            ),
+            business_type=business_type,
+        )
+    )
+
+    total = (
+        pension["total_pension_yen"]
+        + health["total_health_yen"]
+        + employment
+    )
+
+    return {
+        "regular_pension_yen": float(
+            round(
+                pension["regular_pension_yen"],
+                10,
+            )
+        ),
+        "bonus_pension_yen": float(
+            round(
+                pension["bonus_pension_yen"],
+                10,
+            )
+        ),
+        "total_pension_yen": float(
+            round(
+                pension["total_pension_yen"],
+                10,
+            )
+        ),
+        "regular_health_yen": float(
+            round(
+                health["regular_health_yen"],
+                10,
+            )
+        ),
+        "bonus_health_yen": float(
+            round(
+                health["bonus_health_yen"],
+                10,
+            )
+        ),
+        "total_health_yen": float(
+            round(
+                health["total_health_yen"],
+                10,
+            )
+        ),
+        "employment_insurance_yen": float(
+            round(
+                employment,
+                10,
+            )
+        ),
+        "total_social_insurance_yen": float(
+            round(
+                total,
+                10,
+            )
+        ),
+    }
