@@ -1408,3 +1408,186 @@ def calculate_pension_bonus_contribution(
             10,
         )
     )
+
+
+def calculate_annual_pension_bonus_contribution(
+    bonus_payments: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    sex: str = "male",
+) -> float:
+    """賞与支給データから年間の厚生年金本人負担額を計算する。"""
+
+    required_columns = {
+        "date",
+        "bonus_yen",
+    }
+
+    missing = required_columns - set(
+        bonus_payments.columns
+    )
+
+    if missing:
+        raise ValueError(
+            "年間賞与厚生年金の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if bonus_payments.empty:
+        return 0.0
+
+    data = bonus_payments.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    if data["date"].isna().any():
+        raise ValueError(
+            "賞与データの date に不正な値があります。"
+        )
+
+    data["bonus_yen"] = pd.to_numeric(
+        data["bonus_yen"],
+        errors="coerce",
+    )
+
+    if data["bonus_yen"].isna().any():
+        raise ValueError(
+            "bonus_yen に不正な値があります。"
+        )
+
+    if (data["bonus_yen"] < 0).any():
+        raise ValueError(
+            "賞与額は0以上である必要があります。"
+        )
+
+    # 標準賞与額の上限は同一月の賞与合計に対して適用されるため、
+    # 同じ月に複数回支給されている場合は先に月単位へ集約する。
+    data["month"] = data["date"].dt.to_period("M")
+
+    monthly_bonus = (
+        data.groupby(
+            "month",
+            as_index=False,
+        )
+        .agg(
+            bonus_yen=("bonus_yen", "sum"),
+        )
+    )
+
+    monthly_bonus["date"] = (
+        monthly_bonus["month"]
+        .dt.to_timestamp()
+    )
+
+    contributions = [
+        calculate_pension_bonus_contribution(
+            bonus_yen=float(row.bonus_yen),
+            target_date=row.date,
+            pension_rates=pension_rates,
+            bonus_rules=bonus_rules,
+            sex=sex,
+        )
+        for row in monthly_bonus.itertuples(
+            index=False
+        )
+    ]
+
+    return float(
+        round(
+            sum(contributions),
+            10,
+        )
+    )
+
+
+def calculate_annual_pension_contribution(
+    monthly_remuneration: pd.DataFrame,
+    bonus_payments: pd.DataFrame,
+    standard_monthly_rules: pd.DataFrame,
+    pension_rates: pd.DataFrame,
+    bonus_rules: pd.DataFrame,
+    sex: str = "male",
+) -> dict[str, float]:
+    """月給・賞与を合わせた年間厚生年金本人負担額を計算する。"""
+
+    regular_contribution = (
+        calculate_annual_regular_pension_contribution(
+            monthly_remuneration=monthly_remuneration,
+            standard_monthly_rules=standard_monthly_rules,
+            pension_rates=pension_rates,
+            sex=sex,
+        )
+    )
+
+    bonus_contribution = (
+        calculate_annual_pension_bonus_contribution(
+            bonus_payments=bonus_payments,
+            pension_rates=pension_rates,
+            bonus_rules=bonus_rules,
+            sex=sex,
+        )
+    )
+
+    total_contribution = (
+        regular_contribution
+        + bonus_contribution
+    )
+
+    return {
+        "regular_pension_yen": float(
+            round(
+                regular_contribution,
+                10,
+            )
+        ),
+        "bonus_pension_yen": float(
+            round(
+                bonus_contribution,
+                10,
+            )
+        ),
+        "total_pension_yen": float(
+            round(
+                total_contribution,
+                10,
+            )
+        ),
+    }
+
+
+def create_semiannual_bonus_payments(
+    year: int,
+    annual_bonus_yen: float,
+) -> pd.DataFrame:
+    """年間賞与を6月・12月に均等支給する標準モデルを作成する。"""
+
+    if annual_bonus_yen < 0:
+        raise ValueError(
+            "年間賞与額は0以上である必要があります。"
+        )
+
+    half_bonus = annual_bonus_yen / 2
+
+    return pd.DataFrame(
+        {
+            "date": [
+                pd.Timestamp(
+                    year=year,
+                    month=6,
+                    day=1,
+                ),
+                pd.Timestamp(
+                    year=year,
+                    month=12,
+                    day=1,
+                ),
+            ],
+            "bonus_yen": [
+                half_bonus,
+                half_bonus,
+            ],
+        }
+    )

@@ -11,6 +11,8 @@ from real_wage_dashboard.take_home_analysis import (
     _select_single_effective_rule,
     _select_standard_monthly_remuneration_rule,
     calculate_annual_employment_insurance,
+    calculate_annual_pension_bonus_contribution,
+    calculate_annual_pension_contribution,
     calculate_annual_regular_pension_contribution,
     calculate_base_income_tax,
     calculate_basic_deduction,
@@ -25,6 +27,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_standard_monthly_remuneration,
     calculate_taxable_income,
     calculate_total_income_tax,
+    create_semiannual_bonus_payments,
 )
 
 
@@ -2352,3 +2355,210 @@ def test_calculate_pension_bonus_contribution_uses_cap():
     )
 
     assert result == 137_250
+
+
+def test_calculate_annual_pension_bonus_contribution():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = (
+        calculate_annual_pension_bonus_contribution(
+            bonus_payments=bonuses,
+            pension_rates=rates,
+            bonus_rules=rules,
+        )
+    )
+
+    assert result == 45_750 * 2
+    assert result == 91_500
+
+
+def test_annual_pension_bonus_groups_same_month_before_cap():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-06-20",
+            ],
+            "bonus_yen": [
+                1_000_000,
+                800_000,
+            ],
+        }
+    )
+
+    result = (
+        calculate_annual_pension_bonus_contribution(
+            bonus_payments=bonuses,
+            pension_rates=rates,
+            bonus_rules=rules,
+        )
+    )
+
+    expected = (
+        1_500_000
+        * 0.183
+        * 0.5
+    )
+
+    assert result == 137_250
+    assert result == expected
+
+
+def test_annual_pension_bonus_accepts_empty_data():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        columns=[
+            "date",
+            "bonus_yen",
+        ]
+    )
+
+    result = (
+        calculate_annual_pension_bonus_contribution(
+            bonus_payments=bonuses,
+            pension_rates=rates,
+            bonus_rules=rules,
+        )
+    )
+
+    assert result == 0
+
+
+def test_annual_pension_bonus_before_total_remuneration():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2000-06-01",
+                "2000-12-01",
+            ],
+            "bonus_yen": [
+                500_099,
+                500_099,
+            ],
+        }
+    )
+
+    result = (
+        calculate_annual_pension_bonus_contribution(
+            bonus_payments=bonuses,
+            pension_rates=rates,
+            bonus_rules=rules,
+        )
+    )
+
+    assert result == 5_000
+
+
+def test_create_semiannual_bonus_payments():
+    result = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    assert len(result) == 2
+
+    assert result["bonus_yen"].tolist() == [
+        500_000,
+        500_000,
+    ]
+
+    assert result["date"].tolist() == [
+        pd.Timestamp("2025-06-01"),
+        pd.Timestamp("2025-12-01"),
+    ]
+
+
+def test_create_semiannual_bonus_payments_preserves_total():
+    result = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_001,
+    )
+
+    assert result["bonus_yen"].sum() == 1_000_001
+
+
+def test_calculate_annual_pension_contribution():
+    standard_rules = (
+        _create_pension_standard_monthly_rules()
+    )
+
+    pension_rates = _create_pension_rates()
+    bonus_rates = _create_pension_bonus_rates()
+
+    rates = pd.concat(
+        [
+            pension_rates,
+            bonus_rates,
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    bonus_rules = _create_pension_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_pension_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        bonus_rules=bonus_rules,
+    )
+
+    assert result[
+        "regular_pension_yen"
+    ] == 219_600
+
+    assert result[
+        "bonus_pension_yen"
+    ] == 91_500
+
+    assert result[
+        "total_pension_yen"
+    ] == 311_100
