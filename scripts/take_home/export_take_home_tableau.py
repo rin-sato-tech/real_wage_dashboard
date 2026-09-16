@@ -54,6 +54,10 @@ def main() -> None:
         "take_home_real_shapley_4factor.csv"
     )
 
+    fixed_policy = load_snapshot(
+        "take_home_fixed_policy_comparison.csv"
+    )
+
     robustness = load_snapshot(
         "take_home_robustness_summary.csv"
     )
@@ -71,7 +75,12 @@ def main() -> None:
                 burden_shapley
             ),
             real_shapley=real_shapley,
-            robustness_summary=robustness,
+            fixed_policy_comparison=(
+                fixed_policy
+            ),
+            robustness_summary=(
+                robustness
+            ),
         )
     )
 

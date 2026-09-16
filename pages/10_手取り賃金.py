@@ -677,6 +677,113 @@ def create_real_shapley_chart(
     )
 
 
+def create_fixed_policy_chart(
+    df: pd.DataFrame,
+) -> alt.Chart:
+    """実際制度と1990年固定制度の名目手取りを比較する。"""
+
+    chart_df = df[
+        [
+            "year",
+            "actual_nominal_take_home_yen",
+            "fixed_1990_nominal_take_home_yen",
+        ]
+    ].copy()
+
+    chart_df[
+        "actual_nominal_take_home_man_yen"
+    ] = (
+        chart_df[
+            "actual_nominal_take_home_yen"
+        ]
+        / 10_000
+    )
+
+    chart_df[
+        "fixed_1990_nominal_take_home_man_yen"
+    ] = (
+        chart_df[
+            "fixed_1990_nominal_take_home_yen"
+        ]
+        / 10_000
+    )
+
+    chart_df = chart_df[
+        [
+            "year",
+            "actual_nominal_take_home_man_yen",
+            "fixed_1990_nominal_take_home_man_yen",
+        ]
+    ].melt(
+        id_vars="year",
+        var_name="scenario",
+        value_name="take_home_man_yen",
+    )
+
+    chart_df["scenario"] = (
+        chart_df["scenario"]
+        .replace(
+            {
+                "actual_nominal_take_home_man_yen":
+                    "実際の制度",
+                "fixed_1990_nominal_take_home_man_yen":
+                    "1990年制度固定",
+            }
+        )
+    )
+
+    return (
+        alt.Chart(chart_df)
+        .mark_line(
+            strokeWidth=2.5,
+        )
+        .encode(
+            x=alt.X(
+                "year:Q",
+                title="年",
+                axis=alt.Axis(
+                    format="d",
+                ),
+            ),
+            y=alt.Y(
+                "take_home_man_yen:Q",
+                title="年間名目手取り（万円）",
+                scale=alt.Scale(
+                    zero=False,
+                ),
+            ),
+            color=alt.Color(
+                "scenario:N",
+                title="制度",
+                sort=[
+                    "実際の制度",
+                    "1990年制度固定",
+                ],
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "year:Q",
+                    title="年",
+                    format="d",
+                ),
+                alt.Tooltip(
+                    "scenario:N",
+                    title="制度",
+                ),
+                alt.Tooltip(
+                    "take_home_man_yen:Q",
+                    title="名目手取り（万円）",
+                    format=".1f",
+                ),
+            ],
+        )
+        .properties(
+            height=430,
+        )
+        .interactive()
+    )
+
+
 # ============================================
 # データ読み込み
 # ============================================
@@ -721,6 +828,10 @@ try:
 
     real_shapley_df = load_snapshot(
         "take_home_real_shapley_4factor.csv"
+    )
+
+    fixed_policy_df = load_snapshot(
+        "take_home_fixed_policy_comparison.csv"
     )
 
     robustness_df = load_snapshot(
@@ -1116,12 +1227,138 @@ if len(long_term) == 1:
     )
 
 
+st.header(
+    "6. 1990年制度を固定した場合との比較"
+)
+
+st.altair_chart(
+    create_fixed_policy_chart(
+        fixed_policy_df
+    ),
+    width="stretch",
+)
+
+fixed_2025 = fixed_policy_df.loc[
+    fixed_policy_df["year"] == 2025
+]
+
+if len(fixed_2025) == 1:
+    row = fixed_2025.iloc[0]
+
+    col1, col2, col3 = (
+        st.columns(3)
+    )
+
+    col1.metric(
+        "実際の2025年手取り",
+        (
+            f"{row['actual_nominal_take_home_yen'] / 10_000:,.1f}"
+            "万円"
+        ),
+    )
+
+    col2.metric(
+        "1990年制度固定",
+        (
+            f"{row['fixed_1990_nominal_take_home_yen'] / 10_000:,.1f}"
+            "万円"
+        ),
+    )
+
+    col3.metric(
+        "実際－固定制度",
+        (
+            f"{row['nominal_take_home_yen_difference_yen'] / 10_000:+,.1f}"
+            "万円"
+        ),
+        delta_color="inverse",
+    )
+
+    st.info(
+        "2025年の賃金水準に1990年の税・社会保険制度を"
+        "名目額のまま固定して適用すると、"
+        f"名目手取りは約"
+        f"{abs(row['nominal_take_home_yen_difference_yen']) / 10_000:,.1f}"
+        "万円多くなります。"
+        f"実際の制度との差は負担率で"
+        f"{row['burden_rate_difference_pt']:+.2f}ポイントです。"
+    )
+
+st.caption(
+    "1990年制度固定系列では、各年の賃金水準は実績値を使用し、"
+    "税率・控除・社会保険料率・標準報酬月額表などを"
+    "1990年の名目制度に固定しています。"
+    "実際に1990年制度が維持された場合の経済全体を予測する"
+    "因果的な反実仮想ではありません。"
+)
+
+with st.expander(
+    "主要年の固定制度比較を見る"
+):
+    selected_fixed = fixed_policy_df.loc[
+        fixed_policy_df["year"].isin(
+            [
+                1990,
+                2000,
+                2010,
+                2015,
+                2020,
+                2025,
+            ]
+        ),
+        [
+            "year",
+            "actual_nominal_take_home_yen",
+            "fixed_1990_nominal_take_home_yen",
+            "nominal_take_home_yen_difference_yen",
+            "actual_effective_burden_rate",
+            "fixed_1990_effective_burden_rate",
+            "burden_rate_difference_pt",
+        ],
+    ].copy()
+
+    selected_fixed[
+        "actual_effective_burden_rate"
+    ] *= 100
+
+    selected_fixed[
+        "fixed_1990_effective_burden_rate"
+    ] *= 100
+
+    selected_fixed = (
+        selected_fixed.rename(
+            columns={
+                "year":
+                    "年",
+                "actual_nominal_take_home_yen":
+                    "実際の手取り（円）",
+                "fixed_1990_nominal_take_home_yen":
+                    "1990年制度固定（円）",
+                "nominal_take_home_yen_difference_yen":
+                    "手取り差（円）",
+                "actual_effective_burden_rate":
+                    "実際の負担率（%）",
+                "fixed_1990_effective_burden_rate":
+                    "固定制度負担率（%）",
+                "burden_rate_difference_pt":
+                    "負担率差（pt）",
+            }
+        )
+    )
+
+    st.dataframe(
+        selected_fixed,
+        width="stretch",
+        hide_index=True,
+    )
+
+
 # ============================================
-# 6. 頑健性確認
+# 7. 頑健性確認
 # ============================================
 
 st.header(
-    "6. 頑健性確認"
+    "7. 頑健性確認"
 )
 
 robustness_display = (
@@ -1164,11 +1401,11 @@ st.caption(
 
 
 # ============================================
-# 7. Tableau出力
+# 8. Tableau出力
 # ============================================
 
 st.header(
-    "7. Tableau用データ"
+    "8. Tableau用データ"
 )
 
 tableau_df = (
@@ -1185,6 +1422,9 @@ tableau_df = (
         ),
         real_shapley=(
             real_shapley_df
+        ),
+        fixed_policy_comparison=(
+            fixed_policy_df
         ),
         robustness_summary=(
             robustness_df

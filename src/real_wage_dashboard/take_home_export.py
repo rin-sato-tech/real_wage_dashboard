@@ -169,12 +169,220 @@ def _create_robustness_long(
     ]
 
 
+def _create_fixed_policy_long(
+    fixed_policy_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """固定制度反実仮想をTableau向けlong形式へ変換する。"""
+
+    paired_metrics = {
+        "nominal_take_home_yen": (
+            "actual_nominal_take_home_yen",
+            "fixed_1990_nominal_take_home_yen",
+        ),
+        "real_take_home_yen": (
+            "actual_real_take_home_yen",
+            "fixed_1990_real_take_home_yen",
+        ),
+        "total_deductions_yen": (
+            "actual_total_deductions_yen",
+            "fixed_1990_total_deductions_yen",
+        ),
+        "effective_burden_rate": (
+            "actual_effective_burden_rate",
+            "fixed_1990_effective_burden_rate",
+        ),
+        "income_tax_yen": (
+            "actual_income_tax_yen",
+            "fixed_1990_income_tax_yen",
+        ),
+        "resident_tax_yen": (
+            "actual_resident_tax_yen",
+            "fixed_1990_resident_tax_yen",
+        ),
+        "pension_yen": (
+            "actual_pension_yen",
+            "fixed_1990_pension_yen",
+        ),
+        "health_insurance_yen": (
+            "actual_health_insurance_yen",
+            "fixed_1990_health_insurance_yen",
+        ),
+        "employment_insurance_yen": (
+            "actual_employment_insurance_yen",
+            "fixed_1990_employment_insurance_yen",
+        ),
+    }
+
+    required_columns = {
+        "year",
+        *[
+            column
+            for pair in paired_metrics.values()
+            for column in pair
+        ],
+        "nominal_take_home_yen_difference_yen",
+        "real_take_home_difference_yen",
+        "burden_rate_difference_pt",
+    }
+
+    missing = (
+        required_columns
+        - set(fixed_policy_df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "固定制度比較に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    rows = []
+
+    for row in fixed_policy_df.itertuples(
+        index=False
+    ):
+        year = int(row.year)
+
+        for (
+            metric,
+            (
+                actual_column,
+                fixed_column,
+            ),
+        ) in paired_metrics.items():
+
+            rows.append(
+                {
+                    "record_type":
+                        "fixed_policy_comparison",
+                    "year":
+                        year,
+                    "period":
+                        pd.NA,
+                    "start_year":
+                        pd.NA,
+                    "end_year":
+                        pd.NA,
+                    "check":
+                        "fixed_policy",
+                    "comparison":
+                        "actual_policy",
+                    "metric":
+                        metric,
+                    "value":
+                        float(
+                            getattr(
+                                row,
+                                actual_column,
+                            )
+                        ),
+                    "unit":
+                        _infer_metric_unit(
+                            metric
+                        ),
+                    "note":
+                        "各年の実際の税・社会保険制度。",
+                }
+            )
+
+            rows.append(
+                {
+                    "record_type":
+                        "fixed_policy_comparison",
+                    "year":
+                        year,
+                    "period":
+                        pd.NA,
+                    "start_year":
+                        pd.NA,
+                    "end_year":
+                        pd.NA,
+                    "check":
+                        "fixed_policy",
+                    "comparison":
+                        "fixed_1990_policy",
+                    "metric":
+                        metric,
+                    "value":
+                        float(
+                            getattr(
+                                row,
+                                fixed_column,
+                            )
+                        ),
+                    "unit":
+                        _infer_metric_unit(
+                            metric
+                        ),
+                    "note":
+                        (
+                            "賃金は各年実績、"
+                            "税・社会保険制度を"
+                            "1990年に固定。"
+                        ),
+                }
+            )
+
+        difference_metrics = {
+            "nominal_take_home_difference_yen":
+                float(
+                    row.nominal_take_home_yen_difference_yen
+                ),
+            "real_take_home_difference_yen":
+                float(
+                    row.real_take_home_difference_yen
+                ),
+            "burden_rate_difference_pt":
+                float(
+                    row.burden_rate_difference_pt
+                ),
+        }
+
+        for (
+            metric,
+            value,
+        ) in difference_metrics.items():
+            rows.append(
+                {
+                    "record_type":
+                        "fixed_policy_comparison",
+                    "year":
+                        year,
+                    "period":
+                        pd.NA,
+                    "start_year":
+                        pd.NA,
+                    "end_year":
+                        pd.NA,
+                    "check":
+                        "fixed_policy",
+                    "comparison":
+                        "actual_minus_fixed_1990",
+                    "metric":
+                        metric,
+                    "value":
+                        value,
+                    "unit":
+                        _infer_metric_unit(
+                            metric
+                        ),
+                    "note":
+                        (
+                            "実際制度－1990年固定制度。"
+                        ),
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
 def create_take_home_tableau_export(
     main_series: pd.DataFrame,
     period_log_decomposition: pd.DataFrame,
     burden_change_summary: pd.DataFrame,
     burden_shapley: pd.DataFrame,
     real_shapley: pd.DataFrame,
+    fixed_policy_comparison: pd.DataFrame,
     robustness_summary: pd.DataFrame,
 ) -> pd.DataFrame:
     """手取り分析の主要結果をTableau用long形式へ統合する。"""
@@ -199,6 +407,9 @@ def create_take_home_tableau_export(
         _create_long_snapshot(
             real_shapley,
             record_type="real_take_home_shapley",
+        ),
+        _create_fixed_policy_long(
+            fixed_policy_comparison
         ),
         _create_robustness_long(
             robustness_summary

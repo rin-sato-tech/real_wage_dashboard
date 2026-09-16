@@ -94,6 +94,99 @@ def test_create_take_home_tableau_export() -> None:
         }
     )
 
+    fixed_policy = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                2025,
+            ],
+            "actual_nominal_take_home_yen": [
+                3_270_000.0,
+                3_380_000.0,
+            ],
+            "fixed_1990_nominal_take_home_yen": [
+                3_270_000.0,
+                3_500_000.0,
+            ],
+            "actual_real_take_home_yen": [
+                3_640_000.0,
+                2_960_000.0,
+            ],
+            "fixed_1990_real_take_home_yen": [
+                3_640_000.0,
+                3_070_000.0,
+            ],
+            "actual_total_deductions_yen": [
+                670_000.0,
+                886_000.0,
+            ],
+            "fixed_1990_total_deductions_yen": [
+                670_000.0,
+                766_000.0,
+            ],
+            "actual_effective_burden_rate": [
+                0.17,
+                0.208,
+            ],
+            "fixed_1990_effective_burden_rate": [
+                0.17,
+                0.180,
+            ],
+            "actual_income_tax_yen": [
+                195_000.0,
+                75_000.0,
+            ],
+            "fixed_1990_income_tax_yen": [
+                195_000.0,
+                216_000.0,
+            ],
+            "actual_resident_tax_yen": [
+                122_000.0,
+                195_000.0,
+            ],
+            "fixed_1990_resident_tax_yen": [
+                122_000.0,
+                143_000.0,
+            ],
+            "actual_pension_yen": [
+                206_000.0,
+                382_000.0,
+            ],
+            "fixed_1990_pension_yen": [
+                206_000.0,
+                240_000.0,
+            ],
+            "actual_health_insurance_yen": [
+                124_000.0,
+                209_000.0,
+            ],
+            "fixed_1990_health_insurance_yen": [
+                124_000.0,
+                144_000.0,
+            ],
+            "actual_employment_insurance_yen": [
+                22_000.0,
+                24_000.0,
+            ],
+            "fixed_1990_employment_insurance_yen": [
+                22_000.0,
+                23_000.0,
+            ],
+            "nominal_take_home_yen_difference_yen": [
+                0.0,
+                -120_000.0,
+            ],
+            "real_take_home_difference_yen": [
+                0.0,
+                -110_000.0,
+            ],
+            "burden_rate_difference_pt": [
+                0.0,
+                2.8,
+            ],
+        }
+    )
+
     robustness = pd.DataFrame(
         {
             "check": [
@@ -133,6 +226,9 @@ def test_create_take_home_tableau_export() -> None:
                 burden_shapley
             ),
             real_shapley=real_shapley,
+            fixed_policy_comparison=(
+                fixed_policy
+            ),
             robustness_summary=(
                 robustness
             ),
@@ -147,6 +243,7 @@ def test_create_take_home_tableau_export() -> None:
         "burden_change",
         "burden_shapley",
         "real_take_home_shapley",
+        "fixed_policy_comparison",
         "robustness",
     } == set(
         result[
@@ -192,4 +289,29 @@ def test_create_take_home_tableau_export() -> None:
     assert (
         shapley_pct.iloc[0]["unit"]
         == "pct"
+    )
+
+    fixed_2025 = result.loc[
+        (
+            result["record_type"]
+            == "fixed_policy_comparison"
+        )
+        & (
+            result["year"]
+            == 2025
+        )
+        & (
+            result["comparison"]
+            == "actual_minus_fixed_1990"
+        )
+        & (
+            result["metric"]
+            == "nominal_take_home_difference_yen"
+        )
+    ]
+
+    assert len(fixed_2025) == 1
+    assert (
+        fixed_2025.iloc[0]["value"]
+        == -120_000.0
     )
