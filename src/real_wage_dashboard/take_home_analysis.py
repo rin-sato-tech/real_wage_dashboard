@@ -2472,6 +2472,8 @@ def calculate_standard_worker_income_tax_with_policy_years(
     health_insurance_rates: pd.DataFrame,
     bonus_rules: pd.DataFrame,
     employment_insurance_rates: pd.DataFrame,
+    long_term_care_insurance_rates: pd.DataFrame | None = None,
+    age: int = 35,
     sex: str = "male",
     business_type: str = "general",
     dependent_count: int = 0,
@@ -2567,30 +2569,26 @@ def calculate_standard_worker_income_tax_with_policy_years(
 
     social_insurance = (
         calculate_annual_social_insurance(
-            monthly_remuneration=(
-                monthly_remuneration
-            ),
-            bonus_payments=(
-                bonus_payments
-            ),
+            monthly_remuneration=monthly_remuneration,
+            bonus_payments=bonus_payments,
             pension_standard_monthly_rules=(
                 pension_standard_monthly_rules
             ),
-            pension_rates=(
-                pension_rates
-            ),
+            pension_rates=pension_rates,
             health_standard_monthly_rules=(
                 health_standard_monthly_rules
             ),
             health_insurance_rates=(
                 health_insurance_rates
             ),
-            bonus_rules=(
-                bonus_rules
-            ),
+            bonus_rules=bonus_rules,
             employment_insurance_rates=(
                 employment_insurance_rates
             ),
+            long_term_care_insurance_rates=(
+                long_term_care_insurance_rates
+            ),
+            age=age,
             sex=sex,
             business_type=business_type,
         )
@@ -2723,6 +2721,11 @@ def calculate_standard_worker_income_tax_with_policy_years(
                 "total_health_yen"
             ]
         ),
+        "long_term_care_yen": float(
+            social_insurance[
+                "total_long_term_care_yen"
+            ]
+        ),
         "employment_insurance_yen": float(
             social_insurance[
                 "employment_insurance_yen"
@@ -2771,6 +2774,8 @@ def calculate_standard_worker_income_tax(
     health_insurance_rates: pd.DataFrame,
     bonus_rules: pd.DataFrame,
     employment_insurance_rates: pd.DataFrame,
+    long_term_care_insurance_rates: pd.DataFrame | None = None,
+    age: int = 35,
     sex: str = "male",
     business_type: str = "general",
     dependent_count: int = 0,
@@ -2817,6 +2822,10 @@ def calculate_standard_worker_income_tax(
             employment_insurance_rates=(
                 employment_insurance_rates
             ),
+            long_term_care_insurance_rates=(
+                long_term_care_insurance_rates
+            ),
+            age=age,
             sex=sex,
             business_type=business_type,
             dependent_count=dependent_count,
@@ -3557,6 +3566,8 @@ def calculate_standard_worker_take_home(
     human_deduction_difference_yen: float = 50_000.0,
     municipality_band: str | None = None,
     policy_mode: str = "actual_policy",
+    long_term_care_insurance_rates: pd.DataFrame | None = None,
+    age: int = 35,
 ) -> dict[str, float | int]:
     """標準労働者モデルの名目手取り賃金を計算する。
 
@@ -3594,6 +3605,10 @@ def calculate_standard_worker_take_home(
         employment_insurance_rates=(
             employment_insurance_rates
         ),
+        long_term_care_insurance_rates=(
+            long_term_care_insurance_rates
+        ),
+        age=age,
         sex=sex,
         business_type=business_type,
         dependent_count=dependent_count,
@@ -3755,6 +3770,7 @@ def calculate_take_home_time_series(
     municipality_band: str | None = None,
     policy_mode: str = "actual_policy",
     timing: str = "income_year",
+    age: int = 35,
 ) -> pd.DataFrame:
     """年平均賃金から標準労働者の手取り時系列を作成する。
 
@@ -3829,6 +3845,17 @@ def calculate_take_home_time_series(
         raise ValueError(
             "手取り計算に必要な制度表がありません: "
             f"{sorted(missing_rules)}"
+        )
+
+    if (
+        _is_long_term_care_second_insured(age)
+        and "long_term_care_insurance_rates"
+        not in rule_tables
+    ):
+        raise ValueError(
+            "40～64歳の手取り計算には "
+            "long_term_care_insurance_rates "
+            "が必要です。"
         )
 
     if start_year > end_year:
@@ -4100,6 +4127,12 @@ def calculate_take_home_time_series(
                     "employment_insurance_rates"
                 ]
             ),
+            long_term_care_insurance_rates=(
+                rule_tables.get(
+                    "long_term_care_insurance_rates"
+                )
+            ),
+            age=age,
             sex=sex,
             business_type=business_type,
             dependent_count=dependent_count,

@@ -7321,3 +7321,351 @@ def test_annual_social_insurance_age_45_requires_long_term_care_rates():
             ),
             age=45,
         )
+
+
+def test_income_tax_age_45_includes_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    common_kwargs = {
+        "wage_year": 2025,
+        "tax_policy_year": 2025,
+        "social_insurance_policy_year": 2025,
+        "monthly_regular_pay_yen": 300_000,
+        "annual_bonus_yen": 1_000_000,
+        "income_tax_deductions": (
+            rules["income_tax_deductions"]
+        ),
+        "income_tax_brackets": (
+            rules["income_tax_brackets"]
+        ),
+        "income_tax_adjustments": (
+            rules["income_tax_adjustments"]
+        ),
+        "pension_standard_monthly_rules": (
+            rules["pension_standard_monthly"]
+        ),
+        "pension_rates": (
+            rules["pension_rates"]
+        ),
+        "health_standard_monthly_rules": (
+            rules["health_standard_monthly"]
+        ),
+        "health_insurance_rates": (
+            rules["health_insurance_rates"]
+        ),
+        "bonus_rules": (
+            rules[
+                "social_insurance_bonus_rules"
+            ]
+        ),
+        "employment_insurance_rates": (
+            rules[
+                "employment_insurance_rates"
+            ]
+        ),
+        "long_term_care_insurance_rates": (
+            rules[
+                "long_term_care_insurance_rates"
+            ]
+        ),
+    }
+
+    age_35 = (
+        calculate_standard_worker_income_tax_with_policy_years(
+            **common_kwargs,
+            age=35,
+        )
+    )
+
+    age_45 = (
+        calculate_standard_worker_income_tax_with_policy_years(
+            **common_kwargs,
+            age=45,
+        )
+    )
+
+    assert age_35[
+        "long_term_care_yen"
+    ] == pytest.approx(0)
+
+    assert age_45[
+        "long_term_care_yen"
+    ] == pytest.approx(
+        36_600
+    )
+
+    assert (
+        age_45["social_insurance_yen"]
+        - age_35["social_insurance_yen"]
+    ) == pytest.approx(
+        36_600
+    )
+
+    # 介護保険料も社会保険料控除になる。
+    assert age_45[
+        "taxable_income_yen"
+    ] < age_35[
+        "taxable_income_yen"
+    ]
+
+    # したがって所得税は増えない。
+    assert age_45[
+        "income_tax_yen"
+    ] <= age_35[
+        "income_tax_yen"
+    ]
+
+
+def test_standard_worker_income_tax_age_45_matches_separated():
+    rules = load_take_home_rule_tables()
+
+    regular = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(
+            rules["income_tax_deductions"]
+        ),
+        income_tax_brackets=(
+            rules["income_tax_brackets"]
+        ),
+        income_tax_adjustments=(
+            rules["income_tax_adjustments"]
+        ),
+        pension_standard_monthly_rules=(
+            rules["pension_standard_monthly"]
+        ),
+        pension_rates=(
+            rules["pension_rates"]
+        ),
+        health_standard_monthly_rules=(
+            rules["health_standard_monthly"]
+        ),
+        health_insurance_rates=(
+            rules["health_insurance_rates"]
+        ),
+        bonus_rules=(
+            rules[
+                "social_insurance_bonus_rules"
+            ]
+        ),
+        employment_insurance_rates=(
+            rules[
+                "employment_insurance_rates"
+            ]
+        ),
+        long_term_care_insurance_rates=(
+            rules[
+                "long_term_care_insurance_rates"
+            ]
+        ),
+        age=45,
+    )
+
+    separated = (
+        calculate_standard_worker_income_tax_with_policy_years(
+            wage_year=2025,
+            tax_policy_year=2025,
+            social_insurance_policy_year=2025,
+            monthly_regular_pay_yen=300_000,
+            annual_bonus_yen=1_000_000,
+            income_tax_deductions=(
+                rules["income_tax_deductions"]
+            ),
+            income_tax_brackets=(
+                rules["income_tax_brackets"]
+            ),
+            income_tax_adjustments=(
+                rules["income_tax_adjustments"]
+            ),
+            pension_standard_monthly_rules=(
+                rules["pension_standard_monthly"]
+            ),
+            pension_rates=(
+                rules["pension_rates"]
+            ),
+            health_standard_monthly_rules=(
+                rules["health_standard_monthly"]
+            ),
+            health_insurance_rates=(
+                rules["health_insurance_rates"]
+            ),
+            bonus_rules=(
+                rules[
+                    "social_insurance_bonus_rules"
+                ]
+            ),
+            employment_insurance_rates=(
+                rules[
+                    "employment_insurance_rates"
+                ]
+            ),
+            long_term_care_insurance_rates=(
+                rules[
+                    "long_term_care_insurance_rates"
+                ]
+            ),
+            age=45,
+        )
+    )
+
+    for column in [
+        "long_term_care_yen",
+        "social_insurance_yen",
+        "taxable_income_yen",
+        "income_tax_yen",
+    ]:
+        assert regular[
+            column
+        ] == pytest.approx(
+            separated[column]
+        )
+
+
+def test_standard_worker_take_home_age_45():
+    rules = load_take_home_rule_tables()
+
+    common_kwargs = {
+        "year": 2025,
+        "monthly_regular_pay_yen": 300_000,
+        "annual_bonus_yen": 1_000_000,
+        "income_tax_deductions": rules["income_tax_deductions"],
+        "income_tax_brackets": rules["income_tax_brackets"],
+        "income_tax_adjustments": rules["income_tax_adjustments"],
+        "pension_standard_monthly_rules": (
+            rules["pension_standard_monthly"]
+        ),
+        "pension_rates": rules["pension_rates"],
+        "health_standard_monthly_rules": (
+            rules["health_standard_monthly"]
+        ),
+        "health_insurance_rates": (
+            rules["health_insurance_rates"]
+        ),
+        "bonus_rules": rules[
+            "social_insurance_bonus_rules"
+        ],
+        "employment_insurance_rates": rules[
+            "employment_insurance_rates"
+        ],
+        "resident_tax_deductions": (
+            rules["resident_tax_deductions"]
+        ),
+        "resident_tax_income_rates": (
+            rules["resident_tax_income_rates"]
+        ),
+        "resident_tax_adjustments": (
+            rules["resident_tax_adjustments"]
+        ),
+        "resident_tax_per_capita": (
+            rules["resident_tax_per_capita"]
+        ),
+        "long_term_care_insurance_rates": (
+            rules["long_term_care_insurance_rates"]
+        ),
+    }
+
+    age_35 = calculate_standard_worker_take_home(
+        **common_kwargs,
+        age=35,
+    )
+
+    age_45 = calculate_standard_worker_take_home(
+        **common_kwargs,
+        age=45,
+    )
+
+    assert age_45[
+        "long_term_care_yen"
+    ] == pytest.approx(
+        36_600
+    )
+
+    assert age_45[
+        "social_insurance_yen"
+    ] > age_35[
+        "social_insurance_yen"
+    ]
+
+    # 社会保険料控除が増えるため、
+    # 所得税・住民税は増えない。
+    assert age_45[
+        "income_tax_yen"
+    ] <= age_35[
+        "income_tax_yen"
+    ]
+
+    assert age_45[
+        "resident_tax_yen"
+    ] <= age_35[
+        "resident_tax_yen"
+    ]
+
+    # 税軽減で一部相殺されるので、
+    # 手取り減少額は介護保険料36,600円より小さい。
+    take_home_loss = (
+        age_35["nominal_take_home_yen"]
+        - age_45["nominal_take_home_yen"]
+    )
+
+    assert take_home_loss > 0
+    assert take_home_loss < 36_600
+
+
+def test_take_home_time_series_age_35_matches_default():
+    rules = load_take_home_rule_tables()
+
+    annual_wage_df = pd.DataFrame(
+        {
+            "year": [2025],
+            "total_cash_earnings": [
+                350_000,
+            ],
+            "regular_earnings": [
+                300_000,
+            ],
+            "special_earnings": [
+                50_000,
+            ],
+        }
+    )
+
+    default = calculate_take_home_time_series(
+        annual_wage_df=annual_wage_df,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+    )
+
+    age_35 = calculate_take_home_time_series(
+        annual_wage_df=annual_wage_df,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+        age=35,
+    )
+
+    assert age_35.loc[
+        0,
+        "nominal_take_home_yen",
+    ] == pytest.approx(
+        default.loc[
+            0,
+            "nominal_take_home_yen",
+        ]
+    )
+
+    assert age_35.loc[
+        0,
+        "social_insurance_yen",
+    ] == pytest.approx(
+        default.loc[
+            0,
+            "social_insurance_yen",
+        ]
+    )
+
+    assert age_35.loc[
+        0,
+        "long_term_care_yen",
+    ] == pytest.approx(0)
