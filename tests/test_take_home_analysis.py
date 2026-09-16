@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from real_wage_dashboard.take_home_analysis import (
+    _floor_to_hundred_yen,
     _floor_to_thousand_yen,
     _select_assessment_year_rules,
     _select_effective_rules,
@@ -9,9 +10,12 @@ from real_wage_dashboard.take_home_analysis import (
     _select_single_effective_rule,
     calculate_base_income_tax,
     calculate_basic_deduction,
+    calculate_income_tax_after_adjustments,
+    calculate_reconstruction_special_income_tax,
     calculate_salary_income,
     calculate_salary_income_deduction,
     calculate_taxable_income,
+    calculate_total_income_tax,
 )
 
 
@@ -1037,3 +1041,341 @@ def test_calculate_base_income_tax_rejects_unmatched_bracket():
             target_date="2025-06-01",
             tax_brackets=rules,
         )
+
+
+def _create_income_tax_adjustment_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "policy_id": [
+                "special_reduction_1994",
+                "special_reduction_1995",
+                "special_reduction_1996",
+                "special_reduction_1998",
+                "proportional_reduction_1999_2005",
+                "proportional_reduction_2006",
+                "reconstruction_surtax_2013",
+                "fixed_reduction_2024",
+            ],
+            "effective_from": [
+                "1994-01-01",
+                "1995-01-01",
+                "1996-01-01",
+                "1998-01-01",
+                "1999-01-01",
+                "2006-01-01",
+                "2013-01-01",
+                "2024-01-01",
+            ],
+            "effective_to": [
+                "1994-12-31",
+                "1995-12-31",
+                "1996-12-31",
+                "1998-12-31",
+                "2005-12-31",
+                "2006-12-31",
+                None,
+                "2024-12-31",
+            ],
+            "operation": [
+                "subtract_rate",
+                "subtract_rate",
+                "subtract_rate",
+                "subtract_fixed",
+                "subtract_rate",
+                "subtract_rate",
+                "add_rate",
+                "subtract_fixed",
+            ],
+            "base": [
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "post_credit_income_tax",
+                "income_tax",
+            ],
+            "rate": [
+                0.20,
+                0.15,
+                0.15,
+                None,
+                0.20,
+                0.10,
+                0.021,
+                None,
+            ],
+            "fixed_taxpayer_yen": [
+                None,
+                None,
+                None,
+                38_000,
+                None,
+                None,
+                None,
+                30_000,
+            ],
+            "fixed_dependent_yen": [
+                None,
+                None,
+                None,
+                19_000,
+                None,
+                None,
+                None,
+                30_000,
+            ],
+            "cap_yen": [
+                2_000_000,
+                50_000,
+                50_000,
+                None,
+                250_000,
+                125_000,
+                None,
+                None,
+            ],
+            "total_income_limit_yen": [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                18_050_000,
+            ],
+            "policy_class": [
+                "temporary",
+                "temporary",
+                "temporary",
+                "temporary",
+                "multi_year_general",
+                "multi_year_general",
+                "surtax",
+                "temporary",
+            ],
+            "apply_order": [
+                100,
+                100,
+                100,
+                100,
+                100,
+                100,
+                200,
+                100,
+            ],
+            "source_key": ["test"] * 8,
+        }
+    )
+
+
+def test_calculate_income_tax_after_adjustments_1994():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1994-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 80_000
+
+
+def test_calculate_income_tax_after_adjustments_1995_cap():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=1_000_000,
+        total_income_yen=5_000_000,
+        target_date="1995-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 950_000
+
+
+def test_calculate_income_tax_after_adjustments_1998():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1998-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 62_000
+
+
+def test_calculate_income_tax_after_adjustments_1998_with_dependents():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1998-06-01",
+        adjustment_rules=rules,
+        dependent_count=2,
+    )
+
+    assert result == 24_000
+
+
+def test_calculate_income_tax_after_adjustments_1999():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1999-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 80_000
+
+
+def test_calculate_income_tax_after_adjustments_2006():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2006-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 90_000
+
+
+def test_calculate_income_tax_after_adjustments_2007():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2007-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 100_000
+
+
+def test_calculate_income_tax_after_adjustments_2024():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 70_000
+
+
+def test_calculate_income_tax_after_adjustments_2024_with_dependents():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+        dependent_count=2,
+    )
+
+    assert result == 10_000
+
+
+def test_calculate_income_tax_after_adjustments_2024_income_limit():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=18_050_001,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 100_000
+
+
+def test_calculate_income_tax_after_adjustments_floor_at_zero():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=20_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_income_tax_structural_policy_excludes_2024_reduction():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+        policy_mode="structural_policy",
+    )
+
+    assert result == 100_000
+
+
+def test_calculate_income_tax_structural_policy_keeps_1999_reduction():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1999-06-01",
+        adjustment_rules=rules,
+        policy_mode="structural_policy",
+    )
+
+    assert result == 80_000
+
+
+def test_calculate_reconstruction_special_income_tax():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_reconstruction_special_income_tax(
+        income_tax_after_adjustments_yen=176_500,
+        target_date="2025-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 3_706
+
+
+def test_calculate_reconstruction_special_income_tax_before_2013():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_reconstruction_special_income_tax(
+        income_tax_after_adjustments_yen=100_000,
+        target_date="2012-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_total_income_tax_2024():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_total_income_tax(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 71_400

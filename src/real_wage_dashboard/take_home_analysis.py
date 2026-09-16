@@ -510,3 +510,312 @@ def calculate_base_income_tax(
     return float(
         max(tax, 0)
     )
+
+
+def calculate_income_tax_after_adjustments(
+    base_income_tax_yen: float,
+    total_income_yen: float,
+    target_date: str | date | pd.Timestamp,
+    adjustment_rules: pd.DataFrame,
+    dependent_count: int = 0,
+    policy_mode: str = "actual_policy",
+) -> float:
+    """算出所得税額に減税措置を適用する。"""
+
+    if base_income_tax_yen < 0:
+        raise ValueError(
+            "算出所得税額は0以上である必要があります。"
+        )
+
+    if total_income_yen < 0:
+        raise ValueError(
+            "合計所得金額は0以上である必要があります。"
+        )
+
+    if (
+        not isinstance(dependent_count, int)
+        or dependent_count < 0
+    ):
+        raise ValueError(
+            "扶養人数は0以上の整数である必要があります。"
+        )
+
+    if policy_mode not in {
+        "actual_policy",
+        "structural_policy",
+    }:
+        raise ValueError(
+            "policy_mode は actual_policy または "
+            "structural_policy である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        adjustment_rules,
+        target_date=target_date,
+    )
+
+    # 復興特別所得税などの加算措置はここでは扱わない。
+    rules = rules.loc[
+        rules["operation"].isin(
+            [
+                "subtract_rate",
+                "subtract_fixed",
+            ]
+        )
+    ].copy()
+
+    # structural_policy では、一時的な景気対策等を除外する。
+    # 1999～2006年の定率減税のような multi_year_general は残す。
+    if policy_mode == "structural_policy":
+        rules = rules.loc[
+            rules["policy_class"] != "temporary"
+        ].copy()
+
+    if rules.empty:
+        return float(base_income_tax_yen)
+
+    apply_order = pd.to_numeric(
+        rules["apply_order"],
+        errors="coerce",
+    )
+
+    if apply_order.isna().any():
+        raise ValueError(
+            "所得税調整ルールの apply_order に"
+            "不正な値があります。"
+        )
+
+    rules = (
+        rules.assign(_apply_order=apply_order)
+        .sort_values(
+            [
+                "_apply_order",
+                "policy_id",
+            ]
+        )
+        .reset_index(drop=True)
+    )
+
+    tax = float(base_income_tax_yen)
+
+    for _, rule in rules.iterrows():
+        total_income_limit = pd.to_numeric(
+            pd.Series(
+                [rule.get("total_income_limit_yen")]
+            ),
+            errors="coerce",
+        ).iloc[0]
+
+        if (
+            pd.notna(total_income_limit)
+            and total_income_yen
+            > float(total_income_limit)
+        ):
+            continue
+
+        operation = rule["operation"]
+
+        if operation == "subtract_rate":
+            rate = pd.to_numeric(
+                pd.Series([rule.get("rate")]),
+                errors="coerce",
+            ).iloc[0]
+
+            if pd.isna(rate):
+                raise ValueError(
+                    "subtract_rate ルールに"
+                    " rate が設定されていません。"
+                )
+
+            reduction = tax * float(rate)
+
+        elif operation == "subtract_fixed":
+            fixed_taxpayer = pd.to_numeric(
+                pd.Series(
+                    [rule.get("fixed_taxpayer_yen")]
+                ),
+                errors="coerce",
+            ).iloc[0]
+
+            fixed_dependent = pd.to_numeric(
+                pd.Series(
+                    [rule.get("fixed_dependent_yen")]
+                ),
+                errors="coerce",
+            ).iloc[0]
+
+            if pd.isna(fixed_taxpayer):
+                raise ValueError(
+                    "subtract_fixed ルールに"
+                    " fixed_taxpayer_yen が"
+                    "設定されていません。"
+                )
+
+            if pd.isna(fixed_dependent):
+                fixed_dependent = 0.0
+
+            reduction = (
+                float(fixed_taxpayer)
+                + float(fixed_dependent)
+                * dependent_count
+            )
+
+        else:
+            raise ValueError(
+                f"未対応の所得税調整です: {operation}"
+            )
+
+        cap_yen = pd.to_numeric(
+            pd.Series([rule.get("cap_yen")]),
+            errors="coerce",
+        ).iloc[0]
+
+        if pd.notna(cap_yen):
+            reduction = min(
+                reduction,
+                float(cap_yen),
+            )
+
+        # 減税額が税額そのものを超えることはできない。
+        reduction = min(
+            reduction,
+            tax,
+        )
+
+        tax -= reduction
+
+    return float(
+        max(tax, 0)
+    )
+
+
+def calculate_reconstruction_special_income_tax(
+    income_tax_after_adjustments_yen: float,
+    target_date: str | date | pd.Timestamp,
+    adjustment_rules: pd.DataFrame,
+    policy_mode: str = "actual_policy",
+) -> float:
+    """減税等適用後の所得税額から復興特別所得税を計算する。"""
+
+    if income_tax_after_adjustments_yen < 0:
+        raise ValueError(
+            "調整後所得税額は0以上である必要があります。"
+        )
+
+    if policy_mode not in {
+        "actual_policy",
+        "structural_policy",
+    }:
+        raise ValueError(
+            "policy_mode は actual_policy または "
+            "structural_policy である必要があります。"
+        )
+
+    rules = _select_effective_rules(
+        adjustment_rules,
+        target_date=target_date,
+    )
+
+    rules = rules.loc[
+        rules["operation"] == "add_rate"
+    ].copy()
+
+    if policy_mode == "structural_policy":
+        rules = rules.loc[
+            rules["policy_class"] != "temporary"
+        ].copy()
+
+    if rules.empty:
+        return 0.0
+
+    if len(rules) != 1:
+        raise ValueError(
+            "復興特別所得税ルールを一意に取得できません。"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(rules)}"
+        )
+
+    rule = rules.iloc[0]
+
+    if rule["base"] != "post_credit_income_tax":
+        raise ValueError(
+            "復興特別所得税の課税標準が"
+            "想定と一致しません。"
+        )
+
+    rate = pd.to_numeric(
+        pd.Series([rule.get("rate")]),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(rate):
+        raise ValueError(
+            "復興特別所得税率が設定されていません。"
+        )
+
+    surtax = (
+        income_tax_after_adjustments_yen
+        * float(rate)
+    )
+
+    # 復興特別所得税額は1円未満切捨て。
+    return float(
+        math.floor(surtax)
+    )
+
+
+def _floor_to_hundred_yen(
+    amount_yen: float,
+) -> float:
+    """金額の100円未満を切り捨てる。"""
+
+    if amount_yen < 0:
+        raise ValueError(
+            "切り捨て対象金額は0以上である必要があります。"
+        )
+
+    return float(
+        math.floor(amount_yen / 100) * 100
+    )
+
+
+def calculate_total_income_tax(
+    base_income_tax_yen: float,
+    total_income_yen: float,
+    target_date: str | date | pd.Timestamp,
+    adjustment_rules: pd.DataFrame,
+    dependent_count: int = 0,
+    policy_mode: str = "actual_policy",
+) -> float:
+    """減税・復興特別所得税を含む年間所得税額を計算する。"""
+
+    income_tax_after_adjustments = (
+        calculate_income_tax_after_adjustments(
+            base_income_tax_yen=base_income_tax_yen,
+            total_income_yen=total_income_yen,
+            target_date=target_date,
+            adjustment_rules=adjustment_rules,
+            dependent_count=dependent_count,
+            policy_mode=policy_mode,
+        )
+    )
+
+    reconstruction_tax = (
+        calculate_reconstruction_special_income_tax(
+            income_tax_after_adjustments_yen=(
+                income_tax_after_adjustments
+            ),
+            target_date=target_date,
+            adjustment_rules=adjustment_rules,
+            policy_mode=policy_mode,
+        )
+    )
+
+    total_tax = (
+        income_tax_after_adjustments
+        + reconstruction_tax
+    )
+
+    return _floor_to_hundred_yen(
+        total_tax
+    )
