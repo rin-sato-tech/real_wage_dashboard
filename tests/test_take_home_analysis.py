@@ -6,6 +6,7 @@ from real_wage_dashboard.take_home_analysis import (
     _floor_to_thousand_yen,
     _select_assessment_year_rules,
     _select_effective_rules,
+    _select_health_insurance_rate_rule,
     _select_pension_rate_rule,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
@@ -13,11 +14,13 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_annual_employment_insurance,
     calculate_annual_pension_bonus_contribution,
     calculate_annual_pension_contribution,
+    calculate_annual_regular_health_insurance_contribution,
     calculate_annual_regular_pension_contribution,
     calculate_base_income_tax,
     calculate_basic_deduction,
     calculate_employment_insurance,
     calculate_income_tax_after_adjustments,
+    calculate_monthly_health_insurance_contribution,
     calculate_monthly_pension_contribution,
     calculate_pension_bonus_base,
     calculate_pension_bonus_contribution,
@@ -2562,3 +2565,314 @@ def test_calculate_annual_pension_contribution():
     assert result[
         "total_pension_yen"
     ] == 311_100
+
+
+def _create_health_insurance_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1990-01-01",
+                "1992-04-01",
+                "1997-09-01",
+                "2003-04-01",
+                "2010-03-01",
+                "2011-03-01",
+                "2012-03-01",
+            ],
+            "effective_to": [
+                "1992-03-31",
+                "1997-08-31",
+                "2003-03-31",
+                "2010-02-28",
+                "2011-02-28",
+                "2012-02-29",
+                None,
+            ],
+            "regular_total_rate": [
+                0.0840,
+                0.0820,
+                0.0850,
+                0.0820,
+                0.0934,
+                0.0950,
+                0.1000,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_health_standard_monthly_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1984-10-01",
+                "1984-10-01",
+                "1984-10-01",
+                "1992-10-01",
+                "1992-10-01",
+                "1992-10-01",
+                "2007-04-01",
+                "2007-04-01",
+                "2007-04-01",
+            ],
+            "effective_to": [
+                "1992-09-30",
+                "1992-09-30",
+                "1992-09-30",
+                "2007-03-31",
+                "2007-03-31",
+                "2007-03-31",
+                None,
+                None,
+                None,
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+            ],
+            "standard_monthly_yen": [
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+            ],
+            "remuneration_upper_yen": [
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+            ],
+        }
+    )
+
+
+def test_calculate_monthly_health_insurance_contribution():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    result = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=205_000,
+            target_date="2025-06-01",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    assert result == 10_000
+
+
+def test_monthly_health_insurance_1990():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    result = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=205_000,
+            target_date="1990-06-01",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    assert result == 8_400
+
+
+def test_monthly_health_insurance_1997_rate_change():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    august = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=205_000,
+            target_date="1997-08-31",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    september = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=205_000,
+            target_date="1997-09-01",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    assert august == 8_200
+    assert september == 8_500
+
+
+def test_monthly_health_insurance_2010_rate_change():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    february = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=205_000,
+            target_date="2010-02-28",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    march = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=205_000,
+            target_date="2010-03-01",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    assert february == 8_200
+    assert march == 9_340
+
+
+def test_monthly_health_insurance_uses_standard_remuneration():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    below = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=209_999,
+            target_date="2025-06-01",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    boundary = (
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=210_000,
+            target_date="2025-06-01",
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    assert below == 10_000
+    assert boundary == 11_000
+
+
+def test_calculate_annual_regular_health_insurance_contribution():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    result = (
+        calculate_annual_regular_health_insurance_contribution(
+            monthly_remuneration=monthly,
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    assert result == 120_000
+
+
+def test_annual_health_insurance_handles_rate_change():
+    standard_rules = (
+        _create_health_standard_monthly_rules()
+    )
+    rates = _create_health_insurance_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "1997-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ] * 12,
+        }
+    )
+
+    result = (
+        calculate_annual_regular_health_insurance_contribution(
+            monthly_remuneration=monthly,
+            standard_monthly_rules=standard_rules,
+            health_insurance_rates=rates,
+        )
+    )
+
+    expected = (
+        8_200 * 8
+        + 8_500 * 4
+    )
+
+    assert result == expected
+    assert result == 99_600

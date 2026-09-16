@@ -1591,3 +1591,182 @@ def create_semiannual_bonus_payments(
             ],
         }
     )
+
+
+def _select_health_insurance_rate_rule(
+    target_date: str | date | pd.Timestamp,
+    health_insurance_rates: pd.DataFrame,
+) -> pd.Series:
+    """適用日時点の健康保険料率ルールを取得する。"""
+
+    rules = _select_effective_rules(
+        health_insurance_rates,
+        target_date=target_date,
+    )
+
+    if len(rules) != 1:
+        raise ValueError(
+            "健康保険料率を一意に取得できません。"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(rules)}"
+        )
+
+    return rules.iloc[0]
+
+
+def calculate_monthly_health_insurance_contribution(
+    remuneration_yen: float,
+    target_date: str | date | pd.Timestamp,
+    standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+) -> float:
+    """月額報酬から健康保険の月額本人負担額を計算する。"""
+
+    if remuneration_yen < 0:
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    standard_monthly_yen = (
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=remuneration_yen,
+            target_date=target_date,
+            standard_monthly_rules=standard_monthly_rules,
+        )
+    )
+
+    rule = _select_health_insurance_rate_rule(
+        target_date=target_date,
+        health_insurance_rates=health_insurance_rates,
+    )
+
+    total_rate = pd.to_numeric(
+        pd.Series(
+            [rule["regular_total_rate"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    employee_share = pd.to_numeric(
+        pd.Series(
+            [rule["employee_share"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if pd.isna(total_rate):
+        raise ValueError(
+            "健康保険の regular_total_rate に"
+            "不正な値があります。"
+        )
+
+    if pd.isna(employee_share):
+        raise ValueError(
+            "健康保険の employee_share に"
+            "不正な値があります。"
+        )
+
+    if total_rate < 0:
+        raise ValueError(
+            "健康保険料率は0以上である必要があります。"
+        )
+
+    if not 0 <= employee_share <= 1:
+        raise ValueError(
+            "健康保険の本人負担割合は"
+            "0以上1以下である必要があります。"
+        )
+
+    contribution = (
+        standard_monthly_yen
+        * float(total_rate)
+        * float(employee_share)
+    )
+
+    # float演算由来の微小誤差のみ除去する。
+    return float(
+        round(
+            contribution,
+            10,
+        )
+    )
+
+
+def calculate_annual_regular_health_insurance_contribution(
+    monthly_remuneration: pd.DataFrame,
+    standard_monthly_rules: pd.DataFrame,
+    health_insurance_rates: pd.DataFrame,
+) -> float:
+    """月次報酬から年間健康保険本人負担額（月給部分）を計算する。"""
+
+    required_columns = {
+        "date",
+        "regular_pay_yen",
+    }
+
+    missing = required_columns - set(
+        monthly_remuneration.columns
+    )
+
+    if missing:
+        raise ValueError(
+            "年間健康保険料の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if monthly_remuneration.empty:
+        raise ValueError(
+            "月次報酬データが空です。"
+        )
+
+    data = monthly_remuneration.copy()
+
+    data["date"] = pd.to_datetime(
+        data["date"],
+        errors="coerce",
+    )
+
+    if data["date"].isna().any():
+        raise ValueError(
+            "月次報酬データの date に不正な値があります。"
+        )
+
+    data["regular_pay_yen"] = pd.to_numeric(
+        data["regular_pay_yen"],
+        errors="coerce",
+    )
+
+    if data["regular_pay_yen"].isna().any():
+        raise ValueError(
+            "regular_pay_yen に不正な値があります。"
+        )
+
+    if (data["regular_pay_yen"] < 0).any():
+        raise ValueError(
+            "報酬月額は0以上である必要があります。"
+        )
+
+    contributions = [
+        calculate_monthly_health_insurance_contribution(
+            remuneration_yen=float(
+                row.regular_pay_yen
+            ),
+            target_date=row.date,
+            standard_monthly_rules=(
+                standard_monthly_rules
+            ),
+            health_insurance_rates=(
+                health_insurance_rates
+            ),
+        )
+        for row in data.itertuples(
+            index=False
+        )
+    ]
+
+    return float(
+        round(
+            sum(contributions),
+            10,
+        )
+    )
