@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 import pytest
 
@@ -13,6 +15,8 @@ from real_wage_dashboard.take_home_analysis import (
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
     _select_standard_monthly_remuneration_rule,
+    add_deduction_component_rates,
+    add_real_take_home_metrics,
     calculate_annual_employment_insurance,
     calculate_annual_health_bonus_contribution,
     calculate_annual_health_insurance_contribution,
@@ -49,7 +53,9 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_total_income_tax,
     calculate_total_resident_tax,
     create_constant_monthly_remuneration,
+    create_deduction_burden_change_summary,
     create_semiannual_bonus_payments,
+    create_take_home_period_log_decomposition,
 )
 from real_wage_dashboard.take_home_service import (
     load_take_home_rule_tables,
@@ -4896,3 +4902,475 @@ def test_take_home_time_series_rejects_invalid_timing():
             end_year=2025,
             timing="invalid",
         )
+
+
+def test_add_real_take_home_metrics():
+    take_home = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                1991,
+            ],
+            "gross_salary_yen": [
+                4_000_000,
+                4_400_000,
+            ],
+            "nominal_take_home_yen": [
+                3_200_000,
+                3_520_000,
+            ],
+        }
+    )
+
+    cpi = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                1991,
+            ],
+            "cpi": [
+                80.0,
+                88.0,
+            ],
+        }
+    )
+
+    result = add_real_take_home_metrics(
+        take_home_df=take_home,
+        annual_cpi_df=cpi,
+        base_year=1990,
+    )
+
+    assert result.loc[
+        0,
+        "real_gross_salary_yen",
+    ] == pytest.approx(
+        5_000_000
+    )
+
+    assert result.loc[
+        0,
+        "real_take_home_yen",
+    ] == pytest.approx(
+        4_000_000
+    )
+
+    # 名目は10%増だが、CPIも10%上昇。
+    assert result.loc[
+        1,
+        "real_gross_salary_yen",
+    ] == pytest.approx(
+        5_000_000
+    )
+
+    assert result.loc[
+        1,
+        "real_take_home_yen",
+    ] == pytest.approx(
+        4_000_000
+    )
+
+    assert result.loc[
+        0,
+        "gross_salary_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        0,
+        "nominal_take_home_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        0,
+        "real_gross_salary_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        0,
+        "real_take_home_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        1,
+        "gross_salary_index",
+    ] == pytest.approx(110)
+
+    assert result.loc[
+        1,
+        "nominal_take_home_index",
+    ] == pytest.approx(110)
+
+    assert result.loc[
+        1,
+        "real_gross_salary_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        1,
+        "real_take_home_index",
+    ] == pytest.approx(100)
+
+
+def test_add_real_take_home_metrics_rejects_missing_cpi_year():
+    take_home = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                1991,
+            ],
+            "gross_salary_yen": [
+                4_000_000,
+                4_100_000,
+            ],
+            "nominal_take_home_yen": [
+                3_200_000,
+                3_280_000,
+            ],
+        }
+    )
+
+    cpi = pd.DataFrame(
+        {
+            "year": [
+                1990,
+            ],
+            "cpi": [
+                80.0,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="1991",
+    ):
+        add_real_take_home_metrics(
+            take_home_df=take_home,
+            annual_cpi_df=cpi,
+            base_year=1990,
+        )
+
+
+def test_create_take_home_period_log_decomposition():
+    df = pd.DataFrame(
+        {
+            "year": [
+                2000,
+                2010,
+            ],
+            "gross_salary_yen": [
+                100.0,
+                110.0,
+            ],
+            "take_home_rate": [
+                0.8,
+                0.8,
+            ],
+            "cpi": [
+                100.0,
+                110.0,
+            ],
+            "real_take_home_yen": [
+                80.0,
+                80.0,
+            ],
+        }
+    )
+
+    result = (
+        create_take_home_period_log_decomposition(
+            df,
+            periods=[
+                (2000, 2010),
+            ],
+        )
+    )
+
+    expected = (
+        math.log(1.1)
+        * 100
+    )
+
+    assert result.loc[
+        0,
+        "wage_log_contribution_pt",
+    ] == pytest.approx(
+        expected
+    )
+
+    assert result.loc[
+        0,
+        "burden_log_contribution_pt",
+    ] == pytest.approx(
+        0
+    )
+
+    assert result.loc[
+        0,
+        "price_log_contribution_pt",
+    ] == pytest.approx(
+        -expected
+    )
+
+    assert result.loc[
+        0,
+        "real_take_home_log_change_pt",
+    ] == pytest.approx(
+        0
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_total_pt",
+    ] == pytest.approx(
+        0
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(
+        0
+    )
+
+    assert result.loc[
+        0,
+        "real_take_home_pct_change",
+    ] == pytest.approx(
+        0
+    )
+
+
+def test_take_home_log_decomposition_burden_effect():
+    df = pd.DataFrame(
+        {
+            "year": [
+                2000,
+                2010,
+            ],
+            "gross_salary_yen": [
+                100.0,
+                100.0,
+            ],
+            "take_home_rate": [
+                0.8,
+                0.75,
+            ],
+            "cpi": [
+                100.0,
+                100.0,
+            ],
+            "real_take_home_yen": [
+                80.0,
+                75.0,
+            ],
+        }
+    )
+
+    result = (
+        create_take_home_period_log_decomposition(
+            df,
+            periods=[
+                (2000, 2010),
+            ],
+        )
+    )
+
+    expected_burden = (
+        math.log(
+            0.75 / 0.8
+        )
+        * 100
+    )
+
+    assert result.loc[
+        0,
+        "wage_log_contribution_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "price_log_contribution_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "burden_log_contribution_pt",
+    ] == pytest.approx(
+        expected_burden
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "real_take_home_pct_change",
+    ] == pytest.approx(
+        -6.25
+    )
+
+    assert result.loc[
+        0,
+        "burden_change_pt",
+    ] == pytest.approx(
+        5.0
+    )
+
+
+def test_add_deduction_component_rates():
+    df = pd.DataFrame(
+        {
+            "gross_salary_yen": [
+                1_000_000,
+            ],
+            "income_tax_yen": [
+                50_000,
+            ],
+            "resident_tax_yen": [
+                40_000,
+            ],
+            "pension_yen": [
+                100_000,
+            ],
+            "health_insurance_yen": [
+                50_000,
+            ],
+            "employment_insurance_yen": [
+                10_000,
+            ],
+            "total_deductions_yen": [
+                250_000,
+            ],
+            "effective_burden_rate": [
+                0.25,
+            ],
+        }
+    )
+
+    result = (
+        add_deduction_component_rates(
+            df
+        )
+    )
+
+    assert result.loc[
+        0,
+        "income_tax_rate",
+    ] == pytest.approx(0.05)
+
+    assert result.loc[
+        0,
+        "resident_tax_rate",
+    ] == pytest.approx(0.04)
+
+    assert result.loc[
+        0,
+        "pension_rate_effective",
+    ] == pytest.approx(0.10)
+
+    assert result.loc[
+        0,
+        "health_insurance_rate_effective",
+    ] == pytest.approx(0.05)
+
+    assert result.loc[
+        0,
+        "employment_insurance_rate_effective",
+    ] == pytest.approx(0.01)
+
+    assert result.loc[
+        0,
+        "component_burden_rate_sum",
+    ] == pytest.approx(0.25)
+
+    assert result.loc[
+        0,
+        "component_burden_rate_error",
+    ] == pytest.approx(0)
+
+
+def test_create_deduction_burden_change_summary():
+    df = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                2000,
+            ],
+            "effective_burden_rate": [
+                0.20,
+                0.25,
+            ],
+            "income_tax_rate": [
+                0.05,
+                0.04,
+            ],
+            "resident_tax_rate": [
+                0.03,
+                0.04,
+            ],
+            "pension_rate_effective": [
+                0.07,
+                0.10,
+            ],
+            "health_insurance_rate_effective": [
+                0.04,
+                0.05,
+            ],
+            "employment_insurance_rate_effective": [
+                0.01,
+                0.02,
+            ],
+        }
+    )
+
+    result = (
+        create_deduction_burden_change_summary(
+            df,
+            periods=[
+                (1990, 2000),
+            ],
+        )
+    )
+
+    assert result.loc[
+        0,
+        "income_tax_change_pt",
+    ] == pytest.approx(-1.0)
+
+    assert result.loc[
+        0,
+        "resident_tax_change_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        0,
+        "pension_change_pt",
+    ] == pytest.approx(3.0)
+
+    assert result.loc[
+        0,
+        "health_insurance_change_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        0,
+        "employment_insurance_change_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        0,
+        "total_burden_change_pt",
+    ] == pytest.approx(5.0)
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(0)
+
+
+
+
+

@@ -4267,3 +4267,606 @@ def calculate_standard_worker_resident_tax(
             ]
         ),
     }
+
+
+def add_real_take_home_metrics(
+    take_home_df: pd.DataFrame,
+    annual_cpi_df: pd.DataFrame,
+    base_year: int = 1990,
+) -> pd.DataFrame:
+    """手取り時系列に実質額と基準年指数を追加する。"""
+
+    take_home_required = {
+        "year",
+        "gross_salary_yen",
+        "nominal_take_home_yen",
+    }
+
+    cpi_required = {
+        "year",
+        "cpi",
+    }
+
+    missing_take_home = (
+        take_home_required
+        - set(take_home_df.columns)
+    )
+
+    if missing_take_home:
+        raise ValueError(
+            "手取りデータに必要な列がありません: "
+            f"{sorted(missing_take_home)}"
+        )
+
+    missing_cpi = (
+        cpi_required
+        - set(annual_cpi_df.columns)
+    )
+
+    if missing_cpi:
+        raise ValueError(
+            "CPIデータに必要な列がありません: "
+            f"{sorted(missing_cpi)}"
+        )
+
+    take_home = take_home_df.copy()
+    cpi = annual_cpi_df.copy()
+
+    take_home["year"] = pd.to_numeric(
+        take_home["year"],
+        errors="coerce",
+    )
+
+    cpi["year"] = pd.to_numeric(
+        cpi["year"],
+        errors="coerce",
+    )
+
+    cpi["cpi"] = pd.to_numeric(
+        cpi["cpi"],
+        errors="coerce",
+    )
+
+    if take_home["year"].isna().any():
+        raise ValueError(
+            "手取りデータの year に不正な値があります。"
+        )
+
+    if cpi[
+        [
+            "year",
+            "cpi",
+        ]
+    ].isna().any().any():
+        raise ValueError(
+            "CPIデータに不正な値があります。"
+        )
+
+    if (cpi["cpi"] <= 0).any():
+        raise ValueError(
+            "CPIは0より大きい必要があります。"
+        )
+
+    if take_home["year"].duplicated().any():
+        raise ValueError(
+            "手取りデータに重複年があります。"
+        )
+
+    if cpi["year"].duplicated().any():
+        raise ValueError(
+            "CPIデータに重複年があります。"
+        )
+
+    take_home["year"] = (
+        take_home["year"].astype(int)
+    )
+
+    cpi["year"] = (
+        cpi["year"].astype(int)
+    )
+
+    missing_cpi_years = sorted(
+        set(take_home["year"])
+        - set(cpi["year"])
+    )
+
+    if missing_cpi_years:
+        raise ValueError(
+            "手取り実質化に必要なCPI年が"
+            "欠けています: "
+            f"{missing_cpi_years}"
+        )
+
+    result = take_home.merge(
+        cpi[
+            [
+                "year",
+                "cpi",
+            ]
+        ],
+        on="year",
+        how="left",
+        validate="one_to_one",
+    )
+
+    result["real_gross_salary_yen"] = (
+        result["gross_salary_yen"]
+        / result["cpi"]
+        * 100
+    )
+
+    result["real_take_home_yen"] = (
+        result["nominal_take_home_yen"]
+        / result["cpi"]
+        * 100
+    )
+
+    base = result.loc[
+        result["year"] == base_year
+    ]
+
+    if len(base) != 1:
+        raise ValueError(
+            f"{base_year}年の基準データを"
+            "一意に取得できません。"
+        )
+
+    base_row = base.iloc[0]
+
+    base_values = {
+        "gross_salary_yen":
+            base_row["gross_salary_yen"],
+        "nominal_take_home_yen":
+            base_row["nominal_take_home_yen"],
+        "real_gross_salary_yen":
+            base_row["real_gross_salary_yen"],
+        "real_take_home_yen":
+            base_row["real_take_home_yen"],
+    }
+
+    for name, value in base_values.items():
+        if value <= 0:
+            raise ValueError(
+                f"基準年の{name}は"
+                "0より大きい必要があります。"
+            )
+
+    result["gross_salary_index"] = (
+        result["gross_salary_yen"]
+        / base_values["gross_salary_yen"]
+        * 100
+    )
+
+    result["nominal_take_home_index"] = (
+        result["nominal_take_home_yen"]
+        / base_values["nominal_take_home_yen"]
+        * 100
+    )
+
+    result["real_gross_salary_index"] = (
+        result["real_gross_salary_yen"]
+        / base_values["real_gross_salary_yen"]
+        * 100
+    )
+
+    result["real_take_home_index"] = (
+        result["real_take_home_yen"]
+        / base_values["real_take_home_yen"]
+        * 100
+    )
+
+    return (
+        result
+        .sort_values("year")
+        .reset_index(drop=True)
+    )
+
+
+def create_take_home_period_log_decomposition(
+    df: pd.DataFrame,
+    periods: list[tuple[int, int]],
+) -> pd.DataFrame:
+    """実質手取りの期間変化を賃金・負担率・物価に対数分解する。
+
+    R = W * q / P
+
+    W: 額面賃金
+    q: 手取り率 = 1 - 実効負担率
+    P: CPI
+
+    よって、
+
+    Δln(R)
+        = Δln(W)
+        + Δln(q)
+        - Δln(P)
+
+    と分解する。
+    """
+
+    required_columns = {
+        "year",
+        "gross_salary_yen",
+        "take_home_rate",
+        "cpi",
+        "real_take_home_yen",
+    }
+
+    missing = (
+        required_columns
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "期間分解に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    data = df.copy()
+
+    if data["year"].duplicated().any():
+        raise ValueError(
+            "年次データに重複年があります。"
+        )
+
+    positive_columns = [
+        "gross_salary_yen",
+        "take_home_rate",
+        "cpi",
+        "real_take_home_yen",
+    ]
+
+    for column in positive_columns:
+        if (data[column] <= 0).any():
+            raise ValueError(
+                f"{column} は0より大きい"
+                "必要があります。"
+            )
+
+    rows = []
+
+    for start_year, end_year in periods:
+        if start_year >= end_year:
+            raise ValueError(
+                "期間の開始年は終了年より"
+                "前である必要があります。"
+            )
+
+        start = data.loc[
+            data["year"] == start_year
+        ]
+
+        end = data.loc[
+            data["year"] == end_year
+        ]
+
+        if len(start) != 1:
+            raise ValueError(
+                f"{start_year}年のデータを"
+                "一意に取得できません。"
+            )
+
+        if len(end) != 1:
+            raise ValueError(
+                f"{end_year}年のデータを"
+                "一意に取得できません。"
+            )
+
+        start = start.iloc[0]
+        end = end.iloc[0]
+
+        wage_log_contribution = (
+            math.log(
+                end["gross_salary_yen"]
+                / start["gross_salary_yen"]
+            )
+            * 100
+        )
+
+        burden_log_contribution = (
+            math.log(
+                end["take_home_rate"]
+                / start["take_home_rate"]
+            )
+            * 100
+        )
+
+        price_log_contribution = (
+            -math.log(
+                end["cpi"]
+                / start["cpi"]
+            )
+            * 100
+        )
+
+        decomposition_total = (
+            wage_log_contribution
+            + burden_log_contribution
+            + price_log_contribution
+        )
+
+        observed_log_change = (
+            math.log(
+                end["real_take_home_yen"]
+                / start["real_take_home_yen"]
+            )
+            * 100
+        )
+
+        observed_pct_change = (
+            end["real_take_home_yen"]
+            / start["real_take_home_yen"]
+            - 1
+        ) * 100
+
+        rows.append(
+            {
+                "period": (
+                    f"{start_year}"
+                    f"→{end_year}"
+                ),
+                "start_year": start_year,
+                "end_year": end_year,
+                "wage_log_contribution_pt": (
+                    wage_log_contribution
+                ),
+                "burden_log_contribution_pt": (
+                    burden_log_contribution
+                ),
+                "price_log_contribution_pt": (
+                    price_log_contribution
+                ),
+                "real_take_home_log_change_pt": (
+                    observed_log_change
+                ),
+                "decomposition_total_pt": (
+                    decomposition_total
+                ),
+                "decomposition_error_pt": (
+                    observed_log_change
+                    - decomposition_total
+                ),
+                "real_take_home_pct_change": (
+                    observed_pct_change
+                ),
+                "burden_change_pt": (
+                    (
+                        (
+                            1
+                            - end["take_home_rate"]
+                        )
+                        - (
+                            1
+                            - start["take_home_rate"]
+                        )
+                    )
+                    * 100
+                ),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def add_deduction_component_rates(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """額面賃金に対する税・社会保険料各項目の負担率を追加する。"""
+
+    required_columns = {
+        "gross_salary_yen",
+        "income_tax_yen",
+        "resident_tax_yen",
+        "pension_yen",
+        "health_insurance_yen",
+        "employment_insurance_yen",
+        "total_deductions_yen",
+        "effective_burden_rate",
+    }
+
+    missing = (
+        required_columns
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "控除項目別負担率の計算に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    result = df.copy()
+
+    if (
+        result["gross_salary_yen"]
+        <= 0
+    ).any():
+        raise ValueError(
+            "額面賃金は0より大きい必要があります。"
+        )
+
+    deduction_columns = {
+        "income_tax_yen":
+            "income_tax_rate",
+        "resident_tax_yen":
+            "resident_tax_rate",
+        "pension_yen":
+            "pension_rate_effective",
+        "health_insurance_yen":
+            "health_insurance_rate_effective",
+        "employment_insurance_yen":
+            "employment_insurance_rate_effective",
+    }
+
+    for amount_column, rate_column in (
+        deduction_columns.items()
+    ):
+        if (
+            result[amount_column]
+            < 0
+        ).any():
+            raise ValueError(
+                f"{amount_column} は"
+                "0以上である必要があります。"
+            )
+
+        result[rate_column] = (
+            result[amount_column]
+            / result["gross_salary_yen"]
+        )
+
+    rate_columns = list(
+        deduction_columns.values()
+    )
+
+    result[
+        "component_burden_rate_sum"
+    ] = (
+        result[rate_columns]
+        .sum(axis=1)
+    )
+
+    result[
+        "component_burden_rate_error"
+    ] = (
+        result[
+            "effective_burden_rate"
+        ]
+        - result[
+            "component_burden_rate_sum"
+        ]
+    )
+
+    return result
+
+
+def create_deduction_burden_change_summary(
+    df: pd.DataFrame,
+    periods: list[tuple[int, int]],
+) -> pd.DataFrame:
+    """期間ごとの実効負担率変化を控除項目別に分解する。"""
+
+    required_columns = {
+        "year",
+        "effective_burden_rate",
+        "income_tax_rate",
+        "resident_tax_rate",
+        "pension_rate_effective",
+        "health_insurance_rate_effective",
+        "employment_insurance_rate_effective",
+    }
+
+    missing = (
+        required_columns
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "負担率変化分解に必要な列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    if df["year"].duplicated().any():
+        raise ValueError(
+            "年次データに重複年があります。"
+        )
+
+    components = [
+        "income_tax_rate",
+        "resident_tax_rate",
+        "pension_rate_effective",
+        "health_insurance_rate_effective",
+        "employment_insurance_rate_effective",
+    ]
+
+    rows = []
+
+    for start_year, end_year in periods:
+        if start_year >= end_year:
+            raise ValueError(
+                "期間の開始年は終了年より"
+                "前である必要があります。"
+            )
+
+        start = df.loc[
+            df["year"] == start_year
+        ]
+
+        end = df.loc[
+            df["year"] == end_year
+        ]
+
+        if len(start) != 1:
+            raise ValueError(
+                f"{start_year}年のデータを"
+                "一意に取得できません。"
+            )
+
+        if len(end) != 1:
+            raise ValueError(
+                f"{end_year}年のデータを"
+                "一意に取得できません。"
+            )
+
+        start = start.iloc[0]
+        end = end.iloc[0]
+
+        changes = {
+            column: (
+                end[column]
+                - start[column]
+            )
+            * 100
+            for column in components
+        }
+
+        component_sum = sum(
+            changes.values()
+        )
+
+        total_change = (
+            end["effective_burden_rate"]
+            - start["effective_burden_rate"]
+        ) * 100
+
+        rows.append(
+            {
+                "period":
+                    f"{start_year}→{end_year}",
+                "start_year":
+                    start_year,
+                "end_year":
+                    end_year,
+                "income_tax_change_pt":
+                    changes[
+                        "income_tax_rate"
+                    ],
+                "resident_tax_change_pt":
+                    changes[
+                        "resident_tax_rate"
+                    ],
+                "pension_change_pt":
+                    changes[
+                        "pension_rate_effective"
+                    ],
+                "health_insurance_change_pt":
+                    changes[
+                        "health_insurance_rate_effective"
+                    ],
+                "employment_insurance_change_pt":
+                    changes[
+                        "employment_insurance_rate_effective"
+                    ],
+                "component_sum_change_pt":
+                    component_sum,
+                "total_burden_change_pt":
+                    total_change,
+                "decomposition_error_pt":
+                    total_change
+                    - component_sum,
+            }
+        )
+
+    return pd.DataFrame(rows)
