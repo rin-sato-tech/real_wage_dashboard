@@ -402,3 +402,111 @@ def calculate_taxable_income(
     return _floor_to_thousand_yen(
         taxable_before_rounding
     )
+
+
+def calculate_base_income_tax(
+    taxable_income_yen: float,
+    target_date: str | date | pd.Timestamp,
+    tax_brackets: pd.DataFrame,
+) -> float:
+    """課税所得に所得税率表を適用し、算出所得税額を計算する。"""
+
+    if taxable_income_yen < 0:
+        raise ValueError(
+            "課税所得は0以上である必要があります。"
+        )
+
+    # 所得税率表を適用する前に1,000円未満を切り捨てる。
+    taxable_income = _floor_to_thousand_yen(
+        taxable_income_yen
+    )
+
+    rules = _select_effective_rules(
+        tax_brackets,
+        target_date=target_date,
+    )
+
+    if rules.empty:
+        raise ValueError(
+            "指定日に有効な所得税率ルールがありません。"
+        )
+
+    lower = pd.to_numeric(
+        rules["lower_bound_yen"],
+        errors="coerce",
+    )
+
+    upper = pd.to_numeric(
+        rules["upper_bound_yen"],
+        errors="coerce",
+    )
+
+    rate = pd.to_numeric(
+        rules["marginal_rate"],
+        errors="coerce",
+    )
+
+    quick_deduction = pd.to_numeric(
+        rules["quick_deduction_yen"],
+        errors="coerce",
+    )
+
+    if lower.isna().any():
+        raise ValueError(
+            "所得税率ルールの lower_bound_yen に"
+            "不正な値があります。"
+        )
+
+    if rate.isna().any():
+        raise ValueError(
+            "所得税率ルールの marginal_rate に"
+            "不正な値があります。"
+        )
+
+    if quick_deduction.isna().any():
+        raise ValueError(
+            "所得税率ルールの quick_deduction_yen に"
+            "不正な値があります。"
+        )
+
+    # 税率表の区間は
+    # lower_bound_yen <= taxable_income < upper_bound_yen
+    # として扱う。
+    #
+    # upper_bound_yen が欠損している最終区分は上限なし。
+    mask = (
+        (lower <= taxable_income)
+        & (
+            upper.isna()
+            | (taxable_income < upper)
+        )
+    )
+
+    matched = rules.loc[mask].copy()
+
+    if len(matched) != 1:
+        raise ValueError(
+            "所得税率ルールを一意に取得できません。"
+            f" taxable_income_yen={taxable_income},"
+            f" date={pd.Timestamp(target_date).date()},"
+            f" rows={len(matched)}"
+        )
+
+    rule = matched.iloc[0]
+
+    marginal_rate = float(
+        pd.to_numeric(rule["marginal_rate"])
+    )
+
+    deduction_yen = float(
+        pd.to_numeric(rule["quick_deduction_yen"])
+    )
+
+    tax = (
+        taxable_income * marginal_rate
+        - deduction_yen
+    )
+
+    return float(
+        max(tax, 0)
+    )

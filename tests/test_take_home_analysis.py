@@ -7,6 +7,7 @@ from real_wage_dashboard.take_home_analysis import (
     _select_effective_rules,
     _select_single_assessment_year_rule,
     _select_single_effective_rule,
+    calculate_base_income_tax,
     calculate_basic_deduction,
     calculate_salary_income,
     calculate_salary_income_deduction,
@@ -808,4 +809,231 @@ def test_calculate_taxable_income_rejects_negative_values(
             other_income_deductions_yen=(
                 other_income_deductions_yen
             ),
+        )
+
+
+def _create_income_tax_brackets() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1999-01-01",
+                "1999-01-01",
+                "1999-01-01",
+                "1999-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+            ],
+            "effective_to": [
+                "2006-12-31",
+                "2006-12-31",
+                "2006-12-31",
+                "2006-12-31",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                2,
+                3,
+                4,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+            ],
+            "lower_bound_yen": [
+                0,
+                3_300_000,
+                9_000_000,
+                18_000_000,
+                0,
+                1_950_000,
+                3_300_000,
+                6_950_000,
+                9_000_000,
+                18_000_000,
+                40_000_000,
+            ],
+            "upper_bound_yen": [
+                3_300_000,
+                9_000_000,
+                18_000_000,
+                None,
+                1_950_000,
+                3_300_000,
+                6_950_000,
+                9_000_000,
+                18_000_000,
+                40_000_000,
+                None,
+            ],
+            "marginal_rate": [
+                0.10,
+                0.20,
+                0.30,
+                0.37,
+                0.05,
+                0.10,
+                0.20,
+                0.23,
+                0.33,
+                0.40,
+                0.45,
+            ],
+            "quick_deduction_yen": [
+                0,
+                330_000,
+                1_230_000,
+                2_490_000,
+                0,
+                97_500,
+                427_500,
+                636_000,
+                1_536_000,
+                2_796_000,
+                4_796_000,
+            ],
+            "source_key": ["test"] * 11,
+        }
+    )
+
+
+def test_calculate_base_income_tax_2025():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=5_000_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 572_500
+
+
+def test_calculate_base_income_tax_floors_taxable_income():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=5_000_999,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 572_500
+
+
+def test_calculate_base_income_tax_bracket_boundary():
+    rules = _create_income_tax_brackets()
+
+    below = calculate_base_income_tax(
+        taxable_income_yen=1_949_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    boundary = calculate_base_income_tax(
+        taxable_income_yen=1_950_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert below == 97_450
+    assert boundary == 97_500
+
+
+def test_calculate_base_income_tax_top_bracket_boundary():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=40_000_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 13_204_000
+
+
+def test_calculate_base_income_tax_2000():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=5_000_000,
+        target_date="2000-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 670_000
+
+
+def test_calculate_base_income_tax_zero_income():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=0,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_base_income_tax_rejects_negative_income():
+    rules = _create_income_tax_brackets()
+
+    with pytest.raises(
+        ValueError,
+        match="課税所得は0以上",
+    ):
+        calculate_base_income_tax(
+            taxable_income_yen=-1,
+            target_date="2025-06-01",
+            tax_brackets=rules,
+        )
+
+
+def test_calculate_base_income_tax_rejects_missing_period():
+    rules = _create_income_tax_brackets()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な所得税率ルールがありません",
+    ):
+        calculate_base_income_tax(
+            taxable_income_yen=1_000_000,
+            target_date="1990-01-01",
+            tax_brackets=rules,
+        )
+
+
+def test_calculate_base_income_tax_rejects_unmatched_bracket():
+    rules = _create_income_tax_brackets()
+
+    rules = rules.loc[
+        ~(
+            (rules["effective_from"] == "2015-01-01")
+            & (rules["bracket_order"] == 3)
+        )
+    ].copy()
+
+    with pytest.raises(
+        ValueError,
+        match="所得税率ルールを一意に取得できません",
+    ):
+        calculate_base_income_tax(
+            taxable_income_yen=5_000_000,
+            target_date="2025-06-01",
+            tax_brackets=rules,
         )
