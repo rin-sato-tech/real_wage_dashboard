@@ -2670,3 +2670,695 @@ def calculate_standard_worker_income_tax(
             after_income_tax_and_social_insurance_yen
         ),
     }
+
+
+def calculate_resident_basic_deduction(
+    total_income_yen: float,
+    assessment_year: int,
+    deduction_rules: pd.DataFrame,
+) -> float:
+    """合計所得金額から住民税の基礎控除額を取得する。"""
+
+    if total_income_yen < 0:
+        raise ValueError(
+            "合計所得金額は0以上である必要があります。"
+        )
+
+    rules = _select_assessment_year_rules(
+        deduction_rules,
+        assessment_year=assessment_year,
+    )
+
+    rules = rules.loc[
+        rules["deduction_type"] == "basic"
+    ].copy()
+
+    if rules.empty:
+        raise ValueError(
+            "指定課税年度に有効な"
+            "住民税基礎控除ルールがありません。"
+            f" assessment_year={assessment_year}"
+        )
+
+    lower = pd.to_numeric(
+        rules["lower_bound_yen"],
+        errors="coerce",
+    )
+
+    upper = pd.to_numeric(
+        rules["upper_bound_yen"],
+        errors="coerce",
+    )
+
+    fixed = pd.to_numeric(
+        rules["fixed_yen"],
+        errors="coerce",
+    )
+
+    if lower.isna().any():
+        raise ValueError(
+            "住民税基礎控除ルールの "
+            "lower_bound_yen に不正な値があります。"
+        )
+
+    if fixed.isna().any():
+        raise ValueError(
+            "住民税基礎控除ルールの "
+            "fixed_yen に不正な値があります。"
+        )
+
+    mask = (
+        (lower <= total_income_yen)
+        & (
+            upper.isna()
+            | (total_income_yen <= upper)
+        )
+    )
+
+    matched = rules.loc[mask].copy()
+
+    if len(matched) != 1:
+        raise ValueError(
+            "住民税基礎控除ルールを一意に取得できません。"
+            f" total_income_yen={total_income_yen},"
+            f" assessment_year={assessment_year},"
+            f" rows={len(matched)}"
+        )
+
+    return float(
+        pd.to_numeric(
+            matched.iloc[0]["fixed_yen"]
+        )
+    )
+
+
+def calculate_resident_taxable_income(
+    salary_income_yen: float,
+    social_insurance_deduction_yen: float,
+    assessment_year: int,
+    resident_tax_deductions: pd.DataFrame,
+    other_income_deductions_yen: float = 0.0,
+) -> dict[str, float]:
+    """給与所得から住民税の課税所得を計算する。"""
+
+    if salary_income_yen < 0:
+        raise ValueError(
+            "給与所得は0以上である必要があります。"
+        )
+
+    if social_insurance_deduction_yen < 0:
+        raise ValueError(
+            "社会保険料控除は0以上である必要があります。"
+        )
+
+    if other_income_deductions_yen < 0:
+        raise ValueError(
+            "その他所得控除は0以上である必要があります。"
+        )
+
+    basic_deduction_yen = (
+        calculate_resident_basic_deduction(
+            total_income_yen=salary_income_yen,
+            assessment_year=assessment_year,
+            deduction_rules=resident_tax_deductions,
+        )
+    )
+
+    taxable_income_yen = calculate_taxable_income(
+        salary_income_yen=salary_income_yen,
+        basic_deduction_yen=basic_deduction_yen,
+        social_insurance_deduction_yen=(
+            social_insurance_deduction_yen
+        ),
+        other_income_deductions_yen=(
+            other_income_deductions_yen
+        ),
+    )
+
+    return {
+        "resident_basic_deduction_yen": float(
+            basic_deduction_yen
+        ),
+        "resident_taxable_income_yen": float(
+            taxable_income_yen
+        ),
+    }
+
+
+def calculate_base_resident_income_levy(
+    taxable_income_yen: float,
+    assessment_year: int,
+    income_rate_rules: pd.DataFrame,
+) -> float:
+    """住民税の課税所得から控除前所得割額を計算する。"""
+
+    if taxable_income_yen < 0:
+        raise ValueError(
+            "住民税課税所得は0以上である必要があります。"
+        )
+
+    taxable_income = _floor_to_thousand_yen(
+        taxable_income_yen
+    )
+
+    rules = _select_assessment_year_rules(
+        income_rate_rules,
+        assessment_year=assessment_year,
+    )
+
+    if rules.empty:
+        raise ValueError(
+            "指定課税年度に有効な"
+            "住民税所得割率ルールがありません。"
+            f" assessment_year={assessment_year}"
+        )
+
+    lower = pd.to_numeric(
+        rules["lower_bound_yen"],
+        errors="coerce",
+    )
+
+    upper = pd.to_numeric(
+        rules["upper_bound_yen"],
+        errors="coerce",
+    )
+
+    rate = pd.to_numeric(
+        rules["marginal_rate"],
+        errors="coerce",
+    )
+
+    quick_deduction = pd.to_numeric(
+        rules["quick_deduction_yen"],
+        errors="coerce",
+    )
+
+    if lower.isna().any():
+        raise ValueError(
+            "住民税所得割率ルールの "
+            "lower_bound_yen に不正な値があります。"
+        )
+
+    if rate.isna().any():
+        raise ValueError(
+            "住民税所得割率ルールの "
+            "marginal_rate に不正な値があります。"
+        )
+
+    if quick_deduction.isna().any():
+        raise ValueError(
+            "住民税所得割率ルールの "
+            "quick_deduction_yen に不正な値があります。"
+        )
+
+    # 税率表は下限以上・上限未満として扱う。
+    mask = (
+        (lower <= taxable_income)
+        & (
+            upper.isna()
+            | (taxable_income < upper)
+        )
+    )
+
+    matched = rules.loc[mask].copy()
+
+    if len(matched) != 1:
+        raise ValueError(
+            "住民税所得割率ルールを一意に取得できません。"
+            f" taxable_income_yen={taxable_income},"
+            f" assessment_year={assessment_year},"
+            f" rows={len(matched)}"
+        )
+
+    rule = matched.iloc[0]
+
+    marginal_rate = float(
+        pd.to_numeric(
+            rule["marginal_rate"]
+        )
+    )
+
+    deduction_yen = float(
+        pd.to_numeric(
+            rule["quick_deduction_yen"]
+        )
+    )
+
+    tax = (
+        taxable_income
+        * marginal_rate
+        - deduction_yen
+    )
+
+    return float(
+        max(
+            round(tax, 10),
+            0.0,
+        )
+    )
+
+
+def calculate_resident_adjustment_credit(
+    taxable_income_yen: float,
+    total_income_yen: float,
+    assessment_year: int,
+    adjustment_rules: pd.DataFrame,
+    human_deduction_difference_yen: float = 50_000.0,
+) -> float:
+    """住民税の調整控除額を計算する。"""
+
+    if taxable_income_yen < 0:
+        raise ValueError(
+            "住民税課税所得は0以上である必要があります。"
+        )
+
+    if total_income_yen < 0:
+        raise ValueError(
+            "合計所得金額は0以上である必要があります。"
+        )
+
+    if human_deduction_difference_yen < 0:
+        raise ValueError(
+            "人的控除額の差は0以上である必要があります。"
+        )
+
+    rules = _select_assessment_year_rules(
+        adjustment_rules,
+        assessment_year=assessment_year,
+    )
+
+    rules = rules.loc[
+        rules["operation"] == "adjustment_credit"
+    ].copy()
+
+    if rules.empty:
+        return 0.0
+
+    if len(rules) != 1:
+        raise ValueError(
+            "住民税の調整控除ルールを"
+            "一意に取得できません。"
+            f" assessment_year={assessment_year},"
+            f" rows={len(rules)}"
+        )
+
+    rule = rules.iloc[0]
+
+    total_income_limit = pd.to_numeric(
+        pd.Series(
+            [rule.get("total_income_limit_yen")]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    if (
+        pd.notna(total_income_limit)
+        and total_income_yen
+        > float(total_income_limit)
+    ):
+        return 0.0
+
+    if taxable_income_yen <= 2_000_000:
+        credit_base = min(
+            human_deduction_difference_yen,
+            taxable_income_yen,
+        )
+
+    else:
+        credit_base = max(
+            human_deduction_difference_yen
+            - (
+                taxable_income_yen
+                - 2_000_000
+            ),
+            50_000.0,
+        )
+
+    adjustment_credit = (
+        credit_base
+        * 0.05
+    )
+
+    return float(
+        round(
+            adjustment_credit,
+            10,
+        )
+    )
+
+
+def calculate_resident_income_levy_after_adjustments(
+    base_income_levy_yen: float,
+    taxable_income_yen: float,
+    total_income_yen: float,
+    assessment_year: int,
+    adjustment_rules: pd.DataFrame,
+    dependent_count: int = 0,
+    human_deduction_difference_yen: float = 50_000.0,
+    policy_mode: str = "actual_policy",
+) -> dict[str, float]:
+    """住民税所得割に調整控除・減税措置を適用する。"""
+
+    if base_income_levy_yen < 0:
+        raise ValueError(
+            "控除前住民税所得割額は"
+            "0以上である必要があります。"
+        )
+
+    if taxable_income_yen < 0:
+        raise ValueError(
+            "住民税課税所得は0以上である必要があります。"
+        )
+
+    if total_income_yen < 0:
+        raise ValueError(
+            "合計所得金額は0以上である必要があります。"
+        )
+
+    if (
+        not isinstance(dependent_count, int)
+        or dependent_count < 0
+    ):
+        raise ValueError(
+            "扶養人数は0以上の整数である必要があります。"
+        )
+
+    if policy_mode not in {
+        "actual_policy",
+        "structural_policy",
+    }:
+        raise ValueError(
+            "policy_mode は actual_policy または "
+            "structural_policy である必要があります。"
+        )
+
+    # まず調整控除。
+    adjustment_credit_yen = (
+        calculate_resident_adjustment_credit(
+            taxable_income_yen=taxable_income_yen,
+            total_income_yen=total_income_yen,
+            assessment_year=assessment_year,
+            adjustment_rules=adjustment_rules,
+            human_deduction_difference_yen=(
+                human_deduction_difference_yen
+            ),
+        )
+    )
+
+    levy = max(
+        base_income_levy_yen
+        - adjustment_credit_yen,
+        0.0,
+    )
+
+    rules = _select_assessment_year_rules(
+        adjustment_rules,
+        assessment_year=assessment_year,
+    )
+
+    rules = rules.loc[
+        rules["operation"].isin(
+            [
+                "subtract_rate",
+                "subtract_fixed",
+            ]
+        )
+    ].copy()
+
+    if policy_mode == "structural_policy":
+        rules = rules.loc[
+            rules["policy_class"] != "temporary"
+        ].copy()
+
+    total_other_reduction = 0.0
+
+    for _, rule in rules.sort_values(
+        "policy_id"
+    ).iterrows():
+        total_income_limit = pd.to_numeric(
+            pd.Series(
+                [rule.get("total_income_limit_yen")]
+            ),
+            errors="coerce",
+        ).iloc[0]
+
+        if (
+            pd.notna(total_income_limit)
+            and total_income_yen
+            > float(total_income_limit)
+        ):
+            continue
+
+        operation = rule["operation"]
+
+        if operation == "subtract_rate":
+            rate = pd.to_numeric(
+                pd.Series(
+                    [rule.get("rate")]
+                ),
+                errors="coerce",
+            ).iloc[0]
+
+            if pd.isna(rate):
+                raise ValueError(
+                    "住民税 subtract_rate ルールに"
+                    " rate が設定されていません。"
+                )
+
+            reduction = (
+                levy
+                * float(rate)
+            )
+
+        elif operation == "subtract_fixed":
+            fixed_taxpayer = pd.to_numeric(
+                pd.Series(
+                    [rule.get("fixed_taxpayer_yen")]
+                ),
+                errors="coerce",
+            ).iloc[0]
+
+            fixed_dependent = pd.to_numeric(
+                pd.Series(
+                    [rule.get("fixed_dependent_yen")]
+                ),
+                errors="coerce",
+            ).iloc[0]
+
+            if pd.isna(fixed_taxpayer):
+                raise ValueError(
+                    "住民税 subtract_fixed ルールに"
+                    " fixed_taxpayer_yen が"
+                    "設定されていません。"
+                )
+
+            if pd.isna(fixed_dependent):
+                fixed_dependent = 0.0
+
+            reduction = (
+                float(fixed_taxpayer)
+                + float(fixed_dependent)
+                * dependent_count
+            )
+
+        else:
+            raise ValueError(
+                f"未対応の住民税調整です: {operation}"
+            )
+
+        cap_yen = pd.to_numeric(
+            pd.Series(
+                [rule.get("cap_yen")]
+            ),
+            errors="coerce",
+        ).iloc[0]
+
+        if pd.notna(cap_yen):
+            reduction = min(
+                reduction,
+                float(cap_yen),
+            )
+
+        reduction = min(
+            reduction,
+            levy,
+        )
+
+        levy -= reduction
+        total_other_reduction += reduction
+
+    return {
+        "base_resident_income_levy_yen": float(
+            round(
+                base_income_levy_yen,
+                10,
+            )
+        ),
+        "resident_adjustment_credit_yen": float(
+            round(
+                adjustment_credit_yen,
+                10,
+            )
+        ),
+        "resident_other_reduction_yen": float(
+            round(
+                total_other_reduction,
+                10,
+            )
+        ),
+        "resident_income_levy_after_adjustments_yen": float(
+            round(
+                max(levy, 0.0),
+                10,
+            )
+        ),
+    }
+
+
+def calculate_resident_per_capita_tax(
+    assessment_year: int,
+    per_capita_rules: pd.DataFrame,
+    municipality_band: str | None = None,
+) -> dict[str, float]:
+    """住民税均等割と森林環境税を取得する。"""
+
+    rules = _select_assessment_year_rules(
+        per_capita_rules,
+        assessment_year=assessment_year,
+    )
+
+    if municipality_band is not None:
+        rules = rules.loc[
+            rules["municipality_band"]
+            == municipality_band
+        ].copy()
+
+    if len(rules) != 1:
+        raise ValueError(
+            "住民税均等割ルールを一意に取得できません。"
+            f" assessment_year={assessment_year},"
+            f" municipality_band={municipality_band},"
+            f" rows={len(rules)}"
+        )
+
+    rule = rules.iloc[0]
+
+    prefectural_yen = pd.to_numeric(
+        pd.Series(
+            [rule["prefectural_yen"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    municipal_yen = pd.to_numeric(
+        pd.Series(
+            [rule["municipal_yen"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    forest_environment_tax_yen = pd.to_numeric(
+        pd.Series(
+            [rule["forest_environment_tax_yen"]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
+    values = {
+        "prefectural_yen": prefectural_yen,
+        "municipal_yen": municipal_yen,
+        "forest_environment_tax_yen": (
+            forest_environment_tax_yen
+        ),
+    }
+
+    for name, value in values.items():
+        if pd.isna(value):
+            raise ValueError(
+                f"{name} に不正な値があります。"
+            )
+
+        if value < 0:
+            raise ValueError(
+                f"{name} は0以上である必要があります。"
+            )
+
+    resident_per_capita_yen = (
+        float(prefectural_yen)
+        + float(municipal_yen)
+    )
+
+    return {
+        "prefectural_per_capita_yen": float(
+            prefectural_yen
+        ),
+        "municipal_per_capita_yen": float(
+            municipal_yen
+        ),
+        "resident_per_capita_yen": float(
+            resident_per_capita_yen
+        ),
+        "forest_environment_tax_yen": float(
+            forest_environment_tax_yen
+        ),
+    }
+
+
+def calculate_total_resident_tax(
+    income_levy_after_adjustments_yen: float,
+    assessment_year: int,
+    per_capita_rules: pd.DataFrame,
+    municipality_band: str | None = None,
+) -> dict[str, float]:
+    """所得割・均等割・森林環境税から年間住民税額を計算する。"""
+
+    if income_levy_after_adjustments_yen < 0:
+        raise ValueError(
+            "調整後住民税所得割額は"
+            "0以上である必要があります。"
+        )
+
+    income_levy_yen = _floor_to_hundred_yen(
+        income_levy_after_adjustments_yen
+    )
+
+    per_capita = calculate_resident_per_capita_tax(
+        assessment_year=assessment_year,
+        per_capita_rules=per_capita_rules,
+        municipality_band=municipality_band,
+    )
+
+    total_resident_tax_yen = (
+        income_levy_yen
+        + per_capita["resident_per_capita_yen"]
+        + per_capita["forest_environment_tax_yen"]
+    )
+
+    return {
+        "resident_income_levy_yen": float(
+            income_levy_yen
+        ),
+        "prefectural_per_capita_yen": (
+            per_capita[
+                "prefectural_per_capita_yen"
+            ]
+        ),
+        "municipal_per_capita_yen": (
+            per_capita[
+                "municipal_per_capita_yen"
+            ]
+        ),
+        "resident_per_capita_yen": (
+            per_capita[
+                "resident_per_capita_yen"
+            ]
+        ),
+        "forest_environment_tax_yen": (
+            per_capita[
+                "forest_environment_tax_yen"
+            ]
+        ),
+        "total_resident_tax_yen": float(
+            total_resident_tax_yen
+        ),
+    }

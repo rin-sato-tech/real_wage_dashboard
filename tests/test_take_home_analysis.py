@@ -22,6 +22,7 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_annual_regular_pension_contribution,
     calculate_annual_social_insurance,
     calculate_base_income_tax,
+    calculate_base_resident_income_levy,
     calculate_basic_deduction,
     calculate_employment_insurance,
     calculate_health_bonus_base,
@@ -32,12 +33,18 @@ from real_wage_dashboard.take_home_analysis import (
     calculate_pension_bonus_base,
     calculate_pension_bonus_contribution,
     calculate_reconstruction_special_income_tax,
+    calculate_resident_adjustment_credit,
+    calculate_resident_basic_deduction,
+    calculate_resident_income_levy_after_adjustments,
+    calculate_resident_per_capita_tax,
+    calculate_resident_taxable_income,
     calculate_salary_income,
     calculate_salary_income_deduction,
     calculate_standard_monthly_remuneration,
     calculate_standard_worker_income_tax,
     calculate_taxable_income,
     calculate_total_income_tax,
+    calculate_total_resident_tax,
     create_constant_monthly_remuneration,
     create_semiannual_bonus_payments,
 )
@@ -3648,3 +3655,672 @@ def test_standard_worker_income_tax_identity():
     ] == pytest.approx(
         expected
     )
+
+
+def _create_resident_tax_deductions() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "deduction_type": [
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+            ],
+            "assessment_year_from": [
+                1991,
+                1995,
+                2021,
+                2021,
+                2021,
+                2021,
+            ],
+            "assessment_year_to": [
+                1994,
+                2020,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "lower_bound_yen": [
+                0,
+                0,
+                0,
+                24_000_001,
+                24_500_001,
+                25_000_001,
+            ],
+            "upper_bound_yen": [
+                None,
+                None,
+                24_000_000,
+                24_500_000,
+                25_000_000,
+                None,
+            ],
+            "fixed_yen": [
+                310_000,
+                330_000,
+                430_000,
+                290_000,
+                150_000,
+                0,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_resident_tax_income_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "assessment_year_from": [
+                1999,
+                1999,
+                1999,
+                2007,
+            ],
+            "assessment_year_to": [
+                2006,
+                2006,
+                2006,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                2,
+                3,
+                1,
+            ],
+            "lower_bound_yen": [
+                0,
+                2_000_000,
+                7_000_000,
+                0,
+            ],
+            "upper_bound_yen": [
+                2_000_000,
+                7_000_000,
+                None,
+                None,
+            ],
+            "marginal_rate": [
+                0.05,
+                0.10,
+                0.13,
+                0.10,
+            ],
+            "quick_deduction_yen": [
+                0,
+                100_000,
+                310_000,
+                0,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_calculate_resident_basic_deduction_1991():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_basic_deduction(
+        total_income_yen=3_000_000,
+        assessment_year=1991,
+        deduction_rules=rules,
+    )
+
+    assert result == 310_000
+
+
+def test_calculate_resident_basic_deduction_2000():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_basic_deduction(
+        total_income_yen=3_000_000,
+        assessment_year=2000,
+        deduction_rules=rules,
+    )
+
+    assert result == 330_000
+
+
+def test_calculate_resident_basic_deduction_2026():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_basic_deduction(
+        total_income_yen=2_342_000,
+        assessment_year=2026,
+        deduction_rules=rules,
+    )
+
+    assert result == 430_000
+
+
+def test_calculate_resident_taxable_income_2026():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_taxable_income(
+        salary_income_yen=2_342_000,
+        social_insurance_deduction_yen=500_437.5,
+        assessment_year=2026,
+        resident_tax_deductions=rules,
+    )
+
+    assert result[
+        "resident_basic_deduction_yen"
+    ] == 430_000
+
+    assert result[
+        "resident_taxable_income_yen"
+    ] == 1_411_000
+
+
+def test_calculate_base_resident_income_levy_2026():
+    rates = _create_resident_tax_income_rates()
+
+    result = calculate_base_resident_income_levy(
+        taxable_income_yen=1_411_000,
+        assessment_year=2026,
+        income_rate_rules=rates,
+    )
+
+    assert result == 141_100
+
+
+def test_calculate_base_resident_income_levy_2000():
+    rates = _create_resident_tax_income_rates()
+
+    result = calculate_base_resident_income_levy(
+        taxable_income_yen=5_000_000,
+        assessment_year=2000,
+        income_rate_rules=rates,
+    )
+
+    assert result == 400_000
+
+
+def test_resident_income_levy_rate_boundary():
+    rates = _create_resident_tax_income_rates()
+
+    below = calculate_base_resident_income_levy(
+        taxable_income_yen=1_999_000,
+        assessment_year=2000,
+        income_rate_rules=rates,
+    )
+
+    boundary = calculate_base_resident_income_levy(
+        taxable_income_yen=2_000_000,
+        assessment_year=2000,
+        income_rate_rules=rates,
+    )
+
+    assert below == 99_950
+    assert boundary == 100_000
+
+
+def _create_resident_tax_adjustments() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "policy_id": [
+                "special_reduction_1994",
+                "special_reduction_1995_1996",
+                "special_reduction_1998",
+                "proportional_reduction_1999_2005",
+                "proportional_reduction_2006",
+                "adjustment_credit_2007_2020",
+                "adjustment_credit_2021",
+                "fixed_reduction_2024",
+            ],
+            "assessment_year_from": [
+                1994,
+                1995,
+                1998,
+                1999,
+                2006,
+                2007,
+                2021,
+                2024,
+            ],
+            "assessment_year_to": [
+                1994,
+                1996,
+                1998,
+                2005,
+                2006,
+                2020,
+                None,
+                2024,
+            ],
+            "operation": [
+                "subtract_rate",
+                "subtract_rate",
+                "subtract_fixed",
+                "subtract_rate",
+                "subtract_rate",
+                "adjustment_credit",
+                "adjustment_credit",
+                "subtract_fixed",
+            ],
+            "base": [
+                "income_levy",
+                "income_levy",
+                "income_levy",
+                "income_levy",
+                "income_levy",
+                "human_deduction_difference",
+                "human_deduction_difference",
+                "income_levy",
+            ],
+            "rate": [
+                0.20,
+                0.15,
+                None,
+                0.15,
+                0.075,
+                None,
+                None,
+                None,
+            ],
+            "fixed_taxpayer_yen": [
+                None,
+                None,
+                17_000,
+                None,
+                None,
+                None,
+                None,
+                10_000,
+            ],
+            "fixed_dependent_yen": [
+                None,
+                None,
+                8_500,
+                None,
+                None,
+                None,
+                None,
+                10_000,
+            ],
+            "cap_yen": [
+                200_000,
+                20_000,
+                None,
+                40_000,
+                20_000,
+                None,
+                None,
+                None,
+            ],
+            "total_income_limit_yen": [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                25_000_000,
+                18_050_000,
+            ],
+            "policy_class": [
+                "temporary",
+                "temporary",
+                "temporary",
+                "multi_year_general",
+                "multi_year_general",
+                "structural",
+                "structural",
+                "temporary",
+            ],
+            "source_key": [
+                "test",
+            ] * 8,
+        }
+    )
+
+
+def test_calculate_resident_adjustment_credit_2026():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_adjustment_credit(
+        taxable_income_yen=1_411_000,
+        total_income_yen=2_342_000,
+        assessment_year=2026,
+        adjustment_rules=rules,
+    )
+
+    assert result == 2_500
+
+
+def test_resident_adjustment_credit_2026_income_limit():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_adjustment_credit(
+        taxable_income_yen=10_000_000,
+        total_income_yen=25_000_001,
+        assessment_year=2026,
+        adjustment_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_resident_income_levy_after_adjustments_1999():
+    rules = _create_resident_tax_adjustments()
+
+    result = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=400_000,
+            taxable_income_yen=5_000_000,
+            total_income_yen=5_000_000,
+            assessment_year=1999,
+            adjustment_rules=rules,
+        )
+    )
+
+    # 400,000 × 15% = 60,000だが
+    # 上限40,000円。
+    assert result[
+        "resident_adjustment_credit_yen"
+    ] == 0
+
+    assert result[
+        "resident_other_reduction_yen"
+    ] == 40_000
+
+    assert result[
+        "resident_income_levy_after_adjustments_yen"
+    ] == 360_000
+
+
+def test_resident_income_levy_after_adjustments_2024():
+    rules = _create_resident_tax_adjustments()
+
+    result = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=100_000,
+            taxable_income_yen=1_500_000,
+            total_income_yen=3_000_000,
+            assessment_year=2024,
+            adjustment_rules=rules,
+        )
+    )
+
+    assert result[
+        "resident_adjustment_credit_yen"
+    ] == 2_500
+
+    assert result[
+        "resident_other_reduction_yen"
+    ] == 10_000
+
+    assert result[
+        "resident_income_levy_after_adjustments_yen"
+    ] == 87_500
+
+
+def test_resident_2024_fixed_reduction_with_dependents():
+    rules = _create_resident_tax_adjustments()
+
+    result = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=100_000,
+            taxable_income_yen=1_500_000,
+            total_income_yen=3_000_000,
+            assessment_year=2024,
+            adjustment_rules=rules,
+            dependent_count=2,
+        )
+    )
+
+    assert result[
+        "resident_other_reduction_yen"
+    ] == 30_000
+
+    assert result[
+        "resident_income_levy_after_adjustments_yen"
+    ] == 67_500
+
+
+def test_resident_structural_policy_excludes_2024_fixed_reduction():
+    rules = _create_resident_tax_adjustments()
+
+    result = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=100_000,
+            taxable_income_yen=1_500_000,
+            total_income_yen=3_000_000,
+            assessment_year=2024,
+            adjustment_rules=rules,
+            policy_mode="structural_policy",
+        )
+    )
+
+    assert result[
+        "resident_adjustment_credit_yen"
+    ] == 2_500
+
+    assert result[
+        "resident_other_reduction_yen"
+    ] == 0
+
+    assert result[
+        "resident_income_levy_after_adjustments_yen"
+    ] == 97_500
+
+
+def test_resident_structural_policy_keeps_1999_reduction():
+    rules = _create_resident_tax_adjustments()
+
+    result = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=400_000,
+            taxable_income_yen=5_000_000,
+            total_income_yen=5_000_000,
+            assessment_year=1999,
+            adjustment_rules=rules,
+            policy_mode="structural_policy",
+        )
+    )
+
+    assert result[
+        "resident_other_reduction_yen"
+    ] == 40_000
+
+    assert result[
+        "resident_income_levy_after_adjustments_yen"
+    ] == 360_000
+
+
+def _create_resident_tax_per_capita() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "assessment_year_from": [
+                1991,
+                1995,
+                2004,
+                2014,
+                2024,
+            ],
+            "assessment_year_to": [
+                1994,
+                2003,
+                2013,
+                2023,
+                None,
+            ],
+            "municipality_band": [
+                "mid_size",
+                "mid_size",
+                "standard",
+                "standard",
+                "standard",
+            ],
+            "prefectural_yen": [
+                700,
+                1_000,
+                1_000,
+                1_500,
+                1_000,
+            ],
+            "municipal_yen": [
+                2_000,
+                2_500,
+                3_000,
+                3_500,
+                3_000,
+            ],
+            "forest_environment_tax_yen": [
+                0,
+                0,
+                0,
+                0,
+                1_000,
+            ],
+            "source_key": [
+                "test",
+            ] * 5,
+        }
+    )
+
+
+def test_calculate_resident_per_capita_tax_2026():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_resident_per_capita_tax(
+        assessment_year=2026,
+        per_capita_rules=rules,
+    )
+
+    assert result[
+        "prefectural_per_capita_yen"
+    ] == 1_000
+
+    assert result[
+        "municipal_per_capita_yen"
+    ] == 3_000
+
+    assert result[
+        "resident_per_capita_yen"
+    ] == 4_000
+
+    assert result[
+        "forest_environment_tax_yen"
+    ] == 1_000
+
+
+def test_calculate_resident_per_capita_tax_2020():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_resident_per_capita_tax(
+        assessment_year=2020,
+        per_capita_rules=rules,
+    )
+
+    assert result[
+        "resident_per_capita_yen"
+    ] == 5_000
+
+    assert result[
+        "forest_environment_tax_yen"
+    ] == 0
+
+
+def test_calculate_resident_per_capita_tax_2000():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_resident_per_capita_tax(
+        assessment_year=2000,
+        per_capita_rules=rules,
+        municipality_band="mid_size",
+    )
+
+    assert result[
+        "resident_per_capita_yen"
+    ] == 3_500
+
+
+def test_calculate_total_resident_tax_floors_income_levy():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_total_resident_tax(
+        income_levy_after_adjustments_yen=138_699,
+        assessment_year=2026,
+        per_capita_rules=rules,
+    )
+
+    assert result[
+        "resident_income_levy_yen"
+    ] == 138_600
+
+    assert result[
+        "resident_per_capita_yen"
+    ] == 4_000
+
+    assert result[
+        "forest_environment_tax_yen"
+    ] == 1_000
+
+    assert result[
+        "total_resident_tax_yen"
+    ] == 143_600
+
+
+def test_total_resident_tax_for_2025_income():
+    adjustment_rules = (
+        _create_resident_tax_adjustments()
+    )
+
+    per_capita_rules = (
+        _create_resident_tax_per_capita()
+    )
+
+    adjusted = (
+        calculate_resident_income_levy_after_adjustments(
+            base_income_levy_yen=141_100,
+            taxable_income_yen=1_411_000,
+            total_income_yen=2_342_000,
+            assessment_year=2026,
+            adjustment_rules=adjustment_rules,
+        )
+    )
+
+    assert adjusted[
+        "resident_adjustment_credit_yen"
+    ] == 2_500
+
+    assert adjusted[
+        "resident_income_levy_after_adjustments_yen"
+    ] == 138_600
+
+    result = calculate_total_resident_tax(
+        income_levy_after_adjustments_yen=(
+            adjusted[
+                "resident_income_levy_after_adjustments_yen"
+            ]
+        ),
+        assessment_year=2026,
+        per_capita_rules=per_capita_rules,
+    )
+
+    assert result[
+        "resident_income_levy_yen"
+    ] == 138_600
+
+    assert result[
+        "total_resident_tax_yen"
+    ] == 143_600
