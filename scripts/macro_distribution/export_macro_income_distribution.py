@@ -41,6 +41,8 @@ SECRETS_PATH = ROOT_DIR / ".streamlit" / "secrets.toml"
 
 OUTPUT_DIR = ROOT_DIR / "outputs" / "analysis" / "macro_income_distribution"
 
+SNAPSHOT_DIR = ROOT_DIR / "data" / "snapshots" / "macro_distribution"
+
 
 def load_app_id() -> str:
     """環境変数またはStreamlit secretsからe-Stat API IDを取得する。"""
@@ -58,6 +60,8 @@ def load_app_id() -> str:
 def save_csv(
     df: pd.DataFrame,
     filename: str,
+    *,
+    snapshot: bool = False,
 ) -> None:
     """分析結果をCSVで保存する。"""
     output_path = OUTPUT_DIR / filename
@@ -68,13 +72,35 @@ def save_csv(
         encoding="utf-8-sig",
     )
 
-    print(f"saved: {output_path.relative_to(ROOT_DIR)} ({len(df)} rows)")
+    print(
+        f"saved: {output_path.relative_to(ROOT_DIR)} "
+        f"({len(df)} rows)"
+    )
+
+    if snapshot:
+        snapshot_path = SNAPSHOT_DIR / filename
+
+        df.to_csv(
+            snapshot_path,
+            index=False,
+            encoding="utf-8-sig",
+        )
+
+        print(
+            f"snapshot: {snapshot_path.relative_to(ROOT_DIR)} "
+            f"({len(df)} rows)"
+        )
 
 
 def main() -> None:
     app_id = load_app_id()
 
     OUTPUT_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    SNAPSHOT_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
@@ -162,8 +188,11 @@ def main() -> None:
     ]
 
     save_csv(
-        income_generation_result[income_generation_columns],
+        income_generation_result[
+            income_generation_columns
+        ],
         "01_income_generation.csv",
+        snapshot=True,
     )
 
     # ==========================================
@@ -190,8 +219,11 @@ def main() -> None:
     ]
 
     save_csv(
-        household_primary_result[household_primary_columns],
+        household_primary_result[
+            household_primary_columns
+        ],
         "02_household_primary_income.csv",
+        snapshot=True,
     )
 
     # ==========================================
@@ -221,8 +253,11 @@ def main() -> None:
     ]
 
     save_csv(
-        household_redistribution_result[household_redistribution_columns],
+        household_redistribution_result[
+            household_redistribution_columns
+        ],
         "03_household_redistribution.csv",
+        snapshot=True,
     )
 
     # ==========================================
@@ -247,8 +282,11 @@ def main() -> None:
     ]
 
     save_csv(
-        household_saving_result[household_saving_columns],
+        household_saving_result[
+            household_saving_columns
+        ],
         "04_household_saving.csv",
+        snapshot=True,
     )
 
     # ==========================================
@@ -263,17 +301,20 @@ def main() -> None:
     save_csv(
         sector_long,
         "05_sector_net_lending_long.csv",
+        snapshot=True,
     )
 
     # 公表値そのものもwide形式で残しておく
     save_csv(
         sector_amount,
         "05_sector_net_lending_amount_wide.csv",
+        snapshot=True,
     )
 
     save_csv(
         sector_ratio,
         "05_sector_net_lending_ratio_wide.csv",
+        snapshot=True,
     )
 
     # ==========================================
@@ -306,8 +347,11 @@ def main() -> None:
     ]
 
     save_csv(
-        nonfinancial_result[nonfinancial_columns],
+        nonfinancial_result[
+            nonfinancial_columns
+        ],
         "06_nonfinancial_capital_account.csv",
+        snapshot=True,
     )
 
     # ==========================================
@@ -340,6 +384,7 @@ def main() -> None:
     save_csv(
         decomposition_result,
         "07_nonfinancial_net_lending_decomposition.csv",
+        snapshot=True,
     )
 
     # ==========================================
