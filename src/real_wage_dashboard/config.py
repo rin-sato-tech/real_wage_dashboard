@@ -7,6 +7,15 @@ LFS_WORKING_HOURS_DISTRIBUTION_STATS_DATA_ID = "0003009700"
 LFS_HOURS_BY_AGE_SEX_STATS_DATA_ID = "0003009701"
 LFS_EMPLOYMENT_TYPE_HOURS_STATS_DATA_ID = "0003006654"
 
+SNA_INCOME_GENERATION_STATS_DATA_ID = "0004049810"
+SNA_HOUSEHOLD_PRIMARY_INCOME_STATS_DATA_ID = "0004049854"
+SNA_HOUSEHOLD_SECONDARY_DISTRIBUTION_STATS_DATA_ID = "0004049855"
+SNA_HOUSEHOLD_USE_INCOME_STATS_DATA_ID = "0004049857"
+SNA_NONFINANCIAL_CAPITAL_ACCOUNT_STATS_DATA_ID = "0004049767"
+SNA_NONFINANCIAL_FINANCIAL_ACCOUNT_STATS_DATA_ID = "0004049768"
+SNA_SECTOR_NET_LENDING_AMOUNT_STATS_DATA_ID = "0004049961"
+SNA_SECTOR_NET_LENDING_RATIO_STATS_DATA_ID = "0004049963"
+
 CPI_BASE_FILTERS = {
     "cdTab": "1",
     "cdArea": "00000",
@@ -226,4 +235,88 @@ LFS_EMPLOYMENT_TYPE_HOURS_CODES = {
     "hours_1_29": "02",
     "hours_35_plus": "03",
     "hours_49_plus": "04",
+}
+
+SNA_ANALYSIS_START_YEAR = 1994
+SNA_ANALYSIS_END_YEAR = 2024
+
+SNA_INCOME_GENERATION_ITEMS = {
+    "employee_compensation": "11",
+    "taxes_on_production_and_imports": "16",
+    "subsidies": "22",
+    "net_operating_surplus_mixed_income": "23",
+    "net_operating_surplus": "24",
+    "net_mixed_income": "25",
+    "gross_operating_surplus_mixed_income": "26",
+    "gross_operating_surplus": "27",
+    "gross_mixed_income": "28",
+    "consumption_fixed_capital": "29",
+    "net_domestic_product": "31",
+    "gross_domestic_product": "32",
+}
+
+SNA_HOUSEHOLD_PRIMARY_INCOME_ITEMS = {
+    "property_income_paid": "11",
+    "net_primary_income_balance": "19",
+    "gross_primary_income_balance": "20",
+    "net_operating_surplus_mixed_income": "23",
+    "net_operating_surplus_imputed_rent": "24",
+    "net_mixed_income": "25",
+    "employee_compensation_received": "30",
+    "property_income_received": "35",
+    "interest_received": "36",
+    "dividends_received": "37",
+    "other_investment_income_received": "44",
+    "rent_received": "39",
+}
+
+SNA_HOUSEHOLD_SECONDARY_DISTRIBUTION_ITEMS = {
+    "current_taxes_paid": "11",
+    "net_social_contributions_paid": "44",
+    "other_current_transfers_paid": "23",
+    "net_disposable_income": "28",
+    "net_primary_income_balance": "32",
+    "social_benefits_received": "35",
+    "other_current_transfers_received": "40",
+}
+
+SNA_HOUSEHOLD_USE_INCOME_ITEMS = {
+    "household_final_consumption": "11",
+    "net_saving": "12",
+    "gross_saving": "13",
+    "net_disposable_income": "16",
+    "gross_disposable_income": "17",
+    "pension_entitlement_adjustment": "22",
+    "published_saving_rate": "21",
+}
+
+SNA_NONFINANCIAL_CAPITAL_ACCOUNT_ITEMS = {
+    "gross_fixed_capital_formation": "11",
+    "consumption_fixed_capital": "12",
+    "changes_in_inventories": "25",
+    "net_land_purchases": "14",
+    "net_lending_capital_account": "15",
+    "net_saving": "17",
+    "capital_transfers_received": "18",
+    "capital_transfers_paid": "21",
+}
+
+SNA_NONFINANCIAL_FINANCIAL_ACCOUNT_ITEMS = {
+    "net_lending_financial_account": "200",
+}
+
+SNA_SECTOR_NET_LENDING_ITEMS = {
+    "capital_nonfinancial_corporations": "12",
+    "capital_financial_corporations": "13",
+    "capital_general_government": "14",
+    "capital_households": "15",
+    "capital_npish": "16",
+    "capital_rest_of_world": "17",
+    "statistical_discrepancy": "18",
+    "financial_nonfinancial_corporations": "20",
+    "financial_financial_corporations": "21",
+    "financial_general_government": "22",
+    "financial_households": "23",
+    "financial_npish": "24",
+    "financial_rest_of_world": "25",
 }
