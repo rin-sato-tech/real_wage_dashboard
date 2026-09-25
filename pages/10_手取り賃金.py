@@ -129,16 +129,10 @@ def create_reference_wage_df(
         "monthly_special_earnings_yen",
     }
 
-    missing = (
-        required_columns
-        - set(main_df.columns)
-    )
+    missing = required_columns - set(main_df.columns)
 
     if missing:
-        raise ValueError(
-            "シナリオ計算に必要な賃金列がありません: "
-            f"{sorted(missing)}"
-        )
+        raise ValueError(f"シナリオ計算に必要な賃金列がありません: {sorted(missing)}")
 
     return (
         main_df[
@@ -151,12 +145,9 @@ def create_reference_wage_df(
         ]
         .rename(
             columns={
-                "monthly_total_cash_earnings_yen":
-                    "total_cash_earnings",
-                "monthly_regular_earnings_yen":
-                    "regular_earnings",
-                "monthly_special_earnings_yen":
-                    "special_earnings",
+                "monthly_total_cash_earnings_yen": "total_cash_earnings",
+                "monthly_regular_earnings_yen": "regular_earnings",
+                "monthly_special_earnings_yen": "special_earnings",
             }
         )
         .copy()
@@ -744,73 +735,23 @@ def create_scenario_allocation_chart(
 ) -> alt.Chart:
     """指定シナリオの額面100円あたり配分を表示する。"""
 
-    gross = float(
-        scenario["gross_salary_yen"]
-    )
+    gross = float(scenario["gross_salary_yen"])
 
     components = {
-        "手取り":
-            float(
-                scenario[
-                    "nominal_take_home_yen"
-                ]
-            ),
-        "所得税":
-            float(
-                scenario[
-                    "income_tax_yen"
-                ]
-            ),
-        "住民税":
-            float(
-                scenario[
-                    "resident_tax_yen"
-                ]
-            ),
-        "厚生年金":
-            float(
-                scenario[
-                    "pension_yen"
-                ]
-            ),
-        "健康保険":
-            float(
-                scenario[
-                    "health_insurance_yen"
-                ]
-            ),
-        "介護保険":
-            float(
-                scenario[
-                    "long_term_care_yen"
-                ]
-            ),
-        "雇用保険":
-            float(
-                scenario[
-                    "employment_insurance_yen"
-                ]
-            ),
+        "手取り": float(scenario["nominal_take_home_yen"]),
+        "所得税": float(scenario["income_tax_yen"]),
+        "住民税": float(scenario["resident_tax_yen"]),
+        "厚生年金": float(scenario["pension_yen"]),
+        "健康保険": float(scenario["health_insurance_yen"]),
+        "介護保険": float(scenario["long_term_care_yen"]),
+        "雇用保険": float(scenario["employment_insurance_yen"]),
     }
 
     chart_df = pd.DataFrame(
         {
-            "component":
-                list(
-                    components.keys()
-                ),
-            "yen_per_100": [
-                value
-                / gross
-                * 100
-                for value
-                in components.values()
-            ],
-            "group": [
-                "配分"
-            ] * len(
-                components
-            ),
+            "component": list(components.keys()),
+            "yen_per_100": [value / gross * 100 for value in components.values()],
+            "group": ["配分"] * len(components),
         }
     )
 
@@ -894,20 +835,12 @@ except FileNotFoundError as exc:
 
 
 try:
-    reference_wage_df = (
-        create_reference_wage_df(
-            main_df
-        )
-    )
+    reference_wage_df = create_reference_wage_df(main_df)
 
-    rule_tables = (
-        load_rule_tables()
-    )
+    rule_tables = load_rule_tables()
 
 except ValueError as exc:
-    st.error(
-        str(exc)
-    )
+    st.error(str(exc))
     st.stop()
 
 
@@ -932,9 +865,7 @@ st.info(
 # 手取りシミュレーター
 # ============================================
 
-st.header(
-    "手取りシミュレーター"
-)
+st.header("手取りシミュレーター")
 
 st.caption(
     "対象年・年齢・年収を変更して、"
@@ -942,9 +873,7 @@ st.caption(
     "名目手取りを試算できます。"
 )
 
-sim_col1, sim_col2, sim_col3 = (
-    st.columns(3)
-)
+sim_col1, sim_col2, sim_col3 = st.columns(3)
 
 with sim_col1:
     scenario_year = st.selectbox(
@@ -955,10 +884,7 @@ with sim_col1:
                 END_YEAR + 1,
             )
         ),
-        index=(
-            END_YEAR
-            - START_YEAR
-        ),
+        index=(END_YEAR - START_YEAR),
     )
 
 with sim_col2:
@@ -971,97 +897,62 @@ with sim_col2:
     )
 
 with sim_col3:
-    scenario_salary_man = (
-        st.number_input(
-            "年収（万円）",
-            min_value=200,
-            max_value=1_500,
-            value=500,
-            step=10,
-        )
+    scenario_salary_man = st.number_input(
+        "年収（万円）",
+        min_value=200,
+        max_value=1_500,
+        value=500,
+        step=10,
     )
 
-scenario_salary_yen = (
-    float(
-        scenario_salary_man
-    )
-    * 10_000
-)
+scenario_salary_yen = float(scenario_salary_man) * 10_000
 
 try:
-    scenario = (
-        calculate_take_home_scenario(
-            reference_wage_df=(
-                reference_wage_df
-            ),
-            rule_tables=rule_tables,
-            year=int(
-                scenario_year
-            ),
-            annual_salary_yen=(
-                scenario_salary_yen
-            ),
-            age=int(
-                scenario_age
-            ),
-            sex="male",
-        )
+    scenario = calculate_take_home_scenario(
+        reference_wage_df=(reference_wage_df),
+        rule_tables=rule_tables,
+        year=int(scenario_year),
+        annual_salary_yen=(scenario_salary_yen),
+        age=int(scenario_age),
+        sex="male",
     )
 
 except ValueError as exc:
-    st.error(
-        str(exc)
-    )
+    st.error(str(exc))
     st.stop()
 
-result_col1, result_col2, result_col3, result_col4 = (
-    st.columns(4)
-)
+result_col1, result_col2, result_col3, result_col4 = st.columns(4)
 
 with result_col1:
     st.metric(
         "額面年収",
-        (
-            f"{scenario['gross_salary_yen'] / 10_000:,.1f}"
-            "万円"
-        ),
+        (f"{scenario['gross_salary_yen'] / 10_000:,.1f}万円"),
     )
 
 with result_col2:
     st.metric(
         "名目手取り",
-        (
-            f"{scenario['nominal_take_home_yen'] / 10_000:,.1f}"
-            "万円"
-        ),
+        (f"{scenario['nominal_take_home_yen'] / 10_000:,.1f}万円"),
     )
 
 with result_col3:
     st.metric(
         "実効負担率",
-        (
-            f"{scenario['effective_burden_rate'] * 100:.2f}%"
-        ),
+        (f"{scenario['effective_burden_rate'] * 100:.2f}%"),
     )
 
 with result_col4:
     st.metric(
         "手取り率",
-        (
-            f"{scenario['take_home_rate'] * 100:.2f}%"
-        ),
+        (f"{scenario['take_home_rate'] * 100:.2f}%"),
     )
 
 st.altair_chart(
-    create_scenario_allocation_chart(
-        scenario
-    ),
+    create_scenario_allocation_chart(scenario),
     width="stretch",
 )
 
-with st.expander(
-    "税・社会保険料の内訳を見る"
-):
+with st.expander("税・社会保険料の内訳を見る"):
     scenario_detail = pd.DataFrame(
         {
             "項目": [
@@ -1075,30 +966,14 @@ with st.expander(
                 "名目手取り",
             ],
             "年間金額（円）": [
-                scenario[
-                    "income_tax_yen"
-                ],
-                scenario[
-                    "resident_tax_yen"
-                ],
-                scenario[
-                    "pension_yen"
-                ],
-                scenario[
-                    "health_insurance_yen"
-                ],
-                scenario[
-                    "long_term_care_yen"
-                ],
-                scenario[
-                    "employment_insurance_yen"
-                ],
-                scenario[
-                    "total_deductions_yen"
-                ],
-                scenario[
-                    "nominal_take_home_yen"
-                ],
+                scenario["income_tax_yen"],
+                scenario["resident_tax_yen"],
+                scenario["pension_yen"],
+                scenario["health_insurance_yen"],
+                scenario["long_term_care_yen"],
+                scenario["employment_insurance_yen"],
+                scenario["total_deductions_yen"],
+                scenario["nominal_take_home_yen"],
             ],
         }
     )
@@ -1108,27 +983,15 @@ with st.expander(
         width="stretch",
         hide_index=True,
         column_config={
-            "年間金額（円）":
-                st.column_config.NumberColumn(
-                    format="%,.0f",
-                ),
+            "年間金額（円）": st.column_config.NumberColumn(
+                format="%,.0f",
+            ),
         },
     )
 
-monthly_regular = float(
-    scenario[
-        "monthly_regular_earnings_yen"
-    ]
-)
+monthly_regular = float(scenario["monthly_regular_earnings_yen"])
 
-annual_bonus = (
-    float(
-        scenario[
-            "monthly_special_earnings_yen"
-        ]
-    )
-    * 12
-)
+annual_bonus = float(scenario["monthly_special_earnings_yen"]) * 12
 
 st.caption(
     f"{scenario_year}年の毎月勤労統計における"
@@ -1140,11 +1003,7 @@ st.caption(
 )
 
 if 40 <= scenario_age <= 64:
-    st.caption(
-        "40～64歳のため、"
-        "介護保険第2号被保険者として"
-        "介護保険料を含めています。"
-    )
+    st.caption("40～64歳のため、介護保険第2号被保険者として介護保険料を含めています。")
 
 st.warning(
     "このシミュレーターは単身・扶養なし・給与所得のみ等の"

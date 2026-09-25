@@ -32,20 +32,10 @@ def test_create_scaled_wage_input_preserves_salary_total():
 
     row = result.iloc[0]
 
-    assert (
-        row["total_cash_earnings"]
-        * 12
-        == pytest.approx(
-            5_000_000.0
-        )
-    )
+    assert row["total_cash_earnings"] * 12 == pytest.approx(5_000_000.0)
 
-    assert (
-        row["regular_earnings"]
-        + row["special_earnings"]
-        == pytest.approx(
-            row["total_cash_earnings"]
-        )
+    assert row["regular_earnings"] + row["special_earnings"] == pytest.approx(
+        row["total_cash_earnings"]
     )
 
 
@@ -73,19 +63,11 @@ def test_create_scaled_wage_input_preserves_regular_share():
 
     row = result.iloc[0]
 
-    original_share = (
-        320_000.0
-        / 400_000.0
-    )
+    original_share = 320_000.0 / 400_000.0
 
-    result_share = (
-        row["regular_earnings"]
-        / row["total_cash_earnings"]
-    )
+    result_share = row["regular_earnings"] / row["total_cash_earnings"]
 
-    assert result_share == pytest.approx(
-        original_share
-    )
+    assert result_share == pytest.approx(original_share)
 
 
 def test_create_scaled_wage_input_rejects_missing_year():

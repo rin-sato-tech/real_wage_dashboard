@@ -121,7 +121,8 @@ TABLEAU_METRIC_LABELS = {
     # 頑健性確認で使用する代表指標
     # ----------------------------------------
     "real_take_home_change_pct": "実質手取り変化率",
-    "real_gross_salary_change_pct": "実質額面賃金変化率",
+    "real_gross_wage_change_pct": "実質額面賃金変化率",
+    "interpretation": "解釈",
 }
 
 TABLEAU_ANALYSIS_LABELS = {
@@ -153,13 +154,10 @@ TABLEAU_UNIT_LABELS = {
 TABLEAU_CHECK_LABELS = {
     "fixed_policy": "固定制度比較",
     "resident_tax_timing": "住民税対応",
-    "resident_timing": "住民税対応",
     "sex": "性別",
-    "age": "年齢",
-    "long_term_care": "介護保険",
+    "age_long_term_care": "年齢・介護保険",
     "wage_series": "賃金系列",
-    "temporary_tax_policy": "一時的税制",
-    "temporary_tax": "一時的税制",
+    "temporary_tax_measures": "一時的減税",
 }
 
 
@@ -171,10 +169,11 @@ TABLEAU_COMPARISON_LABELS = {
     "cash_flow": "キャッシュフロー対応",
     "male": "男性",
     "female": "女性",
-    "age_35": "35歳",
-    "age_45": "45歳",
-    "long_term_level": "長期水準系列",
-    "chained": "接続系列",
+    "age35": "35歳",
+    "age45": "45歳",
+    "age45_minus_age35": "45歳－35歳",
+    "level_series": "実額系列",
+    "official_yoy_chained": "公表前年比連鎖系列",
     "structural_policy": "構造的制度",
 }
 
@@ -617,10 +616,93 @@ def create_take_home_tableau_export(
 
     result["employment_type"] = "就業形態計"
 
-    result["model_age"] = 35
+    result["model_age"] = pd.Series(
+        35,
+        index=result.index,
+        dtype="Int64",
+    )
+
     result["model_sex"] = "male"
 
     result["resident_tax_timing"] = "income_year"
+
+    robustness_mask = result["record_type"] == "robustness"
+
+    # 性別感応度
+    sex_mask = (
+        robustness_mask
+        & result["check"].eq("sex")
+        & result["comparison"].isin(
+            [
+                "male",
+                "female",
+            ]
+        )
+    )
+
+    result.loc[
+        sex_mask,
+        "model_sex",
+    ] = result.loc[
+        sex_mask,
+        "comparison",
+    ]
+
+    # 年齢・介護保険感応度
+    age35_mask = (
+        robustness_mask
+        & result["check"].eq("age_long_term_care")
+        & result["comparison"].eq("age35")
+    )
+
+    age45_mask = (
+        robustness_mask
+        & result["check"].eq("age_long_term_care")
+        & result["comparison"].eq("age45")
+    )
+
+    age_difference_mask = (
+        robustness_mask
+        & result["check"].eq("age_long_term_care")
+        & result["comparison"].eq("age45_minus_age35")
+    )
+
+    result.loc[
+        age35_mask,
+        "model_age",
+    ] = 35
+
+    result.loc[
+        age45_mask,
+        "model_age",
+    ] = 45
+
+    # 2年齢間の「差」なので、
+    # 単一のモデル年齢は定義しない。
+    result.loc[
+        age_difference_mask,
+        "model_age",
+    ] = pd.NA
+
+    # 住民税対応感応度
+    timing_mask = (
+        robustness_mask
+        & result["check"].eq("resident_tax_timing")
+        & result["comparison"].isin(
+            [
+                "income_year",
+                "cash_flow",
+            ]
+        )
+    )
+
+    result.loc[
+        timing_mask,
+        "resident_tax_timing",
+    ] = result.loc[
+        timing_mask,
+        "comparison",
+    ]
 
     result["cpi_series"] = "持家の帰属家賃を除く総合"
 

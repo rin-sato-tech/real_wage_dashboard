@@ -385,3 +385,80 @@ def test_create_japanese_tableau_export_keeps_unknown_label():
     assert result.iloc[0]["指標"] == "unknown_metric"
 
     assert result.iloc[0]["比較ケース"] == "unknown_case"
+
+
+def test_tableau_labels_cover_robustness_ids():
+    source = pd.DataFrame(
+        {
+            "analysis": [
+                "take_home_wage",
+            ],
+            "record_type": [
+                "robustness",
+            ],
+            "year": [
+                pd.NA,
+            ],
+            "period": [
+                "1990→2025",
+            ],
+            "start_year": [
+                pd.NA,
+            ],
+            "end_year": [
+                pd.NA,
+            ],
+            "metric": [
+                "real_gross_wage_change_pct",
+            ],
+            "value": [
+                -14.364,
+            ],
+            "unit": [
+                "pct",
+            ],
+            "check": [
+                "wage_series",
+            ],
+            "comparison": [
+                "official_yoy_chained",
+            ],
+            "note": [
+                pd.NA,
+            ],
+            "industry": [
+                "調査産業計",
+            ],
+            "establishment_size": [
+                "5人以上",
+            ],
+            "employment_type": [
+                "就業形態計",
+            ],
+            "model_age": [
+                35,
+            ],
+            "model_sex": [
+                "male",
+            ],
+            "resident_tax_timing": [
+                "income_year",
+            ],
+            "cpi_series": [
+                "持家の帰属家賃を除く総合",
+            ],
+            "base_year": [
+                1990,
+            ],
+        }
+    )
+
+    result = create_japanese_tableau_export(source)
+
+    row = result.iloc[0]
+
+    assert row["確認項目"] == "賃金系列"
+
+    assert row["比較ケース"] == "公表前年比連鎖系列"
+
+    assert row["指標"] == "実質額面賃金変化率"

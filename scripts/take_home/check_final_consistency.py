@@ -7,25 +7,13 @@ import pandas as pd
 
 SNAPSHOT_DIR = Path("data/snapshots")
 
-MAIN_PATH = (
-    SNAPSHOT_DIR
-    / "take_home_main_series.csv"
-)
+MAIN_PATH = SNAPSHOT_DIR / "take_home_main_series.csv"
 
-SHAPLEY_PATH = (
-    SNAPSHOT_DIR
-    / "take_home_real_shapley_4factor.csv"
-)
+SHAPLEY_PATH = SNAPSHOT_DIR / "take_home_real_shapley_4factor.csv"
 
-FIXED_POLICY_PATH = (
-    SNAPSHOT_DIR
-    / "take_home_fixed_policy_comparison.csv"
-)
+FIXED_POLICY_PATH = SNAPSHOT_DIR / "take_home_fixed_policy_comparison.csv"
 
-SCENARIO_PATH = (
-    SNAPSHOT_DIR
-    / "take_home_scenario_grid.csv"
-)
+SCENARIO_PATH = SNAPSHOT_DIR / "take_home_scenario_grid.csv"
 
 
 def assert_close(
@@ -43,11 +31,7 @@ def assert_close(
         rel_tol=0.0,
         abs_tol=abs_tol,
     ):
-        raise AssertionError(
-            f"{label}: "
-            f"actual={actual}, "
-            f"expected={expected}"
-        )
+        raise AssertionError(f"{label}: actual={actual}, expected={expected}")
 
 
 def get_unique_row(
@@ -57,35 +41,22 @@ def get_unique_row(
 ) -> pd.Series:
     """条件に一致する行を一意に取得する。"""
 
-    selected = df.loc[
-        condition
-    ]
+    selected = df.loc[condition]
 
     if len(selected) != 1:
-        raise AssertionError(
-            f"{label} を一意に取得できません: "
-            f"{len(selected)} rows"
-        )
+        raise AssertionError(f"{label} を一意に取得できません: {len(selected)} rows")
 
     return selected.iloc[0]
 
 
 def main() -> None:
-    main_df = pd.read_csv(
-        MAIN_PATH
-    )
+    main_df = pd.read_csv(MAIN_PATH)
 
-    shapley_df = pd.read_csv(
-        SHAPLEY_PATH
-    )
+    shapley_df = pd.read_csv(SHAPLEY_PATH)
 
-    fixed_df = pd.read_csv(
-        FIXED_POLICY_PATH
-    )
+    fixed_df = pd.read_csv(FIXED_POLICY_PATH)
 
-    scenario_df = pd.read_csv(
-        SCENARIO_PATH
-    )
+    scenario_df = pd.read_csv(SCENARIO_PATH)
 
     # ========================================
     # 1. 2025年主系列
@@ -98,44 +69,28 @@ def main() -> None:
     )
 
     assert_close(
-        float(
-            main_2025[
-                "gross_salary_yen"
-            ]
-        ),
+        float(main_2025["gross_salary_yen"]),
         4_267_634.0,
         abs_tol=1.0,
         label="2025年額面賃金",
     )
 
     assert_close(
-        float(
-            main_2025[
-                "nominal_take_home_yen"
-            ]
-        ),
+        float(main_2025["nominal_take_home_yen"]),
         3_381_643.9005,
         abs_tol=1.0,
         label="2025年名目手取り",
     )
 
     assert_close(
-        float(
-            main_2025[
-                "real_take_home_yen"
-            ]
-        ),
+        float(main_2025["real_take_home_yen"]),
         2_965_703.925,
         abs_tol=1.0,
         label="2025年実質手取り",
     )
 
     assert_close(
-        float(
-            main_2025[
-                "effective_burden_rate"
-            ]
-        ),
+        float(main_2025["effective_burden_rate"]),
         0.207607,
         abs_tol=1e-6,
         label="2025年実効負担率",
@@ -147,29 +102,20 @@ def main() -> None:
 
     shapley_long = get_unique_row(
         shapley_df,
-        shapley_df["period"]
-        == "1990→2025",
+        shapley_df["period"] == "1990→2025",
         "1990→2025 Shapley",
     )
 
     expected_shapley = {
-        "wage_effect_pct_of_start":
-            6.491,
-        "tax_policy_effect_pct_of_start":
-            1.274,
-        "social_insurance_policy_effect_pct_of_start":
-            -4.727,
-        "price_effect_pct_of_start":
-            -21.678,
+        "wage_effect_pct_of_start": 6.491,
+        "tax_policy_effect_pct_of_start": 1.274,
+        "social_insurance_policy_effect_pct_of_start": -4.727,
+        "price_effect_pct_of_start": -21.678,
     }
 
-    for column, expected in (
-        expected_shapley.items()
-    ):
+    for column, expected in expected_shapley.items():
         assert_close(
-            float(
-                shapley_long[column]
-            ),
+            float(shapley_long[column]),
             expected,
             abs_tol=0.01,
             label=column,
@@ -186,39 +132,21 @@ def main() -> None:
     )
 
     assert_close(
-        float(
-            fixed_2025[
-                "fixed_1990_nominal_take_home_yen"
-            ]
-        ),
+        float(fixed_2025["fixed_1990_nominal_take_home_yen"]),
         3_501_446.213,
         abs_tol=1.0,
-        label=(
-            "2025年 "
-            "1990年制度固定手取り"
-        ),
+        label=("2025年 1990年制度固定手取り"),
     )
 
     assert_close(
-        float(
-            fixed_2025[
-                "nominal_take_home_yen_difference_yen"
-            ]
-        ),
+        float(fixed_2025["nominal_take_home_yen_difference_yen"]),
         -119_802.3125,
         abs_tol=1.0,
-        label=(
-            "2025年 "
-            "実際－1990年制度固定"
-        ),
+        label=("2025年 実際－1990年制度固定"),
     )
 
     assert_close(
-        float(
-            fixed_2025[
-                "burden_rate_difference_pt"
-            ]
-        ),
+        float(fixed_2025["burden_rate_difference_pt"]),
         2.807230,
         abs_tol=1e-5,
         label="2025年負担率差",
@@ -230,106 +158,51 @@ def main() -> None:
 
     scenario_35 = get_unique_row(
         scenario_df,
-        (
-            scenario_df["年"]
-            == 2025
-        )
-        & (
-            scenario_df["年齢"]
-            == 35
-        )
-        & (
-            scenario_df[
-                "年収（万円）"
-            ]
-            == 500
-        ),
+        (scenario_df["年"] == 2025)
+        & (scenario_df["年齢"] == 35)
+        & (scenario_df["年収（万円）"] == 500),
         "2025年・35歳・500万円",
     )
 
     assert_close(
-        float(
-            scenario_35[
-                "名目手取り（円）"
-            ]
-        ),
+        float(scenario_35["名目手取り（円）"]),
         3_898_918.0,
         abs_tol=2.0,
-        label=(
-            "2025年・35歳・500万円 "
-            "名目手取り"
-        ),
+        label=("2025年・35歳・500万円 名目手取り"),
     )
 
     assert_close(
-        float(
-            scenario_35[
-                "実効負担率（%）"
-            ]
-        ),
+        float(scenario_35["実効負担率（%）"]),
         22.021642,
         abs_tol=1e-5,
-        label=(
-            "2025年・35歳・500万円 "
-            "実効負担率"
-        ),
+        label=("2025年・35歳・500万円 実効負担率"),
     )
 
     scenario_45 = get_unique_row(
         scenario_df,
-        (
-            scenario_df["年"]
-            == 2025
-        )
-        & (
-            scenario_df["年齢"]
-            == 45
-        )
-        & (
-            scenario_df[
-                "年収（万円）"
-            ]
-            == 500
-        ),
+        (scenario_df["年"] == 2025)
+        & (scenario_df["年齢"] == 45)
+        & (scenario_df["年収（万円）"] == 500),
         "2025年・45歳・500万円",
     )
 
     assert_close(
-        float(
-            scenario_45[
-                "介護保険（円）"
-            ]
-        ),
+        float(scenario_45["介護保険（円）"]),
         40_086.1,
         abs_tol=1.0,
-        label=(
-            "2025年・45歳・500万円 "
-            "介護保険料"
-        ),
+        label=("2025年・45歳・500万円 介護保険料"),
     )
 
     # ========================================
     # 完了
     # ========================================
 
-    print(
-        "=== final consistency check ==="
-    )
-    print(
-        "2025年主系列: OK"
-    )
-    print(
-        "1990→2025 Shapley: OK"
-    )
-    print(
-        "1990年制度固定比較: OK"
-    )
-    print(
-        "年収500万円シナリオ: OK"
-    )
-    print(
-        "主要数値の整合性確認: PASS"
-    )
+    print("=== final consistency check ===")
+    print("2025年主系列: OK")
+    print("1990→2025 Shapley: OK")
+    print("1990年制度固定比較: OK")
+    print("年収500万円シナリオ: OK")
+    print("主要数値の整合性確認: PASS")
 
 
 if __name__ == "__main__":
