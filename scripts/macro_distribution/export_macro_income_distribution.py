@@ -37,18 +37,9 @@ from real_wage_dashboard.macro_distribution_service import (
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
-SECRETS_PATH = (
-    ROOT_DIR
-    / ".streamlit"
-    / "secrets.toml"
-)
+SECRETS_PATH = ROOT_DIR / ".streamlit" / "secrets.toml"
 
-OUTPUT_DIR = (
-    ROOT_DIR
-    / "outputs"
-    / "analysis"
-    / "macro_income_distribution"
-)
+OUTPUT_DIR = ROOT_DIR / "outputs" / "analysis" / "macro_income_distribution"
 
 
 def load_app_id() -> str:
@@ -77,10 +68,7 @@ def save_csv(
         encoding="utf-8-sig",
     )
 
-    print(
-        f"saved: {output_path.relative_to(ROOT_DIR)} "
-        f"({len(df)} rows)"
-    )
+    print(f"saved: {output_path.relative_to(ROOT_DIR)} ({len(df)} rows)")
 
 
 def main() -> None:
@@ -103,10 +91,8 @@ def main() -> None:
         app_id=app_id,
     )
 
-    household_secondary = (
-        load_household_secondary_distribution(
-            app_id=app_id,
-        )
+    household_secondary = load_household_secondary_distribution(
+        app_id=app_id,
     )
 
     household_use = load_household_use_income(
@@ -121,31 +107,21 @@ def main() -> None:
         app_id=app_id,
     )
 
-    nonfinancial_capital = (
-        load_nonfinancial_capital_account(
-            app_id=app_id,
-        )
+    nonfinancial_capital = load_nonfinancial_capital_account(
+        app_id=app_id,
     )
 
     # ==========================================
     # 2. 会計・クロスチェック
     # ==========================================
 
-    validate_income_generation_identity(
-        income_generation
-    )
+    validate_income_generation_identity(income_generation)
 
-    validate_household_primary_income_identity(
-        household_primary
-    )
+    validate_household_primary_income_identity(household_primary)
 
-    validate_household_disposable_income_identity(
-        household_secondary
-    )
+    validate_household_disposable_income_identity(household_secondary)
 
-    validate_household_saving_identity(
-        household_use
-    )
+    validate_household_saving_identity(household_use)
 
     validate_sector_net_lending_ratios(
         amount_df=sector_amount,
@@ -153,17 +129,11 @@ def main() -> None:
         income_generation_df=income_generation,
     )
 
-    validate_sector_net_lending_balances(
-        sector_amount
-    )
+    validate_sector_net_lending_balances(sector_amount)
 
-    validate_capital_financial_reconciliation(
-        sector_amount
-    )
+    validate_capital_financial_reconciliation(sector_amount)
 
-    validate_nonfinancial_capital_account_identity(
-        nonfinancial_capital
-    )
+    validate_nonfinancial_capital_account_identity(nonfinancial_capital)
 
     validate_nonfinancial_net_lending_crosscheck(
         capital_account_df=nonfinancial_capital,
@@ -174,11 +144,7 @@ def main() -> None:
     # 3. GDP所得面構成
     # ==========================================
 
-    income_generation_result = (
-        calculate_income_generation_shares(
-            income_generation
-        )
-    )
+    income_generation_result = calculate_income_generation_shares(income_generation)
 
     income_generation_columns = [
         "fiscal_year",
@@ -196,9 +162,7 @@ def main() -> None:
     ]
 
     save_csv(
-        income_generation_result[
-            income_generation_columns
-        ],
+        income_generation_result[income_generation_columns],
         "01_income_generation.csv",
     )
 
@@ -206,10 +170,8 @@ def main() -> None:
     # 4. 家計第1次所得
     # ==========================================
 
-    household_primary_result = (
-        calculate_household_primary_income_components(
-            household_primary
-        )
+    household_primary_result = calculate_household_primary_income_components(
+        household_primary
     )
 
     household_primary_columns = [
@@ -228,9 +190,7 @@ def main() -> None:
     ]
 
     save_csv(
-        household_primary_result[
-            household_primary_columns
-        ],
+        household_primary_result[household_primary_columns],
         "02_household_primary_income.csv",
     )
 
@@ -238,10 +198,8 @@ def main() -> None:
     # 5. 第1次所得 → 可処分所得
     # ==========================================
 
-    household_redistribution_result = (
-        calculate_household_redistribution_components(
-            household_secondary
-        )
+    household_redistribution_result = calculate_household_redistribution_components(
+        household_secondary
     )
 
     household_redistribution_columns = [
@@ -263,9 +221,7 @@ def main() -> None:
     ]
 
     save_csv(
-        household_redistribution_result[
-            household_redistribution_columns
-        ],
+        household_redistribution_result[household_redistribution_columns],
         "03_household_redistribution.csv",
     )
 
@@ -273,11 +229,7 @@ def main() -> None:
     # 6. 可処分所得 → 消費・貯蓄
     # ==========================================
 
-    household_saving_result = (
-        calculate_household_saving_metrics(
-            household_use
-        )
-    )
+    household_saving_result = calculate_household_saving_metrics(household_use)
 
     household_saving_columns = [
         "fiscal_year",
@@ -295,9 +247,7 @@ def main() -> None:
     ]
 
     save_csv(
-        household_saving_result[
-            household_saving_columns
-        ],
+        household_saving_result[household_saving_columns],
         "04_household_saving.csv",
     )
 
@@ -330,12 +280,10 @@ def main() -> None:
     # 8. 非金融法人企業・資本勘定
     # ==========================================
 
-    nonfinancial_result = (
-        calculate_nonfinancial_capital_account_metrics(
-            df=nonfinancial_capital,
-            income_generation_df=income_generation,
-            statistical_discrepancy_df=sector_amount,
-        )
+    nonfinancial_result = calculate_nonfinancial_capital_account_metrics(
+        df=nonfinancial_capital,
+        income_generation_df=income_generation,
+        statistical_discrepancy_df=sector_amount,
     )
 
     nonfinancial_columns = [
@@ -358,9 +306,7 @@ def main() -> None:
     ]
 
     save_csv(
-        nonfinancial_result[
-            nonfinancial_columns
-        ],
+        nonfinancial_result[nonfinancial_columns],
         "06_nonfinancial_capital_account.csv",
     )
 
@@ -384,9 +330,7 @@ def main() -> None:
             end_year=end_year,
         )
 
-        decomposition_frames.append(
-            decomposition
-        )
+        decomposition_frames.append(decomposition)
 
     decomposition_result = pd.concat(
         decomposition_frames,
@@ -404,9 +348,7 @@ def main() -> None:
 
     print()
     print("=== export completed ===")
-    print(
-        OUTPUT_DIR.relative_to(ROOT_DIR)
-    )
+    print(OUTPUT_DIR.relative_to(ROOT_DIR))
 
 
 if __name__ == "__main__":

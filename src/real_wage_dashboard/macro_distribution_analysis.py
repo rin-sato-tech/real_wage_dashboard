@@ -131,15 +131,11 @@ def validate_income_generation_columns(
     df: pd.DataFrame,
 ) -> None:
     """所得発生分析に必要な列が存在することを確認する。"""
-    missing_columns = (
-        INCOME_GENERATION_REQUIRED_COLUMNS
-        - set(df.columns)
-    )
+    missing_columns = INCOME_GENERATION_REQUIRED_COLUMNS - set(df.columns)
 
     if missing_columns:
         raise ValueError(
-            "所得発生分析に必要な列がありません: "
-            f"{sorted(missing_columns)}"
+            f"所得発生分析に必要な列がありません: {sorted(missing_columns)}"
         )
 
 
@@ -152,8 +148,7 @@ def add_income_generation_identity(
     result = df.copy()
 
     result["net_taxes_on_production_and_imports"] = (
-        result["taxes_on_production_and_imports"]
-        - result["subsidies"]
+        result["taxes_on_production_and_imports"] - result["subsidies"]
     )
 
     result["calculated_gdp"] = (
@@ -164,8 +159,7 @@ def add_income_generation_identity(
     )
 
     result["gdp_identity_residual"] = (
-        result["calculated_gdp"]
-        - result["gross_domestic_product"]
+        result["calculated_gdp"] - result["gross_domestic_product"]
     )
 
     return result
@@ -178,10 +172,7 @@ def validate_income_generation_identity(
     """GDP所得面恒等式が許容誤差内で成立することを確認する。"""
     result = add_income_generation_identity(df)
 
-    invalid = result[
-        result["gdp_identity_residual"].abs()
-        > tolerance
-    ]
+    invalid = result[result["gdp_identity_residual"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -193,10 +184,7 @@ def validate_income_generation_identity(
             ]
         ].to_dict("records")
 
-        raise ValueError(
-            "GDP所得面恒等式が許容誤差を超えています: "
-            f"{details}"
-        )
+        raise ValueError(f"GDP所得面恒等式が許容誤差を超えています: {details}")
 
 
 def calculate_income_generation_shares(
@@ -208,9 +196,7 @@ def calculate_income_generation_shares(
     gdp = result["gross_domestic_product"]
 
     if gdp.isna().any():
-        raise ValueError(
-            "GDPに欠損値があります。"
-        )
+        raise ValueError("GDPに欠損値があります。")
 
     if (gdp <= 0).any():
         invalid_years = result.loc[
@@ -218,33 +204,18 @@ def calculate_income_generation_shares(
             "fiscal_year",
         ].tolist()
 
-        raise ValueError(
-            "GDPは正である必要があります: "
-            f"{invalid_years}"
-        )
+        raise ValueError(f"GDPは正である必要があります: {invalid_years}")
 
-    result["employee_compensation_share"] = (
-        result["employee_compensation"]
-        / gdp
-        * 100
-    )
+    result["employee_compensation_share"] = result["employee_compensation"] / gdp * 100
 
     result["gross_operating_surplus_share"] = (
-        result["gross_operating_surplus"]
-        / gdp
-        * 100
+        result["gross_operating_surplus"] / gdp * 100
     )
 
-    result["gross_mixed_income_share"] = (
-        result["gross_mixed_income"]
-        / gdp
-        * 100
-    )
+    result["gross_mixed_income_share"] = result["gross_mixed_income"] / gdp * 100
 
     result["net_production_tax_share"] = (
-        result["net_taxes_on_production_and_imports"]
-        / gdp
-        * 100
+        result["net_taxes_on_production_and_imports"] / gdp * 100
     )
 
     result["income_component_share_sum"] = (
@@ -261,15 +232,11 @@ def validate_household_primary_income_columns(
     df: pd.DataFrame,
 ) -> None:
     """家計第1次所得分析に必要な列を確認する。"""
-    missing_columns = (
-        HOUSEHOLD_PRIMARY_INCOME_REQUIRED_COLUMNS
-        - set(df.columns)
-    )
+    missing_columns = HOUSEHOLD_PRIMARY_INCOME_REQUIRED_COLUMNS - set(df.columns)
 
     if missing_columns:
         raise ValueError(
-            "家計第1次所得分析に必要な列がありません: "
-            f"{sorted(missing_columns)}"
+            f"家計第1次所得分析に必要な列がありません: {sorted(missing_columns)}"
         )
 
 
@@ -282,8 +249,7 @@ def add_household_primary_income_identity(
     result = df.copy()
 
     result["net_property_income"] = (
-        result["property_income_received"]
-        - result["property_income_paid"]
+        result["property_income_received"] - result["property_income_paid"]
     )
 
     result["calculated_net_primary_income"] = (
@@ -293,8 +259,7 @@ def add_household_primary_income_identity(
     )
 
     result["primary_income_identity_residual"] = (
-        result["calculated_net_primary_income"]
-        - result["net_primary_income_balance"]
+        result["calculated_net_primary_income"] - result["net_primary_income_balance"]
     )
 
     return result
@@ -307,10 +272,7 @@ def validate_household_primary_income_identity(
     """家計第1次所得恒等式が許容誤差内で成立することを確認する。"""
     result = add_household_primary_income_identity(df)
 
-    invalid = result[
-        result["primary_income_identity_residual"].abs()
-        > tolerance
-    ]
+    invalid = result[result["primary_income_identity_residual"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -322,10 +284,7 @@ def validate_household_primary_income_identity(
             ]
         ].to_dict("records")
 
-        raise ValueError(
-            "家計第1次所得恒等式が許容誤差を超えています: "
-            f"{details}"
-        )
+        raise ValueError(f"家計第1次所得恒等式が許容誤差を超えています: {details}")
 
 
 def calculate_household_primary_income_components(
@@ -337,9 +296,7 @@ def calculate_household_primary_income_components(
     primary_income = result["net_primary_income_balance"]
 
     if primary_income.isna().any():
-        raise ValueError(
-            "家計第1次所得に欠損値があります。"
-        )
+        raise ValueError("家計第1次所得に欠損値があります。")
 
     if (primary_income <= 0).any():
         invalid_years = result.loc[
@@ -347,27 +304,18 @@ def calculate_household_primary_income_components(
             "fiscal_year",
         ].tolist()
 
-        raise ValueError(
-            "家計第1次所得は正である必要があります: "
-            f"{invalid_years}"
-        )
+        raise ValueError(f"家計第1次所得は正である必要があります: {invalid_years}")
 
     result["employee_compensation_ratio"] = (
-        result["employee_compensation_received"]
-        / primary_income
-        * 100
+        result["employee_compensation_received"] / primary_income * 100
     )
 
     result["operating_mixed_income_ratio"] = (
-        result["net_operating_surplus_mixed_income"]
-        / primary_income
-        * 100
+        result["net_operating_surplus_mixed_income"] / primary_income * 100
     )
 
     result["net_property_income_ratio"] = (
-        result["net_property_income"]
-        / primary_income
-        * 100
+        result["net_property_income"] / primary_income * 100
     )
 
     result["primary_income_component_ratio_sum"] = (
@@ -383,15 +331,13 @@ def validate_household_secondary_distribution_columns(
     df: pd.DataFrame,
 ) -> None:
     """家計第2次所得分配分析に必要な列を確認する。"""
-    missing_columns = (
-        HOUSEHOLD_SECONDARY_DISTRIBUTION_REQUIRED_COLUMNS
-        - set(df.columns)
+    missing_columns = HOUSEHOLD_SECONDARY_DISTRIBUTION_REQUIRED_COLUMNS - set(
+        df.columns
     )
 
     if missing_columns:
         raise ValueError(
-            "家計第2次所得分配分析に必要な列がありません: "
-            f"{sorted(missing_columns)}"
+            f"家計第2次所得分配分析に必要な列がありません: {sorted(missing_columns)}"
         )
 
 
@@ -417,8 +363,7 @@ def add_household_disposable_income_identity(
     )
 
     result["disposable_income_identity_residual"] = (
-        result["calculated_net_disposable_income"]
-        - result["net_disposable_income"]
+        result["calculated_net_disposable_income"] - result["net_disposable_income"]
     )
 
     return result
@@ -431,10 +376,7 @@ def validate_household_disposable_income_identity(
     """可処分所得恒等式が許容誤差内で成立することを確認する。"""
     result = add_household_disposable_income_identity(df)
 
-    invalid = result[
-        result["disposable_income_identity_residual"].abs()
-        > tolerance
-    ]
+    invalid = result[result["disposable_income_identity_residual"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -446,10 +388,7 @@ def validate_household_disposable_income_identity(
             ]
         ].to_dict("records")
 
-        raise ValueError(
-            "家計可処分所得恒等式が許容誤差を超えています: "
-            f"{details}"
-        )
+        raise ValueError(f"家計可処分所得恒等式が許容誤差を超えています: {details}")
 
 
 def calculate_household_redistribution_components(
@@ -461,9 +400,7 @@ def calculate_household_redistribution_components(
     primary_income = result["net_primary_income_balance"]
 
     if primary_income.isna().any():
-        raise ValueError(
-            "家計第1次所得に欠損値があります。"
-        )
+        raise ValueError("家計第1次所得に欠損値があります。")
 
     if (primary_income <= 0).any():
         invalid_years = result.loc[
@@ -471,50 +408,32 @@ def calculate_household_redistribution_components(
             "fiscal_year",
         ].tolist()
 
-        raise ValueError(
-            "家計第1次所得は正である必要があります: "
-            f"{invalid_years}"
-        )
+        raise ValueError(f"家計第1次所得は正である必要があります: {invalid_years}")
 
-    result["current_taxes_ratio"] = (
-        result["current_taxes_paid"]
-        / primary_income
-        * 100
-    )
+    result["current_taxes_ratio"] = result["current_taxes_paid"] / primary_income * 100
 
     result["net_social_contributions_ratio"] = (
-        result["net_social_contributions_paid"]
-        / primary_income
-        * 100
+        result["net_social_contributions_paid"] / primary_income * 100
     )
 
     result["social_benefits_ratio"] = (
-        result["social_benefits_received"]
-        / primary_income
-        * 100
+        result["social_benefits_received"] / primary_income * 100
     )
 
     result["net_other_current_transfers_ratio"] = (
-        result["net_other_current_transfers"]
-        / primary_income
-        * 100
+        result["net_other_current_transfers"] / primary_income * 100
     )
 
     result["disposable_income_to_primary_income_ratio"] = (
-        result["net_disposable_income"]
-        / primary_income
-        * 100
+        result["net_disposable_income"] / primary_income * 100
     )
 
     result["net_redistribution"] = (
-        result["net_disposable_income"]
-        - result["net_primary_income_balance"]
+        result["net_disposable_income"] - result["net_primary_income_balance"]
     )
 
     result["net_redistribution_ratio"] = (
-        result["net_redistribution"]
-        / primary_income
-        * 100
+        result["net_redistribution"] / primary_income * 100
     )
 
     return result
@@ -524,15 +443,11 @@ def validate_household_use_income_columns(
     df: pd.DataFrame,
 ) -> None:
     """家計所得使用分析に必要な列を確認する。"""
-    missing_columns = (
-        HOUSEHOLD_USE_INCOME_REQUIRED_COLUMNS
-        - set(df.columns)
-    )
+    missing_columns = HOUSEHOLD_USE_INCOME_REQUIRED_COLUMNS - set(df.columns)
 
     if missing_columns:
         raise ValueError(
-            "家計所得使用分析に必要な列がありません: "
-            f"{sorted(missing_columns)}"
+            f"家計所得使用分析に必要な列がありません: {sorted(missing_columns)}"
         )
 
 
@@ -545,18 +460,15 @@ def add_household_saving_identity(
     result = df.copy()
 
     result["adjusted_disposable_income"] = (
-        result["net_disposable_income"]
-        + result["pension_entitlement_adjustment"]
+        result["net_disposable_income"] + result["pension_entitlement_adjustment"]
     )
 
     result["calculated_net_saving"] = (
-        result["adjusted_disposable_income"]
-        - result["household_final_consumption"]
+        result["adjusted_disposable_income"] - result["household_final_consumption"]
     )
 
     result["saving_identity_residual"] = (
-        result["calculated_net_saving"]
-        - result["net_saving"]
+        result["calculated_net_saving"] - result["net_saving"]
     )
 
     return result
@@ -569,10 +481,7 @@ def validate_household_saving_identity(
     """家計純貯蓄恒等式が許容誤差内で成立することを確認する。"""
     result = add_household_saving_identity(df)
 
-    invalid = result[
-        result["saving_identity_residual"].abs()
-        > tolerance
-    ]
+    invalid = result[result["saving_identity_residual"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -584,10 +493,7 @@ def validate_household_saving_identity(
             ]
         ].to_dict("records")
 
-        raise ValueError(
-            "家計純貯蓄恒等式が許容誤差を超えています: "
-            f"{details}"
-        )
+        raise ValueError(f"家計純貯蓄恒等式が許容誤差を超えています: {details}")
 
 
 def calculate_household_saving_metrics(
@@ -599,9 +505,7 @@ def calculate_household_saving_metrics(
     denominator = result["adjusted_disposable_income"]
 
     if denominator.isna().any():
-        raise ValueError(
-            "調整後可処分所得に欠損値があります。"
-        )
+        raise ValueError("調整後可処分所得に欠損値があります。")
 
     if (denominator <= 0).any():
         invalid_years = result.loc[
@@ -609,31 +513,20 @@ def calculate_household_saving_metrics(
             "fiscal_year",
         ].tolist()
 
-        raise ValueError(
-            "調整後可処分所得は正である必要があります: "
-            f"{invalid_years}"
-        )
+        raise ValueError(f"調整後可処分所得は正である必要があります: {invalid_years}")
 
-    result["calculated_saving_rate"] = (
-        result["net_saving"]
-        / denominator
-        * 100
-    )
+    result["calculated_saving_rate"] = result["net_saving"] / denominator * 100
 
     result["saving_rate_difference"] = (
-        result["calculated_saving_rate"]
-        - result["published_saving_rate"]
+        result["calculated_saving_rate"] - result["published_saving_rate"]
     )
 
     result["consumption_ratio"] = (
-        result["household_final_consumption"]
-        / denominator
-        * 100
+        result["household_final_consumption"] / denominator * 100
     )
 
     result["saving_consumption_ratio_sum"] = (
-        result["calculated_saving_rate"]
-        + result["consumption_ratio"]
+        result["calculated_saving_rate"] + result["consumption_ratio"]
     )
 
     return result
@@ -646,10 +539,7 @@ def validate_published_saving_rate(
     """再計算した家計貯蓄率と公表値を照合する。"""
     result = calculate_household_saving_metrics(df)
 
-    invalid = result[
-        result["saving_rate_difference"].abs()
-        > tolerance
-    ]
+    invalid = result[result["saving_rate_difference"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -662,9 +552,7 @@ def validate_published_saving_rate(
         ].to_dict("records")
 
         raise ValueError(
-            "家計貯蓄率の再計算値と公表値の差が"
-            "許容範囲を超えています: "
-            f"{details}"
+            f"家計貯蓄率の再計算値と公表値の差が許容範囲を超えています: {details}"
         )
 
 
@@ -678,14 +566,11 @@ def calculate_sector_net_lending_ratios(
         *SECTOR_NET_LENDING_AMOUNT_COLUMNS,
     }
 
-    missing_amount = (
-        required_amount_columns - set(amount_df.columns)
-    )
+    missing_amount = required_amount_columns - set(amount_df.columns)
 
     if missing_amount:
         raise ValueError(
-            "制度部門別純貸出金額に必要な列がありません: "
-            f"{sorted(missing_amount)}"
+            f"制度部門別純貸出金額に必要な列がありません: {sorted(missing_amount)}"
         )
 
     required_gdp_columns = {
@@ -693,16 +578,10 @@ def calculate_sector_net_lending_ratios(
         "gross_domestic_product",
     }
 
-    missing_gdp = (
-        required_gdp_columns
-        - set(income_generation_df.columns)
-    )
+    missing_gdp = required_gdp_columns - set(income_generation_df.columns)
 
     if missing_gdp:
-        raise ValueError(
-            "GDPデータに必要な列がありません: "
-            f"{sorted(missing_gdp)}"
-        )
+        raise ValueError(f"GDPデータに必要な列がありません: {sorted(missing_gdp)}")
 
     result = amount_df.merge(
         income_generation_df[
@@ -722,17 +601,13 @@ def calculate_sector_net_lending_ratios(
             "fiscal_year",
         ].tolist()
 
-        raise ValueError(
-            "GDPを結合できない年度があります: "
-            f"{missing_years}"
-        )
+        raise ValueError(f"GDPを結合できない年度があります: {missing_years}")
 
     # 所得発生勘定のGDPは生産・分配側。
     # 純貸出/GDPの公表値は支出側GDPを分母としているため、
     # 統計上の不突合を加えて支出側GDPを再構成する。
     result["expenditure_side_gdp"] = (
-        result["gross_domestic_product"]
-        + result["statistical_discrepancy"]
+        result["gross_domestic_product"] + result["statistical_discrepancy"]
     )
 
     if (result["expenditure_side_gdp"] <= 0).any():
@@ -741,17 +616,10 @@ def calculate_sector_net_lending_ratios(
             "fiscal_year",
         ].tolist()
 
-        raise ValueError(
-            "支出側GDPは正である必要があります: "
-            f"{invalid_years}"
-        )
+        raise ValueError(f"支出側GDPは正である必要があります: {invalid_years}")
 
     for column in SECTOR_NET_LENDING_AMOUNT_COLUMNS:
-        result[column] = (
-            result[column]
-            / result["expenditure_side_gdp"]
-            * 100
-        )
+        result[column] = result[column] / result["expenditure_side_gdp"] * 100
 
     return result
 
@@ -767,9 +635,7 @@ def compare_sector_net_lending_ratios(
         income_generation_df=income_generation_df,
     )
 
-    result = calculated[
-        ["fiscal_year"]
-    ].copy()
+    result = calculated[["fiscal_year"]].copy()
 
     for column in SECTOR_NET_LENDING_AMOUNT_COLUMNS:
         result[f"{column}_calculated"] = calculated[column]
@@ -784,8 +650,7 @@ def compare_sector_net_lending_ratios(
         )
 
         result[f"{column}_difference"] = (
-            result[f"{column}_calculated"]
-            - result[f"{column}_published"]
+            result[f"{column}_calculated"] - result[f"{column}_published"]
         )
 
     return result
@@ -805,17 +670,10 @@ def validate_sector_net_lending_ratios(
     )
 
     difference_columns = [
-        column
-        for column in result.columns
-        if column.endswith("_difference")
+        column for column in result.columns if column.endswith("_difference")
     ]
 
-    max_difference = (
-        result[difference_columns]
-        .abs()
-        .max()
-        .max()
-    )
+    max_difference = result[difference_columns].abs().max().max()
 
     if max_difference > tolerance:
         raise ValueError(
@@ -836,9 +694,9 @@ def add_sector_net_lending_balance_checks(
         + result["statistical_discrepancy"]
     )
 
-    result["financial_account_balance_residual"] = (
-        result[FINANCIAL_NET_LENDING_COLUMNS].sum(axis=1)
-    )
+    result["financial_account_balance_residual"] = result[
+        FINANCIAL_NET_LENDING_COLUMNS
+    ].sum(axis=1)
 
     return result
 
@@ -854,9 +712,7 @@ def validate_sector_net_lending_balances(
         "capital_account_balance_residual",
         "financial_account_balance_residual",
     ]:
-        invalid = result[
-            result[column].abs() > tolerance
-        ]
+        invalid = result[result[column].abs() > tolerance]
 
         if not invalid.empty:
             details = invalid[
@@ -867,9 +723,7 @@ def validate_sector_net_lending_balances(
             ].to_dict("records")
 
             raise ValueError(
-                "制度部門別純貸出の会計整合性が"
-                "許容誤差を超えています: "
-                f"{details}"
+                f"制度部門別純貸出の会計整合性が許容誤差を超えています: {details}"
             )
 
 
@@ -877,33 +731,22 @@ def calculate_capital_financial_discrepancies(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
     """資本勘定側と金融勘定側の純貸出差を算出する。"""
-    result = df[
-        ["fiscal_year"]
-    ].copy()
+    result = df[["fiscal_year"]].copy()
 
     for sector, (
         capital_column,
         financial_column,
     ) in SECTOR_NET_LENDING_PAIRS.items():
-        result[f"{sector}_difference"] = (
-            df[capital_column]
-            - df[financial_column]
-        )
+        result[f"{sector}_difference"] = df[capital_column] - df[financial_column]
 
     result["difference_sum"] = result[
-        [
-            f"{sector}_difference"
-            for sector in SECTOR_NET_LENDING_PAIRS
-        ]
+        [f"{sector}_difference" for sector in SECTOR_NET_LENDING_PAIRS]
     ].sum(axis=1)
 
-    result["statistical_discrepancy"] = (
-        df["statistical_discrepancy"]
-    )
+    result["statistical_discrepancy"] = df["statistical_discrepancy"]
 
     result["discrepancy_reconciliation_residual"] = (
-        result["difference_sum"]
-        + result["statistical_discrepancy"]
+        result["difference_sum"] + result["statistical_discrepancy"]
     )
 
     return result
@@ -916,12 +759,7 @@ def validate_capital_financial_reconciliation(
     """資本・金融勘定差と統計上の不突合の整合性を確認する。"""
     result = calculate_capital_financial_discrepancies(df)
 
-    invalid = result[
-        result[
-            "discrepancy_reconciliation_residual"
-        ].abs()
-        > tolerance
-    ]
+    invalid = result[result["discrepancy_reconciliation_residual"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -934,9 +772,7 @@ def validate_capital_financial_reconciliation(
         ].to_dict("records")
 
         raise ValueError(
-            "資本勘定・金融勘定差と統計上の不突合が"
-            "整合しません: "
-            f"{details}"
+            f"資本勘定・金融勘定差と統計上の不突合が整合しません: {details}"
         )
 
 
@@ -969,9 +805,7 @@ def prepare_sector_net_lending_long(
                 {
                     "fiscal_year": fiscal_year,
                     "sector": sector,
-                    "sector_name": SECTOR_DISPLAY_NAMES[
-                        sector
-                    ],
+                    "sector_name": SECTOR_DISPLAY_NAMES[sector],
                     "capital_net_lending": capital_amount,
                     "financial_net_lending": financial_amount,
                     "capital_net_lending_ratio": (
@@ -986,10 +820,7 @@ def prepare_sector_net_lending_long(
                             financial_column,
                         ]
                     ),
-                    "capital_financial_difference": (
-                        capital_amount
-                        - financial_amount
-                    ),
+                    "capital_financial_difference": (capital_amount - financial_amount),
                 }
             )
 
@@ -1000,10 +831,7 @@ def validate_nonfinancial_capital_account_columns(
     df: pd.DataFrame,
 ) -> None:
     """非金融法人企業の資本勘定分析に必要な列を確認する。"""
-    missing_columns = (
-        NONFINANCIAL_CAPITAL_ACCOUNT_REQUIRED_COLUMNS
-        - set(df.columns)
-    )
+    missing_columns = NONFINANCIAL_CAPITAL_ACCOUNT_REQUIRED_COLUMNS - set(df.columns)
 
     if missing_columns:
         raise ValueError(
@@ -1021,8 +849,7 @@ def add_nonfinancial_capital_account_identity(
     result = df.copy()
 
     result["net_fixed_capital_formation"] = (
-        result["gross_fixed_capital_formation"]
-        - result["consumption_fixed_capital"]
+        result["gross_fixed_capital_formation"] - result["consumption_fixed_capital"]
     )
 
     result["net_capital_formation"] = (
@@ -1032,8 +859,7 @@ def add_nonfinancial_capital_account_identity(
     )
 
     result["net_capital_transfers"] = (
-        result["capital_transfers_received"]
-        - result["capital_transfers_paid"]
+        result["capital_transfers_received"] - result["capital_transfers_paid"]
     )
 
     result["calculated_net_lending"] = (
@@ -1043,8 +869,7 @@ def add_nonfinancial_capital_account_identity(
     )
 
     result["net_lending_identity_residual"] = (
-        result["calculated_net_lending"]
-        - result["net_lending_capital_account"]
+        result["calculated_net_lending"] - result["net_lending_capital_account"]
     )
 
     return result
@@ -1057,10 +882,7 @@ def validate_nonfinancial_capital_account_identity(
     """非金融法人企業の資本勘定恒等式を検証する。"""
     result = add_nonfinancial_capital_account_identity(df)
 
-    invalid = result[
-        result["net_lending_identity_residual"].abs()
-        > tolerance
-    ]
+    invalid = result[result["net_lending_identity_residual"].abs() > tolerance]
 
     if not invalid.empty:
         details = invalid[
@@ -1073,9 +895,7 @@ def validate_nonfinancial_capital_account_identity(
         ].to_dict("records")
 
         raise ValueError(
-            "非金融法人企業の資本勘定恒等式が"
-            "許容誤差を超えています: "
-            f"{details}"
+            f"非金融法人企業の資本勘定恒等式が許容誤差を超えています: {details}"
         )
 
 
@@ -1115,25 +935,25 @@ def calculate_nonfinancial_capital_account_metrics(
         validate="one_to_one",
     )
 
-    if result[
-        [
-            "gross_domestic_product",
-            "statistical_discrepancy",
+    if (
+        result[
+            [
+                "gross_domestic_product",
+                "statistical_discrepancy",
+            ]
         ]
-    ].isna().any().any():
-        raise ValueError(
-            "支出側GDPの計算に必要なデータが欠けています。"
-        )
+        .isna()
+        .any()
+        .any()
+    ):
+        raise ValueError("支出側GDPの計算に必要なデータが欠けています。")
 
     result["expenditure_side_gdp"] = (
-        result["gross_domestic_product"]
-        + result["statistical_discrepancy"]
+        result["gross_domestic_product"] + result["statistical_discrepancy"]
     )
 
     if (result["expenditure_side_gdp"] <= 0).any():
-        raise ValueError(
-            "支出側GDPは正である必要があります。"
-        )
+        raise ValueError("支出側GDPは正である必要があります。")
 
     ratio_columns = [
         "net_saving",
@@ -1147,9 +967,7 @@ def calculate_nonfinancial_capital_account_metrics(
 
     for column in ratio_columns:
         result[f"{column}_ratio"] = (
-            result[column]
-            / result["expenditure_side_gdp"]
-            * 100
+            result[column] / result["expenditure_side_gdp"] * 100
         )
 
     return result
@@ -1173,40 +991,29 @@ def decompose_net_lending_change(
 
     if missing_columns:
         raise ValueError(
-            "純貸出変化分解に必要な列がありません: "
-            f"{sorted(missing_columns)}"
+            f"純貸出変化分解に必要な列がありません: {sorted(missing_columns)}"
         )
 
     indexed = df.set_index("fiscal_year")
 
     missing_years = [
-        year
-        for year in [start_year, end_year]
-        if year not in indexed.index
+        year for year in [start_year, end_year] if year not in indexed.index
     ]
 
     if missing_years:
-        raise ValueError(
-            "比較年度がありません: "
-            f"{missing_years}"
-        )
+        raise ValueError(f"比較年度がありません: {missing_years}")
 
     start = indexed.loc[start_year]
     end = indexed.loc[end_year]
 
-    saving_effect = (
-        end["net_saving_ratio"]
-        - start["net_saving_ratio"]
-    )
+    saving_effect = end["net_saving_ratio"] - start["net_saving_ratio"]
 
     capital_transfer_effect = (
-        end["net_capital_transfers_ratio"]
-        - start["net_capital_transfers_ratio"]
+        end["net_capital_transfers_ratio"] - start["net_capital_transfers_ratio"]
     )
 
     capital_formation_effect = -(
-        end["net_capital_formation_ratio"]
-        - start["net_capital_formation_ratio"]
+        end["net_capital_formation_ratio"] - start["net_capital_formation_ratio"]
     )
 
     actual_change = (
@@ -1215,9 +1022,7 @@ def decompose_net_lending_change(
     )
 
     calculated_change = (
-        saving_effect
-        + capital_transfer_effect
-        + capital_formation_effect
+        saving_effect + capital_transfer_effect + capital_formation_effect
     )
 
     return pd.DataFrame(
@@ -1236,9 +1041,7 @@ def decompose_net_lending_change(
             "end_year": end_year,
             "actual_change_pt": actual_change,
             "calculated_change_pt": calculated_change,
-            "decomposition_residual": (
-                calculated_change - actual_change
-            ),
+            "decomposition_residual": (calculated_change - actual_change),
         }
     )
 
@@ -1267,18 +1070,14 @@ def validate_nonfinancial_net_lending_crosscheck(
     )
 
     if comparison.isna().any().any():
-        raise ValueError(
-            "非金融法人企業の純貸出照合に必要な年度が一致しません。"
-        )
+        raise ValueError("非金融法人企業の純貸出照合に必要な年度が一致しません。")
 
     comparison["difference"] = (
         comparison["net_lending_capital_account"]
         - comparison["capital_nonfinancial_corporations"]
     )
 
-    invalid = comparison[
-        comparison["difference"].abs() > tolerance
-    ]
+    invalid = comparison[comparison["difference"].abs() > tolerance]
 
     if not invalid.empty:
         raise ValueError(

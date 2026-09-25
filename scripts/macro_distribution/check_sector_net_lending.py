@@ -109,17 +109,10 @@ def main() -> None:
     )
 
     difference_columns = [
-        column
-        for column in ratio_comparison.columns
-        if column.endswith("_difference")
+        column for column in ratio_comparison.columns if column.endswith("_difference")
     ]
 
-    max_ratio_difference = (
-        ratio_comparison[difference_columns]
-        .abs()
-        .max()
-        .max()
-    )
+    max_ratio_difference = ratio_comparison[difference_columns].abs().max().max()
 
     print()
     print("=== 金額から再計算したGDP比と公表値の照合 ===")
@@ -134,9 +127,7 @@ def main() -> None:
     # 資本勘定側と金融勘定側の差を統計上の不突合と照合
     validate_capital_financial_reconciliation(amount)
 
-    discrepancies = calculate_capital_financial_discrepancies(
-        amount
-    )
+    discrepancies = calculate_capital_financial_discrepancies(amount)
 
     print()
     print("=== 資本勘定・金融勘定の差 ===")
@@ -155,9 +146,7 @@ def main() -> None:
     ]
 
     print(
-        discrepancies[
-            discrepancy_columns
-        ].to_string(
+        discrepancies[discrepancy_columns].to_string(
             index=False,
             float_format=lambda x: f"{x:,.1f}",
         )
@@ -166,11 +155,7 @@ def main() -> None:
     print()
     print(
         "最大資本・金融勘定照合残差:",
-        discrepancies[
-            "discrepancy_reconciliation_residual"
-        ]
-        .abs()
-        .max(),
+        discrepancies["discrepancy_reconciliation_residual"].abs().max(),
     )
 
     # 分析・可視化用long形式
@@ -182,14 +167,10 @@ def main() -> None:
     print()
     print("=== 制度部門別純貸出：long形式（直近3年度） ===")
 
-    recent_years = sorted(
-        long_df["fiscal_year"].unique()
-    )[-3:]
+    recent_years = sorted(long_df["fiscal_year"].unique())[-3:]
 
     print(
-        long_df[
-            long_df["fiscal_year"].isin(recent_years)
-        ].to_string(
+        long_df[long_df["fiscal_year"].isin(recent_years)].to_string(
             index=False,
             float_format=lambda x: f"{x:,.4f}",
         )

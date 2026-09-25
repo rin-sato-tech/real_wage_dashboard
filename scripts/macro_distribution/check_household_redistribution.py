@@ -66,11 +66,7 @@ def main() -> None:
     print()
     print(
         "最大恒等式残差:",
-        result[
-            "disposable_income_identity_residual"
-        ]
-        .abs()
-        .max(),
+        result["disposable_income_identity_residual"].abs().max(),
     )
 
     print(

@@ -26,20 +26,12 @@ SECRETS_PATH = ROOT_DIR / ".streamlit" / "secrets.toml"
 TABLES = {
     "所得の発生勘定": SNA_INCOME_GENERATION_STATS_DATA_ID,
     "家計・第1次所得の配分勘定": SNA_HOUSEHOLD_PRIMARY_INCOME_STATS_DATA_ID,
-    "家計・所得の第2次分配勘定": (
-        SNA_HOUSEHOLD_SECONDARY_DISTRIBUTION_STATS_DATA_ID
-    ),
+    "家計・所得の第2次分配勘定": (SNA_HOUSEHOLD_SECONDARY_DISTRIBUTION_STATS_DATA_ID),
     "家計・可処分所得の使用勘定": SNA_HOUSEHOLD_USE_INCOME_STATS_DATA_ID,
     "非金融法人企業・資本勘定": SNA_NONFINANCIAL_CAPITAL_ACCOUNT_STATS_DATA_ID,
-    "非金融法人企業・金融勘定": (
-        SNA_NONFINANCIAL_FINANCIAL_ACCOUNT_STATS_DATA_ID
-    ),
-    "制度部門別純貸出・純借入（金額）": (
-        SNA_SECTOR_NET_LENDING_AMOUNT_STATS_DATA_ID
-    ),
-    "制度部門別純貸出・純借入（GDP比）": (
-        SNA_SECTOR_NET_LENDING_RATIO_STATS_DATA_ID
-    ),
+    "非金融法人企業・金融勘定": (SNA_NONFINANCIAL_FINANCIAL_ACCOUNT_STATS_DATA_ID),
+    "制度部門別純貸出・純借入（金額）": (SNA_SECTOR_NET_LENDING_AMOUNT_STATS_DATA_ID),
+    "制度部門別純貸出・純借入（GDP比）": (SNA_SECTOR_NET_LENDING_RATIO_STATS_DATA_ID),
 }
 
 
@@ -52,8 +44,7 @@ def load_estat_app_id() -> str:
 
     if not SECRETS_PATH.exists():
         raise FileNotFoundError(
-            "ESTAT_APP_IDが環境変数にも"
-            ".streamlit/secrets.tomlにも設定されていません。"
+            "ESTAT_APP_IDが環境変数にも.streamlit/secrets.tomlにも設定されていません。"
         )
 
     with SECRETS_PATH.open("rb") as file:
@@ -62,9 +53,7 @@ def load_estat_app_id() -> str:
     try:
         return str(secrets["ESTAT_APP_ID"])
     except KeyError as exc:
-        raise KeyError(
-            ".streamlit/secrets.tomlにESTAT_APP_IDがありません。"
-        ) from exc
+        raise KeyError(".streamlit/secrets.tomlにESTAT_APP_IDがありません。") from exc
 
 
 def print_class_object(class_obj: dict[str, Any]) -> None:

@@ -70,10 +70,9 @@ def main() -> None:
     print()
     print(
         "最大恒等式残差:",
-        result["gdp_identity_residual"]
-        .abs()
-        .max(),
+        result["gdp_identity_residual"].abs().max(),
     )
+
 
 if __name__ == "__main__":
     main()

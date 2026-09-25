@@ -92,32 +92,22 @@ def test_calculate_income_generation_shares() -> None:
     assert result.loc[
         0,
         "employee_compensation_share",
-    ] == pytest.approx(
-        314065.9 / 635981.5 * 100
-    )
+    ] == pytest.approx(314065.9 / 635981.5 * 100)
 
     assert result.loc[
         0,
         "gross_operating_surplus_share",
-    ] == pytest.approx(
-        259437.5 / 635981.5 * 100
-    )
+    ] == pytest.approx(259437.5 / 635981.5 * 100)
 
     assert result.loc[
         0,
         "gross_mixed_income_share",
-    ] == pytest.approx(
-        13463.0 / 635981.5 * 100
-    )
+    ] == pytest.approx(13463.0 / 635981.5 * 100)
 
     assert result.loc[
         0,
         "net_production_tax_share",
-    ] == pytest.approx(
-        (56081.9 - 7066.7)
-        / 635981.5
-        * 100
-    )
+    ] == pytest.approx((56081.9 - 7066.7) / 635981.5 * 100)
 
     assert result.loc[
         0,
@@ -144,9 +134,7 @@ def test_calculate_income_generation_shares_rejects_nonpositive_gdp() -> None:
 
 
 def test_income_generation_requires_columns() -> None:
-    df = make_income_generation_df().drop(
-        columns="gross_mixed_income"
-    )
+    df = make_income_generation_df().drop(columns="gross_mixed_income")
 
     with pytest.raises(
         ValueError,
@@ -237,9 +225,7 @@ def test_calculate_household_primary_income_components() -> None:
 
 
 def test_household_primary_income_requires_columns() -> None:
-    df = make_household_primary_income_df().drop(
-        columns="property_income_paid"
-    )
+    df = make_household_primary_income_df().drop(columns="property_income_paid")
 
     with pytest.raises(
         ValueError,
@@ -428,16 +414,12 @@ def test_calculate_household_saving_metrics() -> None:
     assert result.loc[
         0,
         "saving_rate_difference",
-    ] == pytest.approx(
-        expected_rate - 10.8
-    )
+    ] == pytest.approx(expected_rate - 10.8)
 
     assert result.loc[
         0,
         "consumption_ratio",
-    ] == pytest.approx(
-        330.0 / 370.0 * 100
-    )
+    ] == pytest.approx(330.0 / 370.0 * 100)
 
     assert result.loc[
         0,
@@ -446,9 +428,7 @@ def test_calculate_household_saving_metrics() -> None:
 
 
 def test_household_use_income_requires_columns() -> None:
-    df = make_household_use_income_df().drop(
-        columns="pension_entitlement_adjustment"
-    )
+    df = make_household_use_income_df().drop(columns="pension_entitlement_adjustment")
 
     with pytest.raises(
         ValueError,
@@ -495,18 +475,11 @@ def test_prepare_sector_net_lending_long() -> None:
 
     assert len(result) == 6
 
-    row = result[
-        result["sector"]
-        == "nonfinancial_corporations"
-    ].iloc[0]
+    row = result[result["sector"] == "nonfinancial_corporations"].iloc[0]
 
-    assert row["capital_net_lending"] == pytest.approx(
-        10.0
-    )
+    assert row["capital_net_lending"] == pytest.approx(10.0)
 
-    assert row[
-        "capital_financial_difference"
-    ] == pytest.approx(2.0)
+    assert row["capital_financial_difference"] == pytest.approx(2.0)
 
 
 def test_calculate_sector_net_lending_ratios_uses_expenditure_side_gdp() -> None:
@@ -549,9 +522,7 @@ def test_calculate_sector_net_lending_ratios_uses_expenditure_side_gdp() -> None
     assert result.loc[
         0,
         "capital_nonfinancial_corporations",
-    ] == pytest.approx(
-        22.0 / 1010.0 * 100
-    )
+    ] == pytest.approx(22.0 / 1010.0 * 100)
 
 
 def make_nonfinancial_capital_account_df() -> pd.DataFrame:
@@ -618,14 +589,8 @@ def test_decompose_net_lending_change() -> None:
         end_year=2024,
     )
 
-    assert result["contribution_pt"].sum() == pytest.approx(
-        -3.8
-    )
+    assert result["contribution_pt"].sum() == pytest.approx(-3.8)
 
-    assert result["actual_change_pt"].iloc[0] == pytest.approx(
-        -3.8
-    )
+    assert result["actual_change_pt"].iloc[0] == pytest.approx(-3.8)
 
-    assert result["decomposition_residual"].iloc[0] == pytest.approx(
-        0.0
-    )
+    assert result["decomposition_residual"].iloc[0] == pytest.approx(0.0)

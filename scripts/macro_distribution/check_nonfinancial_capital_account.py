@@ -58,9 +58,7 @@ def main() -> None:
     # 1. 非金融法人企業の資本勘定恒等式
     # --------------------------------------------------
 
-    validate_nonfinancial_capital_account_identity(
-        capital_account
-    )
+    validate_nonfinancial_capital_account_identity(capital_account)
 
     # 個別資本勘定の純貸出と、
     # 制度部門別純貸出表の非金融法人企業を照合する。
@@ -109,11 +107,7 @@ def main() -> None:
     print()
     print(
         "最大恒等式残差:",
-        result[
-            "net_lending_identity_residual"
-        ]
-        .abs()
-        .max(),
+        result["net_lending_identity_residual"].abs().max(),
     )
 
     # --------------------------------------------------
@@ -138,9 +132,7 @@ def main() -> None:
         )
 
         print()
-        print(
-            f"--- {start_year} → {end_year} ---"
-        )
+        print(f"--- {start_year} → {end_year} ---")
 
         print(
             decomposition.to_string(

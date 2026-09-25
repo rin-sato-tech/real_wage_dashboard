@@ -64,16 +64,12 @@ def main() -> None:
     print()
     print(
         "最大恒等式残差:",
-        result["saving_identity_residual"]
-        .abs()
-        .max(),
+        result["saving_identity_residual"].abs().max(),
     )
 
     print(
         "最大貯蓄率差:",
-        result["saving_rate_difference"]
-        .abs()
-        .max(),
+        result["saving_rate_difference"].abs().max(),
     )
 
     print(
