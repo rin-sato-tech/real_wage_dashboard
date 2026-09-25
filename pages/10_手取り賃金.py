@@ -8,6 +8,12 @@ from real_wage_dashboard.take_home_export import (
     create_japanese_tableau_export,
     create_take_home_tableau_export,
 )
+from real_wage_dashboard.take_home_scenario import (
+    calculate_take_home_scenario,
+)
+from real_wage_dashboard.take_home_service import (
+    load_take_home_rule_tables,
+)
 
 SNAPSHOT_PATH = Path("data/snapshots/take_home_main_series.csv")
 
@@ -102,6 +108,59 @@ def calculate_change_pct(
         raise ValueError("変化率の開始値は0以外である必要があります。")
 
     return (end_value / start_value - 1) * 100
+
+
+@st.cache_resource
+def load_rule_tables():
+    """税・社会保険制度表を読み込む。"""
+
+    return load_take_home_rule_tables()
+
+
+def create_reference_wage_df(
+    main_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """主系列からシナリオ計算用の年平均賃金を再構成する。"""
+
+    required_columns = {
+        "year",
+        "monthly_total_cash_earnings_yen",
+        "monthly_regular_earnings_yen",
+        "monthly_special_earnings_yen",
+    }
+
+    missing = (
+        required_columns
+        - set(main_df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            "シナリオ計算に必要な賃金列がありません: "
+            f"{sorted(missing)}"
+        )
+
+    return (
+        main_df[
+            [
+                "year",
+                "monthly_total_cash_earnings_yen",
+                "monthly_regular_earnings_yen",
+                "monthly_special_earnings_yen",
+            ]
+        ]
+        .rename(
+            columns={
+                "monthly_total_cash_earnings_yen":
+                    "total_cash_earnings",
+                "monthly_regular_earnings_yen":
+                    "regular_earnings",
+                "monthly_special_earnings_yen":
+                    "special_earnings",
+            }
+        )
+        .copy()
+    )
 
 
 def create_index_chart(
@@ -680,6 +739,117 @@ def create_fixed_policy_chart(
     )
 
 
+def create_scenario_allocation_chart(
+    scenario: pd.Series,
+) -> alt.Chart:
+    """指定シナリオの額面100円あたり配分を表示する。"""
+
+    gross = float(
+        scenario["gross_salary_yen"]
+    )
+
+    components = {
+        "手取り":
+            float(
+                scenario[
+                    "nominal_take_home_yen"
+                ]
+            ),
+        "所得税":
+            float(
+                scenario[
+                    "income_tax_yen"
+                ]
+            ),
+        "住民税":
+            float(
+                scenario[
+                    "resident_tax_yen"
+                ]
+            ),
+        "厚生年金":
+            float(
+                scenario[
+                    "pension_yen"
+                ]
+            ),
+        "健康保険":
+            float(
+                scenario[
+                    "health_insurance_yen"
+                ]
+            ),
+        "介護保険":
+            float(
+                scenario[
+                    "long_term_care_yen"
+                ]
+            ),
+        "雇用保険":
+            float(
+                scenario[
+                    "employment_insurance_yen"
+                ]
+            ),
+    }
+
+    chart_df = pd.DataFrame(
+        {
+            "component":
+                list(
+                    components.keys()
+                ),
+            "yen_per_100": [
+                value
+                / gross
+                * 100
+                for value
+                in components.values()
+            ],
+            "group": [
+                "配分"
+            ] * len(
+                components
+            ),
+        }
+    )
+
+    return (
+        alt.Chart(chart_df)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "yen_per_100:Q",
+                title="額面100円あたり（円）",
+                stack="zero",
+            ),
+            y=alt.Y(
+                "group:N",
+                title=None,
+                axis=None,
+            ),
+            color=alt.Color(
+                "component:N",
+                title="配分",
+            ),
+            tooltip=[
+                alt.Tooltip(
+                    "component:N",
+                    title="項目",
+                ),
+                alt.Tooltip(
+                    "yen_per_100:Q",
+                    title="100円あたり",
+                    format=".2f",
+                ),
+            ],
+        )
+        .properties(
+            height=100,
+        )
+    )
+
+
 # ============================================
 # データ読み込み
 # ============================================
@@ -723,6 +893,24 @@ except FileNotFoundError as exc:
     st.stop()
 
 
+try:
+    reference_wage_df = (
+        create_reference_wage_df(
+            main_df
+        )
+    )
+
+    rule_tables = (
+        load_rule_tables()
+    )
+
+except ValueError as exc:
+    st.error(
+        str(exc)
+    )
+    st.stop()
+
+
 # ============================================
 # ヘッダー
 # ============================================
@@ -738,6 +926,234 @@ st.info(
     "日本の労働者の平均的な実手取り額を"
     "直接推計したものではありません。"
 )
+
+
+# ============================================
+# 手取りシミュレーター
+# ============================================
+
+st.header(
+    "手取りシミュレーター"
+)
+
+st.caption(
+    "対象年・年齢・年収を変更して、"
+    "その条件での税・社会保険料と"
+    "名目手取りを試算できます。"
+)
+
+sim_col1, sim_col2, sim_col3 = (
+    st.columns(3)
+)
+
+with sim_col1:
+    scenario_year = st.selectbox(
+        "対象年",
+        options=list(
+            range(
+                START_YEAR,
+                END_YEAR + 1,
+            )
+        ),
+        index=(
+            END_YEAR
+            - START_YEAR
+        ),
+    )
+
+with sim_col2:
+    scenario_age = st.slider(
+        "年齢",
+        min_value=20,
+        max_value=64,
+        value=35,
+        step=1,
+    )
+
+with sim_col3:
+    scenario_salary_man = (
+        st.number_input(
+            "年収（万円）",
+            min_value=200,
+            max_value=1_500,
+            value=500,
+            step=10,
+        )
+    )
+
+scenario_salary_yen = (
+    float(
+        scenario_salary_man
+    )
+    * 10_000
+)
+
+try:
+    scenario = (
+        calculate_take_home_scenario(
+            reference_wage_df=(
+                reference_wage_df
+            ),
+            rule_tables=rule_tables,
+            year=int(
+                scenario_year
+            ),
+            annual_salary_yen=(
+                scenario_salary_yen
+            ),
+            age=int(
+                scenario_age
+            ),
+            sex="male",
+        )
+    )
+
+except ValueError as exc:
+    st.error(
+        str(exc)
+    )
+    st.stop()
+
+result_col1, result_col2, result_col3, result_col4 = (
+    st.columns(4)
+)
+
+with result_col1:
+    st.metric(
+        "額面年収",
+        (
+            f"{scenario['gross_salary_yen'] / 10_000:,.1f}"
+            "万円"
+        ),
+    )
+
+with result_col2:
+    st.metric(
+        "名目手取り",
+        (
+            f"{scenario['nominal_take_home_yen'] / 10_000:,.1f}"
+            "万円"
+        ),
+    )
+
+with result_col3:
+    st.metric(
+        "実効負担率",
+        (
+            f"{scenario['effective_burden_rate'] * 100:.2f}%"
+        ),
+    )
+
+with result_col4:
+    st.metric(
+        "手取り率",
+        (
+            f"{scenario['take_home_rate'] * 100:.2f}%"
+        ),
+    )
+
+st.altair_chart(
+    create_scenario_allocation_chart(
+        scenario
+    ),
+    width="stretch",
+)
+
+with st.expander(
+    "税・社会保険料の内訳を見る"
+):
+    scenario_detail = pd.DataFrame(
+        {
+            "項目": [
+                "所得税",
+                "住民税",
+                "厚生年金",
+                "健康保険",
+                "介護保険",
+                "雇用保険",
+                "控除総額",
+                "名目手取り",
+            ],
+            "年間金額（円）": [
+                scenario[
+                    "income_tax_yen"
+                ],
+                scenario[
+                    "resident_tax_yen"
+                ],
+                scenario[
+                    "pension_yen"
+                ],
+                scenario[
+                    "health_insurance_yen"
+                ],
+                scenario[
+                    "long_term_care_yen"
+                ],
+                scenario[
+                    "employment_insurance_yen"
+                ],
+                scenario[
+                    "total_deductions_yen"
+                ],
+                scenario[
+                    "nominal_take_home_yen"
+                ],
+            ],
+        }
+    )
+
+    st.dataframe(
+        scenario_detail,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "年間金額（円）":
+                st.column_config.NumberColumn(
+                    format="%,.0f",
+                ),
+        },
+    )
+
+monthly_regular = float(
+    scenario[
+        "monthly_regular_earnings_yen"
+    ]
+)
+
+annual_bonus = (
+    float(
+        scenario[
+            "monthly_special_earnings_yen"
+        ]
+    )
+    * 12
+)
+
+st.caption(
+    f"{scenario_year}年の毎月勤労統計における"
+    "月例賃金・特別給与の構成比を維持して試算。"
+    f"設定上の月例賃金は約"
+    f"{monthly_regular / 10_000:,.1f}万円/月、"
+    f"年間賞与相当額は約"
+    f"{annual_bonus / 10_000:,.1f}万円です。"
+)
+
+if 40 <= scenario_age <= 64:
+    st.caption(
+        "40～64歳のため、"
+        "介護保険第2号被保険者として"
+        "介護保険料を含めています。"
+    )
+
+st.warning(
+    "このシミュレーターは単身・扶養なし・給与所得のみ等の"
+    "標準化した条件による概算です。"
+    "実際の手取り額は勤務先、加入する健康保険、"
+    "各種控除、自治体等によって異なります。"
+)
+
+st.divider()
 
 
 # ============================================
