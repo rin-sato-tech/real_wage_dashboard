@@ -1,0 +1,16 @@
+effective_from,effective_to,business_type,employee_rate,source_key,notes
+1988-04-01,1992-03-31,general,0.0055,mhlw_employment_insurance_history,
+1992-04-01,1993-03-31,general,0.0045,mhlw_employment_insurance_history,
+1993-04-01,2001-03-31,general,0.0040,mhlw_employment_insurance_history,
+2001-04-01,2002-09-30,general,0.0060,mhlw_employment_insurance_history,
+2002-10-01,2005-03-31,general,0.0070,mhlw_2002_rate_change,2002年10月に年度途中改定
+2005-04-01,2007-03-31,general,0.0080,mhlw_2005_rate_change,
+2007-04-01,2009-03-31,general,0.0060,mhlw_2007_rate_change,
+2009-04-01,2010-03-31,general,0.0040,mhlw_2009_rate_change,
+2010-04-01,2012-03-31,general,0.0060,mhlw_2010_rate_change,
+2012-04-01,2016-03-31,general,0.0050,mhlw_2012_rate_change,
+2016-04-01,2017-03-31,general,0.0040,mhlw_2016_rate_change,
+2017-04-01,2022-09-30,general,0.0030,mhlw_2017_rate_change,
+2022-10-01,2023-03-31,general,0.0050,mhlw_2022_rate_change,2022年10月に年度途中改定
+2023-04-01,2025-03-31,general,0.0060,mhlw_2023_rate_change,
+2025-04-01,,general,0.0055,mhlw_2025_rate_change,

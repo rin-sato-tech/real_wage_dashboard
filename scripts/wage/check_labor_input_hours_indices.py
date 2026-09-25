@@ -7,15 +7,9 @@ END_YEAR = 2025
 SHEET_NAME = "TL"
 
 INDEX_FILES = {
-    "総実労働時間": Path(
-        "data/raw/labor_input/total_hours_index_5plus.xls"
-    ),
-    "所定内労働時間": Path(
-        "data/raw/labor_input/scheduled_hours_index_5plus.xls"
-    ),
-    "所定外労働時間": Path(
-        "data/raw/labor_input/overtime_hours_index_5plus.xls"
-    ),
+    "総実労働時間": Path("data/raw/labor_input/total_hours_index_5plus.xls"),
+    "所定内労働時間": Path("data/raw/labor_input/scheduled_hours_index_5plus.xls"),
+    "所定外労働時間": Path("data/raw/labor_input/overtime_hours_index_5plus.xls"),
 }
 
 
@@ -75,9 +69,7 @@ def main() -> None:
     for indicator, path in INDEX_FILES.items():
         start_index, end_index = load_annual_index(path)
 
-        change_pct = (
-            end_index / start_index - 1
-        ) * 100
+        change_pct = (end_index / start_index - 1) * 100
 
         records.append(
             {

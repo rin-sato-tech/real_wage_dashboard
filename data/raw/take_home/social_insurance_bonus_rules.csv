@@ -1,0 +1,7 @@
+scheme,effective_from,effective_to,cap_type,cap_yen,rounding_unit_yen,source_key,notes
+health,1990-01-01,2003-03-31,none,,100,mhlw_special_health_bonus,賞与特別保険料
+health,2003-04-01,2007-03-31,per_payment,2000000,1000,mhlw_total_remuneration_2003,総報酬制・1回200万円上限
+health,2007-04-01,2016-03-31,fiscal_year,5400000,1000,mhlw_health_bonus_cap_2007,年度累計540万円
+health,2016-04-01,,fiscal_year,5730000,1000,mhlw_health_bonus_cap_2016,年度累計573万円
+pension,1995-04-01,2003-03-31,none,,100,mhlw_1995_special_premium,賞与特別保険料
+pension,2003-04-01,,per_month,1500000,1000,jps_standard_bonus,総報酬制による標準賞与額

@@ -1,0 +1,9 @@
+policy_id,assessment_year_from,assessment_year_to,operation,base,rate,fixed_taxpayer_yen,fixed_dependent_yen,cap_yen,total_income_limit_yen,policy_class,source_key,notes
+special_reduction_1994,1994,1994,subtract_rate,income_levy,0.20,,,200000,,temporary,local_tax_history,所得割20%・上限20万円
+special_reduction_1995_1996,1995,1996,subtract_rate,income_levy,0.15,,,20000,,temporary,local_tax_history,所得割15%・上限2万円
+special_reduction_1998,1998,1998,subtract_fixed,income_levy,,17000,8500,,,temporary,local_tax_1998_reduction,本人1.7万円・扶養等1人0.85万円
+proportional_reduction_1999_2005,1999,2005,subtract_rate,income_levy,0.15,,,40000,,multi_year_general,local_tax_1999_reform,所得割15%・上限4万円
+proportional_reduction_2006,2006,2006,subtract_rate,income_levy,0.075,,,20000,,multi_year_general,local_tax_2005_reform,所得割7.5%・上限2万円
+adjustment_credit_2007_2020,2007,2020,adjustment_credit,human_deduction_difference,,,,,,structural,local_tax_2007_reform,税源移譲に伴う調整控除
+adjustment_credit_2021,2021,,adjustment_credit,human_deduction_difference,,,,,25000000,structural,local_tax_2007_reform,税源移譲に伴う調整控除・合計所得2500万円以下
+fixed_reduction_2024,2024,2024,subtract_fixed,income_levy,,10000,10000,,18050000,temporary,local_tax_2024_fixed_reduction,本人1万円・対象配偶者等1人につき1万円

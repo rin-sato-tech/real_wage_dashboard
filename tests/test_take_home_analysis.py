@@ -1,0 +1,6532 @@
+import math
+
+import pandas as pd
+import pytest
+
+from real_wage_dashboard.take_home_analysis import (
+    _create_employment_insurance_wage_payments,
+    _floor_to_thousand_yen,
+    _get_fiscal_year,
+    _is_long_term_care_second_insured,
+    _select_assessment_year_rules,
+    _select_effective_rules,
+    _select_pension_rate_rule,
+    _select_single_assessment_year_rule,
+    _select_single_effective_rule,
+    add_deduction_component_changes,
+    add_deduction_component_rates,
+    add_real_take_home_metrics,
+    calculate_annual_employment_insurance,
+    calculate_annual_health_bonus_contribution,
+    calculate_annual_health_insurance_contribution,
+    calculate_annual_long_term_care_bonus_contribution,
+    calculate_annual_long_term_care_contribution,
+    calculate_annual_pension_bonus_contribution,
+    calculate_annual_pension_contribution,
+    calculate_annual_regular_health_insurance_contribution,
+    calculate_annual_regular_long_term_care_contribution,
+    calculate_annual_regular_pension_contribution,
+    calculate_annual_social_insurance,
+    calculate_base_income_tax,
+    calculate_base_resident_income_levy,
+    calculate_basic_deduction,
+    calculate_employment_insurance,
+    calculate_fixed_policy_take_home_time_series,
+    calculate_health_bonus_contribution,
+    calculate_income_tax_after_adjustments,
+    calculate_long_term_care_bonus_contribution,
+    calculate_monthly_health_insurance_contribution,
+    calculate_monthly_long_term_care_contribution,
+    calculate_monthly_pension_contribution,
+    calculate_pension_bonus_base,
+    calculate_pension_bonus_contribution,
+    calculate_reconstruction_special_income_tax,
+    calculate_resident_adjustment_credit,
+    calculate_resident_basic_deduction,
+    calculate_resident_income_levy_after_adjustments,
+    calculate_resident_per_capita_tax,
+    calculate_resident_taxable_income,
+    calculate_salary_income,
+    calculate_salary_income_deduction,
+    calculate_standard_monthly_remuneration,
+    calculate_standard_worker_income_tax,
+    calculate_standard_worker_income_tax_with_policy_years,
+    calculate_standard_worker_resident_tax,
+    calculate_standard_worker_take_home,
+    calculate_take_home_time_series,
+    calculate_take_home_under_policy_year,
+    calculate_take_home_under_policy_years,
+    calculate_taxable_income,
+    calculate_total_income_tax,
+    calculate_total_resident_tax,
+    create_burden_policy_shapley_decomposition,
+    create_burden_three_factor_shapley_decomposition,
+    create_constant_monthly_remuneration,
+    create_deduction_burden_change_summary,
+    create_hundred_yen_allocation,
+    create_real_take_home_four_factor_shapley_decomposition,
+    create_semiannual_bonus_payments,
+    create_take_home_period_log_decomposition,
+)
+from real_wage_dashboard.take_home_service import (
+    load_take_home_rule_tables,
+)
+
+
+def test_select_effective_rules():
+    df = pd.DataFrame(
+        {
+            "effective_from": [
+                "2000-01-01",
+                "2010-01-01",
+            ],
+            "effective_to": [
+                "2009-12-31",
+                None,
+            ],
+            "rate": [
+                0.10,
+                0.20,
+            ],
+        }
+    )
+
+    result = _select_effective_rules(
+        df,
+        "2015-01-01",
+    )
+
+    assert len(result) == 1
+    assert result.loc[0, "rate"] == 0.20
+
+
+def test_select_effective_rules_includes_boundary_dates():
+    df = pd.DataFrame(
+        {
+            "effective_from": ["2000-01-01"],
+            "effective_to": ["2009-12-31"],
+            "rate": [0.10],
+        }
+    )
+
+    start = _select_effective_rules(
+        df,
+        "2000-01-01",
+    )
+
+    end = _select_effective_rules(
+        df,
+        "2009-12-31",
+    )
+
+    assert len(start) == 1
+    assert len(end) == 1
+
+
+def test_select_effective_rules_accepts_open_ended_rule():
+    df = pd.DataFrame(
+        {
+            "effective_from": ["2017-09-01"],
+            "effective_to": [None],
+            "rate": [0.183],
+        }
+    )
+
+    result = _select_effective_rules(
+        df,
+        "2025-01-01",
+    )
+
+    assert len(result) == 1
+    assert result.loc[0, "rate"] == 0.183
+
+
+def test_select_effective_rules_rejects_invalid_start_date():
+    df = pd.DataFrame(
+        {
+            "effective_from": ["invalid"],
+            "effective_to": [None],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="effective_from に不正な日付があります",
+    ):
+        _select_effective_rules(
+            df,
+            "2025-01-01",
+        )
+
+
+def test_select_assessment_year_rules():
+    df = pd.DataFrame(
+        {
+            "assessment_year_from": [
+                1999,
+                2007,
+            ],
+            "assessment_year_to": [
+                2006,
+                None,
+            ],
+            "rate": [
+                0.13,
+                0.10,
+            ],
+        }
+    )
+
+    result = _select_assessment_year_rules(
+        df,
+        assessment_year=2025,
+    )
+
+    assert len(result) == 1
+    assert result.loc[0, "rate"] == 0.10
+
+
+def test_select_assessment_year_rules_includes_boundaries():
+    df = pd.DataFrame(
+        {
+            "assessment_year_from": [1999],
+            "assessment_year_to": [2006],
+            "rate": [0.13],
+        }
+    )
+
+    start = _select_assessment_year_rules(
+        df,
+        assessment_year=1999,
+    )
+
+    end = _select_assessment_year_rules(
+        df,
+        assessment_year=2006,
+    )
+
+    assert len(start) == 1
+    assert len(end) == 1
+
+
+def test_select_single_effective_rule_with_filter():
+    df = pd.DataFrame(
+        {
+            "effective_from": [
+                "2017-09-01",
+                "2017-09-01",
+            ],
+            "effective_to": [
+                None,
+                None,
+            ],
+            "insured_category": [
+                "general",
+                "other",
+            ],
+            "rate": [
+                0.183,
+                0.15,
+            ],
+        }
+    )
+
+    result = _select_single_effective_rule(
+        df,
+        target_date="2025-01-01",
+        filters={
+            "insured_category": "general",
+        },
+    )
+
+    assert result["rate"] == 0.183
+
+
+def test_select_single_effective_rule_rejects_multiple_rows():
+    df = pd.DataFrame(
+        {
+            "effective_from": [
+                "2017-09-01",
+                "2017-09-01",
+            ],
+            "effective_to": [
+                None,
+                None,
+            ],
+            "rate": [
+                0.183,
+                0.184,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="制度ルールを一意に取得できません",
+    ):
+        _select_single_effective_rule(
+            df,
+            target_date="2025-01-01",
+        )
+
+
+def test_select_single_assessment_year_rule_with_filter():
+    df = pd.DataFrame(
+        {
+            "assessment_year_from": [
+                2024,
+                2024,
+            ],
+            "assessment_year_to": [
+                None,
+                None,
+            ],
+            "municipality_band": [
+                "standard",
+                "other",
+            ],
+            "municipal_yen": [
+                3000,
+                4000,
+            ],
+        }
+    )
+
+    result = _select_single_assessment_year_rule(
+        df,
+        assessment_year=2025,
+        filters={
+            "municipality_band": "standard",
+        },
+    )
+
+    assert result["municipal_yen"] == 3000
+
+
+def _create_salary_income_deduction_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "deduction_type": [
+                "salary_income",
+                "salary_income",
+                "salary_income",
+                "salary_income",
+                "salary_income",
+                "salary_income",
+            ],
+            "effective_from": [
+                "2017-01-01",
+                "2017-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2025-01-01",
+                "2025-01-01",
+            ],
+            "effective_to": [
+                "2019-12-31",
+                "2019-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                None,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                4,
+                1,
+                4,
+                1,
+                3,
+            ],
+            "basis": [
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+                "gross_salary",
+            ],
+            "lower_bound_yen": [
+                0,
+                3_600_001,
+                0,
+                3_600_001,
+                0,
+                3_600_001,
+            ],
+            "upper_bound_yen": [
+                1_625_000,
+                6_600_000,
+                1_625_000,
+                6_600_000,
+                1_900_000,
+                6_600_000,
+            ],
+            "rate": [
+                None,
+                0.20,
+                None,
+                0.20,
+                None,
+                0.20,
+            ],
+            "add_yen": [
+                None,
+                540_000,
+                None,
+                440_000,
+                None,
+                440_000,
+            ],
+            "fixed_yen": [
+                650_000,
+                None,
+                550_000,
+                None,
+                650_000,
+                None,
+            ],
+            "source_key": ["test"] * 6,
+        }
+    )
+
+
+def test_calculate_salary_income_deduction_fixed_amount():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=1_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 550_000
+
+
+def test_calculate_salary_income_deduction_does_not_exceed_salary():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=300_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 300_000
+
+
+def test_calculate_salary_income_deduction_2019():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=4_000_000,
+        target_date="2019-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 1_340_000
+
+
+def test_calculate_salary_income_deduction_2020():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=4_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 1_240_000
+
+
+def test_calculate_salary_income_deduction_2025():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income_deduction(
+        gross_salary_yen=4_000_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 1_240_000
+
+
+def test_calculate_salary_income():
+    rules = _create_salary_income_deduction_rules()
+
+    result = calculate_salary_income(
+        gross_salary_yen=4_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 2_760_000
+
+
+def test_calculate_salary_income_deduction_rejects_negative_salary():
+    rules = _create_salary_income_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="給与収入は0以上",
+    ):
+        calculate_salary_income_deduction(
+            gross_salary_yen=-1,
+            target_date="2020-06-01",
+            deduction_rules=rules,
+        )
+
+
+def test_calculate_salary_income_deduction_rejects_missing_rule():
+    rules = _create_salary_income_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な給与所得控除ルールがありません",
+    ):
+        calculate_salary_income_deduction(
+            gross_salary_yen=1_000_000,
+            target_date="2010-01-01",
+            deduction_rules=rules,
+        )
+
+
+def _create_basic_deduction_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "deduction_type": [
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+            ],
+            "effective_from": [
+                "1995-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2020-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+                "2025-01-01",
+            ],
+            "effective_to": [
+                "2019-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                "2024-12-31",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                1,
+                2,
+                3,
+                4,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+            ],
+            "basis": ["total_income"] * 14,
+            "lower_bound_yen": [
+                0,
+                0,
+                24_000_001,
+                24_500_001,
+                25_000_001,
+                0,
+                1_320_001,
+                3_360_001,
+                4_890_001,
+                6_550_001,
+                23_500_001,
+                24_000_001,
+                24_500_001,
+                25_000_001,
+            ],
+            "upper_bound_yen": [
+                None,
+                24_000_000,
+                24_500_000,
+                25_000_000,
+                None,
+                1_320_000,
+                3_360_000,
+                4_890_000,
+                6_550_000,
+                23_500_000,
+                24_000_000,
+                24_500_000,
+                25_000_000,
+                None,
+            ],
+            "fixed_yen": [
+                380_000,
+                480_000,
+                320_000,
+                160_000,
+                0,
+                950_000,
+                880_000,
+                680_000,
+                630_000,
+                580_000,
+                480_000,
+                320_000,
+                160_000,
+                0,
+            ],
+            "source_key": ["test"] * 14,
+        }
+    )
+
+
+def test_calculate_basic_deduction_2019():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=3_000_000,
+        target_date="2019-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 380_000
+
+
+def test_calculate_basic_deduction_2020():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=3_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 480_000
+
+
+def test_calculate_basic_deduction_2020_high_income():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=24_300_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 320_000
+
+
+def test_calculate_basic_deduction_2020_over_limit():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=26_000_000,
+        target_date="2020-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_basic_deduction_2025_standard_worker():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=2_800_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 880_000
+
+
+def test_calculate_basic_deduction_2025_low_income():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=1_000_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 950_000
+
+
+def test_calculate_basic_deduction_2025_boundary():
+    rules = _create_basic_deduction_rules()
+
+    lower_band = calculate_basic_deduction(
+        total_income_yen=1_320_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    upper_band = calculate_basic_deduction(
+        total_income_yen=1_320_001,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert lower_band == 950_000
+    assert upper_band == 880_000
+
+
+def test_calculate_basic_deduction_2025_middle_income():
+    rules = _create_basic_deduction_rules()
+
+    result = calculate_basic_deduction(
+        total_income_yen=4_000_000,
+        target_date="2025-06-01",
+        deduction_rules=rules,
+    )
+
+    assert result == 680_000
+
+
+def test_calculate_basic_deduction_rejects_negative_income():
+    rules = _create_basic_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="合計所得金額は0以上",
+    ):
+        calculate_basic_deduction(
+            total_income_yen=-1,
+            target_date="2025-06-01",
+            deduction_rules=rules,
+        )
+
+
+def test_calculate_basic_deduction_rejects_missing_rule():
+    rules = _create_basic_deduction_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な基礎控除ルールがありません",
+    ):
+        calculate_basic_deduction(
+            total_income_yen=3_000_000,
+            target_date="1990-01-01",
+            deduction_rules=rules,
+        )
+
+
+def test_floor_to_thousand_yen():
+    result = _floor_to_thousand_yen(
+        1_234_567,
+    )
+
+    assert result == 1_234_000
+
+
+def test_floor_to_thousand_yen_exact():
+    result = _floor_to_thousand_yen(
+        1_234_000,
+    )
+
+    assert result == 1_234_000
+
+
+def test_floor_to_thousand_yen_below_thousand():
+    result = _floor_to_thousand_yen(
+        999,
+    )
+
+    assert result == 0
+
+
+def test_floor_to_thousand_yen_rejects_negative():
+    with pytest.raises(
+        ValueError,
+        match="切り捨て対象金額は0以上",
+    ):
+        _floor_to_thousand_yen(
+            -1,
+        )
+
+
+def test_calculate_taxable_income():
+    result = calculate_taxable_income(
+        salary_income_yen=2_760_000,
+        basic_deduction_yen=480_000,
+        social_insurance_deduction_yen=600_123,
+    )
+
+    assert result == 1_679_000
+
+
+def test_calculate_taxable_income_floor_at_zero():
+    result = calculate_taxable_income(
+        salary_income_yen=500_000,
+        basic_deduction_yen=950_000,
+        social_insurance_deduction_yen=100_000,
+    )
+
+    assert result == 0
+
+
+def test_calculate_taxable_income_with_other_deductions():
+    result = calculate_taxable_income(
+        salary_income_yen=3_000_000,
+        basic_deduction_yen=480_000,
+        social_insurance_deduction_yen=500_000,
+        other_income_deductions_yen=100_500,
+    )
+
+    assert result == 1_919_000
+
+
+@pytest.mark.parametrize(
+    (
+        "salary_income_yen",
+        "basic_deduction_yen",
+        "social_insurance_deduction_yen",
+        "other_income_deductions_yen",
+        "message",
+    ),
+    [
+        (
+            -1,
+            0,
+            0,
+            0,
+            "給与所得は0以上",
+        ),
+        (
+            0,
+            -1,
+            0,
+            0,
+            "基礎控除は0以上",
+        ),
+        (
+            0,
+            0,
+            -1,
+            0,
+            "社会保険料控除は0以上",
+        ),
+        (
+            0,
+            0,
+            0,
+            -1,
+            "その他所得控除は0以上",
+        ),
+    ],
+)
+def test_calculate_taxable_income_rejects_negative_values(
+    salary_income_yen,
+    basic_deduction_yen,
+    social_insurance_deduction_yen,
+    other_income_deductions_yen,
+    message,
+):
+    with pytest.raises(
+        ValueError,
+        match=message,
+    ):
+        calculate_taxable_income(
+            salary_income_yen=salary_income_yen,
+            basic_deduction_yen=basic_deduction_yen,
+            social_insurance_deduction_yen=(social_insurance_deduction_yen),
+            other_income_deductions_yen=(other_income_deductions_yen),
+        )
+
+
+def _create_income_tax_brackets() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1999-01-01",
+                "1999-01-01",
+                "1999-01-01",
+                "1999-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+                "2015-01-01",
+            ],
+            "effective_to": [
+                "2006-12-31",
+                "2006-12-31",
+                "2006-12-31",
+                "2006-12-31",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                2,
+                3,
+                4,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+            ],
+            "lower_bound_yen": [
+                0,
+                3_300_000,
+                9_000_000,
+                18_000_000,
+                0,
+                1_950_000,
+                3_300_000,
+                6_950_000,
+                9_000_000,
+                18_000_000,
+                40_000_000,
+            ],
+            "upper_bound_yen": [
+                3_300_000,
+                9_000_000,
+                18_000_000,
+                None,
+                1_950_000,
+                3_300_000,
+                6_950_000,
+                9_000_000,
+                18_000_000,
+                40_000_000,
+                None,
+            ],
+            "marginal_rate": [
+                0.10,
+                0.20,
+                0.30,
+                0.37,
+                0.05,
+                0.10,
+                0.20,
+                0.23,
+                0.33,
+                0.40,
+                0.45,
+            ],
+            "quick_deduction_yen": [
+                0,
+                330_000,
+                1_230_000,
+                2_490_000,
+                0,
+                97_500,
+                427_500,
+                636_000,
+                1_536_000,
+                2_796_000,
+                4_796_000,
+            ],
+            "source_key": ["test"] * 11,
+        }
+    )
+
+
+def test_calculate_base_income_tax_2025():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=5_000_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 572_500
+
+
+def test_calculate_base_income_tax_floors_taxable_income():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=5_000_999,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 572_500
+
+
+def test_calculate_base_income_tax_bracket_boundary():
+    rules = _create_income_tax_brackets()
+
+    below = calculate_base_income_tax(
+        taxable_income_yen=1_949_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    boundary = calculate_base_income_tax(
+        taxable_income_yen=1_950_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert below == 97_450
+    assert boundary == 97_500
+
+
+def test_calculate_base_income_tax_top_bracket_boundary():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=40_000_000,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 13_204_000
+
+
+def test_calculate_base_income_tax_2000():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=5_000_000,
+        target_date="2000-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 670_000
+
+
+def test_calculate_base_income_tax_zero_income():
+    rules = _create_income_tax_brackets()
+
+    result = calculate_base_income_tax(
+        taxable_income_yen=0,
+        target_date="2025-06-01",
+        tax_brackets=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_base_income_tax_rejects_negative_income():
+    rules = _create_income_tax_brackets()
+
+    with pytest.raises(
+        ValueError,
+        match="課税所得は0以上",
+    ):
+        calculate_base_income_tax(
+            taxable_income_yen=-1,
+            target_date="2025-06-01",
+            tax_brackets=rules,
+        )
+
+
+def test_calculate_base_income_tax_rejects_missing_period():
+    rules = _create_income_tax_brackets()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な所得税率ルールがありません",
+    ):
+        calculate_base_income_tax(
+            taxable_income_yen=1_000_000,
+            target_date="1990-01-01",
+            tax_brackets=rules,
+        )
+
+
+def test_calculate_base_income_tax_rejects_unmatched_bracket():
+    rules = _create_income_tax_brackets()
+
+    rules = rules.loc[
+        ~((rules["effective_from"] == "2015-01-01") & (rules["bracket_order"] == 3))
+    ].copy()
+
+    with pytest.raises(
+        ValueError,
+        match="所得税率ルールを一意に取得できません",
+    ):
+        calculate_base_income_tax(
+            taxable_income_yen=5_000_000,
+            target_date="2025-06-01",
+            tax_brackets=rules,
+        )
+
+
+def _create_income_tax_adjustment_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "policy_id": [
+                "special_reduction_1994",
+                "special_reduction_1995",
+                "special_reduction_1996",
+                "special_reduction_1998",
+                "proportional_reduction_1999_2005",
+                "proportional_reduction_2006",
+                "reconstruction_surtax_2013",
+                "fixed_reduction_2024",
+            ],
+            "effective_from": [
+                "1994-01-01",
+                "1995-01-01",
+                "1996-01-01",
+                "1998-01-01",
+                "1999-01-01",
+                "2006-01-01",
+                "2013-01-01",
+                "2024-01-01",
+            ],
+            "effective_to": [
+                "1994-12-31",
+                "1995-12-31",
+                "1996-12-31",
+                "1998-12-31",
+                "2005-12-31",
+                "2006-12-31",
+                None,
+                "2024-12-31",
+            ],
+            "operation": [
+                "subtract_rate",
+                "subtract_rate",
+                "subtract_rate",
+                "subtract_fixed",
+                "subtract_rate",
+                "subtract_rate",
+                "add_rate",
+                "subtract_fixed",
+            ],
+            "base": [
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "income_tax",
+                "post_credit_income_tax",
+                "income_tax",
+            ],
+            "rate": [
+                0.20,
+                0.15,
+                0.15,
+                None,
+                0.20,
+                0.10,
+                0.021,
+                None,
+            ],
+            "fixed_taxpayer_yen": [
+                None,
+                None,
+                None,
+                38_000,
+                None,
+                None,
+                None,
+                30_000,
+            ],
+            "fixed_dependent_yen": [
+                None,
+                None,
+                None,
+                19_000,
+                None,
+                None,
+                None,
+                30_000,
+            ],
+            "cap_yen": [
+                2_000_000,
+                50_000,
+                50_000,
+                None,
+                250_000,
+                125_000,
+                None,
+                None,
+            ],
+            "total_income_limit_yen": [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                18_050_000,
+            ],
+            "policy_class": [
+                "temporary",
+                "temporary",
+                "temporary",
+                "temporary",
+                "multi_year_general",
+                "multi_year_general",
+                "surtax",
+                "temporary",
+            ],
+            "apply_order": [
+                100,
+                100,
+                100,
+                100,
+                100,
+                100,
+                200,
+                100,
+            ],
+            "source_key": ["test"] * 8,
+        }
+    )
+
+
+def test_calculate_income_tax_after_adjustments_1994():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1994-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 80_000
+
+
+def test_calculate_income_tax_after_adjustments_1995_cap():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=1_000_000,
+        total_income_yen=5_000_000,
+        target_date="1995-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 950_000
+
+
+def test_calculate_income_tax_after_adjustments_1998():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1998-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 62_000
+
+
+def test_calculate_income_tax_after_adjustments_1998_with_dependents():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1998-06-01",
+        adjustment_rules=rules,
+        dependent_count=2,
+    )
+
+    assert result == 24_000
+
+
+def test_calculate_income_tax_after_adjustments_1999():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1999-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 80_000
+
+
+def test_calculate_income_tax_after_adjustments_2006():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2006-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 90_000
+
+
+def test_calculate_income_tax_after_adjustments_2007():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2007-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 100_000
+
+
+def test_calculate_income_tax_after_adjustments_2024():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 70_000
+
+
+def test_calculate_income_tax_after_adjustments_2024_with_dependents():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+        dependent_count=2,
+    )
+
+    assert result == 10_000
+
+
+def test_calculate_income_tax_after_adjustments_2024_income_limit():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=18_050_001,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 100_000
+
+
+def test_calculate_income_tax_after_adjustments_floor_at_zero():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=20_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_income_tax_structural_policy_excludes_2024_reduction():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+        policy_mode="structural_policy",
+    )
+
+    assert result == 100_000
+
+
+def test_calculate_income_tax_structural_policy_keeps_1999_reduction():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_income_tax_after_adjustments(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="1999-06-01",
+        adjustment_rules=rules,
+        policy_mode="structural_policy",
+    )
+
+    assert result == 80_000
+
+
+def test_calculate_reconstruction_special_income_tax():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_reconstruction_special_income_tax(
+        income_tax_after_adjustments_yen=176_500,
+        target_date="2025-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 3_706
+
+
+def test_calculate_reconstruction_special_income_tax_before_2013():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_reconstruction_special_income_tax(
+        income_tax_after_adjustments_yen=100_000,
+        target_date="2012-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_total_income_tax_2024():
+    rules = _create_income_tax_adjustment_rules()
+
+    result = calculate_total_income_tax(
+        base_income_tax_yen=100_000,
+        total_income_yen=3_000_000,
+        target_date="2024-06-01",
+        adjustment_rules=rules,
+    )
+
+    assert result == 71_400
+
+
+def _create_employment_insurance_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "2017-04-01",
+                "2022-10-01",
+                "2023-04-01",
+                "2025-04-01",
+                "2017-04-01",
+            ],
+            "effective_to": [
+                "2022-09-30",
+                "2023-03-31",
+                "2025-03-31",
+                None,
+                None,
+            ],
+            "business_type": [
+                "general",
+                "general",
+                "general",
+                "general",
+                "construction",
+            ],
+            "employee_rate": [
+                0.0030,
+                0.0050,
+                0.0060,
+                0.0055,
+                0.0040,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_calculate_employment_insurance():
+    rates = _create_employment_insurance_rates()
+
+    result = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2024-06-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert result == 1_800
+
+
+def test_calculate_employment_insurance_2022_rate_change():
+    rates = _create_employment_insurance_rates()
+
+    september = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2022-09-30",
+        employment_insurance_rates=rates,
+    )
+
+    october = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2022-10-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert september == 900
+    assert october == 1_500
+
+
+def test_calculate_employment_insurance_2025_rate_change():
+    rates = _create_employment_insurance_rates()
+
+    march = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2025-03-31",
+        employment_insurance_rates=rates,
+    )
+
+    april = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2025-04-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert march == 1_800
+    assert april == 1_650
+
+
+def test_calculate_employment_insurance_business_type():
+    rates = _create_employment_insurance_rates()
+
+    result = calculate_employment_insurance(
+        wage_yen=300_000,
+        target_date="2020-06-01",
+        employment_insurance_rates=rates,
+        business_type="construction",
+    )
+
+    assert result == 1_200
+
+
+def test_calculate_employment_insurance_zero_wage():
+    rates = _create_employment_insurance_rates()
+
+    result = calculate_employment_insurance(
+        wage_yen=0,
+        target_date="2024-06-01",
+        employment_insurance_rates=rates,
+    )
+
+    assert result == 0
+
+
+def test_calculate_employment_insurance_rejects_negative_wage():
+    rates = _create_employment_insurance_rates()
+
+    with pytest.raises(
+        ValueError,
+        match="対象賃金は0以上",
+    ):
+        calculate_employment_insurance(
+            wage_yen=-1,
+            target_date="2024-06-01",
+            employment_insurance_rates=rates,
+        )
+
+
+def test_calculate_annual_employment_insurance_2025():
+    rates = _create_employment_insurance_rates()
+
+    monthly_wages = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "cash_earnings_yen": [
+                300_000,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_annual_employment_insurance(
+        monthly_wages=monthly_wages,
+        employment_insurance_rates=rates,
+    )
+
+    expected = 300_000 * 0.0060 * 3 + 300_000 * 0.0055 * 9
+
+    assert result == expected
+
+
+def test_calculate_annual_employment_insurance_rejects_missing_columns():
+    rates = _create_employment_insurance_rates()
+
+    monthly_wages = pd.DataFrame(
+        {
+            "date": ["2025-01-01"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="必要な列がありません",
+    ):
+        calculate_annual_employment_insurance(
+            monthly_wages=monthly_wages,
+            employment_insurance_rates=rates,
+        )
+
+
+def test_calculate_annual_employment_insurance_rejects_empty_data():
+    rates = _create_employment_insurance_rates()
+
+    monthly_wages = pd.DataFrame(
+        columns=[
+            "date",
+            "cash_earnings_yen",
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="月次賃金データが空です",
+    ):
+        calculate_annual_employment_insurance(
+            monthly_wages=monthly_wages,
+            employment_insurance_rates=rates,
+        )
+
+
+def _create_standard_monthly_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "2000-10-01",
+                "2000-10-01",
+                "2000-10-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2020-09-01",
+                "2020-09-01",
+                "2020-09-01",
+            ],
+            "effective_to": [
+                "2016-09-30",
+                "2016-09-30",
+                "2016-09-30",
+                "2020-08-31",
+                "2020-08-31",
+                "2020-08-31",
+                None,
+                None,
+                None,
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+                30,
+                31,
+                32,
+            ],
+            "standard_monthly_yen": [
+                98_000,
+                104_000,
+                110_000,
+                88_000,
+                98_000,
+                104_000,
+                590_000,
+                620_000,
+                650_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                101_000,
+                107_000,
+                None,
+                93_000,
+                101_000,
+                575_000,
+                605_000,
+                635_000,
+            ],
+            "remuneration_upper_yen": [
+                101_000,
+                107_000,
+                None,
+                93_000,
+                101_000,
+                None,
+                605_000,
+                635_000,
+                None,
+            ],
+        }
+    )
+
+
+def test_calculate_standard_monthly_remuneration():
+    rules = _create_standard_monthly_rules()
+
+    result = calculate_standard_monthly_remuneration(
+        remuneration_yen=97_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert result == 98_000
+
+
+def test_calculate_standard_monthly_remuneration_2016_boundary():
+    rules = _create_standard_monthly_rules()
+
+    below = calculate_standard_monthly_remuneration(
+        remuneration_yen=92_999,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    boundary = calculate_standard_monthly_remuneration(
+        remuneration_yen=93_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert below == 88_000
+    assert boundary == 98_000
+
+
+def test_calculate_standard_monthly_remuneration_second_boundary():
+    rules = _create_standard_monthly_rules()
+
+    below = calculate_standard_monthly_remuneration(
+        remuneration_yen=100_999,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    boundary = calculate_standard_monthly_remuneration(
+        remuneration_yen=101_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert below == 98_000
+    assert boundary == 104_000
+
+
+def test_calculate_standard_monthly_remuneration_below_bottom():
+    rules = _create_standard_monthly_rules()
+
+    result = calculate_standard_monthly_remuneration(
+        remuneration_yen=50_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert result == 88_000
+
+
+def test_calculate_standard_monthly_remuneration_above_top():
+    rules = _create_standard_monthly_rules()
+
+    result = calculate_standard_monthly_remuneration(
+        remuneration_yen=800_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert result == 650_000
+
+
+def test_calculate_standard_monthly_remuneration_2020_top_boundary():
+    rules = _create_standard_monthly_rules()
+
+    below = calculate_standard_monthly_remuneration(
+        remuneration_yen=634_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    boundary = calculate_standard_monthly_remuneration(
+        remuneration_yen=635_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert below == 620_000
+    assert boundary == 650_000
+
+
+def test_standard_monthly_remuneration_changes_by_period():
+    rules = _create_standard_monthly_rules()
+
+    before = calculate_standard_monthly_remuneration(
+        remuneration_yen=90_000,
+        target_date="2015-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    after = calculate_standard_monthly_remuneration(
+        remuneration_yen=90_000,
+        target_date="2018-06-01",
+        standard_monthly_rules=rules,
+    )
+
+    assert before == 98_000
+    assert after == 88_000
+
+
+def test_calculate_standard_monthly_remuneration_rejects_negative():
+    rules = _create_standard_monthly_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="報酬月額は0以上",
+    ):
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=-1,
+            target_date="2025-06-01",
+            standard_monthly_rules=rules,
+        )
+
+
+def test_calculate_standard_monthly_remuneration_rejects_missing_period():
+    rules = _create_standard_monthly_rules()
+
+    with pytest.raises(
+        ValueError,
+        match="有効な標準報酬月額ルールがありません",
+    ):
+        calculate_standard_monthly_remuneration(
+            remuneration_yen=300_000,
+            target_date="1990-01-01",
+            standard_monthly_rules=rules,
+        )
+
+
+def _create_pension_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1990-01-01",
+                "1990-01-01",
+                "1994-01-01",
+                "2015-09-01",
+                "2016-09-01",
+                "2017-09-01",
+            ],
+            "effective_to": [
+                "1990-12-31",
+                "1990-12-31",
+                "1994-10-31",
+                "2016-08-31",
+                "2017-08-31",
+                None,
+            ],
+            "insured_category": [
+                "general_male",
+                "general_female",
+                "general",
+                "general",
+                "general",
+                "general",
+            ],
+            "regular_total_rate": [
+                0.1430,
+                0.1380,
+                0.1450,
+                0.17828,
+                0.18182,
+                0.18300,
+            ],
+            "bonus_total_rate": [
+                0,
+                0,
+                0,
+                0.17828,
+                0.18182,
+                0.18300,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_pension_standard_monthly_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1989-12-01",
+                "1989-12-01",
+                "1989-12-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2016-10-01",
+                "2020-09-01",
+                "2020-09-01",
+                "2020-09-01",
+            ],
+            "effective_to": [
+                "1994-10-31",
+                "1994-10-31",
+                "1994-10-31",
+                "2020-08-31",
+                "2020-08-31",
+                "2020-08-31",
+                None,
+                None,
+                None,
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+            ],
+            "standard_monthly_yen": [
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+            ],
+            "remuneration_upper_yen": [
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+            ],
+        }
+    )
+
+
+def test_calculate_monthly_pension_contribution():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    result = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert result == 18_300
+
+
+def test_monthly_pension_uses_standard_monthly_remuneration():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    result = calculate_monthly_pension_contribution(
+        remuneration_yen=209_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    expected = 200_000 * 0.183 * 0.5
+
+    assert result == expected
+
+
+def test_monthly_pension_standard_monthly_boundary():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    below = calculate_monthly_pension_contribution(
+        remuneration_yen=209_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    boundary = calculate_monthly_pension_contribution(
+        remuneration_yen=210_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert below == 18_300
+    assert boundary == 20_130
+
+
+def test_monthly_pension_1990_sex_difference():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    male = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1990-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="male",
+    )
+
+    female = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1990-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="female",
+    )
+
+    assert male == 14_300
+    assert female == 13_800
+
+
+def test_pension_rate_uses_general_after_sex_rates_end():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    male = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1994-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="male",
+    )
+
+    female = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="1994-06-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        sex="female",
+    )
+
+    assert male == female
+    assert male == 14_500
+
+
+def test_monthly_pension_2017_rate_change():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    august = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="2017-08-31",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    september = calculate_monthly_pension_contribution(
+        remuneration_yen=205_000,
+        target_date="2017-09-01",
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert august == 18_182
+    assert september == 18_300
+
+
+def test_calculate_annual_regular_pension_contribution():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_annual_regular_pension_contribution(
+        monthly_remuneration=monthly,
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    assert result == 18_300 * 12
+    assert result == 219_600
+
+
+def test_annual_regular_pension_handles_rate_change():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    rates = _create_pension_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2017-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_annual_regular_pension_contribution(
+        monthly_remuneration=monthly,
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+    )
+
+    expected = 18_182 * 8 + 18_300 * 4
+
+    assert result == expected
+
+
+def test_select_pension_rate_rejects_invalid_sex():
+    rates = _create_pension_rates()
+
+    with pytest.raises(
+        ValueError,
+        match="sex は male または female",
+    ):
+        _select_pension_rate_rule(
+            target_date="1990-06-01",
+            pension_rates=rates,
+            sex="other",
+        )
+
+
+def _create_pension_bonus_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1994-11-01",
+                "1995-04-01",
+                "2003-04-01",
+                "2017-09-01",
+            ],
+            "effective_to": [
+                "1995-03-31",
+                "2003-03-31",
+                "2017-08-31",
+                None,
+            ],
+            "insured_category": [
+                "general",
+                "general",
+                "general",
+                "general",
+            ],
+            "regular_total_rate": [
+                0.1650,
+                0.1735,
+                0.1358,
+                0.1830,
+            ],
+            "bonus_total_rate": [
+                0.0,
+                0.0100,
+                0.1358,
+                0.1830,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_pension_bonus_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "scheme": [
+                "pension",
+                "pension",
+            ],
+            "effective_from": [
+                "1995-04-01",
+                "2003-04-01",
+            ],
+            "effective_to": [
+                "2003-03-31",
+                None,
+            ],
+            "cap_type": [
+                "none",
+                "per_month",
+            ],
+            "cap_yen": [
+                None,
+                1_500_000,
+            ],
+            "rounding_unit_yen": [
+                100,
+                1_000,
+            ],
+            "source_key": [
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_calculate_pension_bonus_base_special_premium():
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_base(
+        bonus_yen=500_099,
+        target_date="2000-06-01",
+        bonus_rules=rules,
+    )
+
+    assert result == 500_000
+
+
+def test_calculate_pension_bonus_base_after_2003():
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_base(
+        bonus_yen=500_999,
+        target_date="2025-06-01",
+        bonus_rules=rules,
+    )
+
+    assert result == 500_000
+
+
+def test_calculate_pension_bonus_base_cap():
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_base(
+        bonus_yen=2_000_000,
+        target_date="2025-06-01",
+        bonus_rules=rules,
+    )
+
+    assert result == 1_500_000
+
+
+def test_calculate_pension_bonus_contribution_before_1995():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_000,
+        target_date="1995-03-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_calculate_pension_bonus_contribution_special_premium():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_099,
+        target_date="2000-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 2_500
+
+
+def test_calculate_pension_bonus_contribution_after_2003():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_999,
+        target_date="2003-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 33_950
+
+
+def test_calculate_pension_bonus_contribution_current():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=500_000,
+        target_date="2025-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 45_750
+
+
+def test_calculate_pension_bonus_contribution_uses_cap():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    result = calculate_pension_bonus_contribution(
+        bonus_yen=2_000_000,
+        target_date="2025-06-01",
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 137_250
+
+
+def test_calculate_annual_pension_bonus_contribution():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_pension_bonus_contribution(
+        bonus_payments=bonuses,
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 45_750 * 2
+    assert result == 91_500
+
+
+def test_annual_pension_bonus_groups_same_month_before_cap():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-06-20",
+            ],
+            "bonus_yen": [
+                1_000_000,
+                800_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_pension_bonus_contribution(
+        bonus_payments=bonuses,
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    expected = 1_500_000 * 0.183 * 0.5
+
+    assert result == 137_250
+    assert result == expected
+
+
+def test_annual_pension_bonus_accepts_empty_data():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        columns=[
+            "date",
+            "bonus_yen",
+        ]
+    )
+
+    result = calculate_annual_pension_bonus_contribution(
+        bonus_payments=bonuses,
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_annual_pension_bonus_before_total_remuneration():
+    rates = _create_pension_bonus_rates()
+    rules = _create_pension_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2000-06-01",
+                "2000-12-01",
+            ],
+            "bonus_yen": [
+                500_099,
+                500_099,
+            ],
+        }
+    )
+
+    result = calculate_annual_pension_bonus_contribution(
+        bonus_payments=bonuses,
+        pension_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 5_000
+
+
+def test_create_semiannual_bonus_payments():
+    result = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    assert len(result) == 2
+
+    assert result["bonus_yen"].tolist() == [
+        500_000,
+        500_000,
+    ]
+
+    assert result["date"].tolist() == [
+        pd.Timestamp("2025-06-01"),
+        pd.Timestamp("2025-12-01"),
+    ]
+
+
+def test_create_semiannual_bonus_payments_preserves_total():
+    result = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_001,
+    )
+
+    assert result["bonus_yen"].sum() == 1_000_001
+
+
+def test_calculate_annual_pension_contribution():
+    standard_rules = _create_pension_standard_monthly_rules()
+
+    pension_rates = _create_pension_rates()
+    bonus_rates = _create_pension_bonus_rates()
+
+    rates = pd.concat(
+        [
+            pension_rates,
+            bonus_rates,
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    bonus_rules = _create_pension_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_pension_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        standard_monthly_rules=standard_rules,
+        pension_rates=rates,
+        bonus_rules=bonus_rules,
+    )
+
+    assert result["regular_pension_yen"] == 219_600
+
+    assert result["bonus_pension_yen"] == 91_500
+
+    assert result["total_pension_yen"] == 311_100
+
+
+def _create_health_insurance_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1990-01-01",
+                "1992-04-01",
+                "1997-09-01",
+                "2003-04-01",
+                "2010-03-01",
+                "2011-03-01",
+                "2012-03-01",
+            ],
+            "effective_to": [
+                "1992-03-31",
+                "1997-08-31",
+                "2003-03-31",
+                "2010-02-28",
+                "2011-02-28",
+                "2012-02-29",
+                None,
+            ],
+            "regular_total_rate": [
+                0.0840,
+                0.0820,
+                0.0850,
+                0.0820,
+                0.0934,
+                0.0950,
+                0.1000,
+            ],
+            "bonus_employee_rate": [
+                0.003,
+                0.003,
+                0.003,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "employee_share": [
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+                0.5,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_health_standard_monthly_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "effective_from": [
+                "1984-10-01",
+                "1984-10-01",
+                "1984-10-01",
+                "1992-10-01",
+                "1992-10-01",
+                "1992-10-01",
+                "2007-04-01",
+                "2007-04-01",
+                "2007-04-01",
+            ],
+            "effective_to": [
+                "1992-09-30",
+                "1992-09-30",
+                "1992-09-30",
+                "2007-03-31",
+                "2007-03-31",
+                "2007-03-31",
+                None,
+                None,
+                None,
+            ],
+            "grade": [
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+                1,
+                2,
+                3,
+            ],
+            "standard_monthly_yen": [
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+                200_000,
+                220_000,
+                240_000,
+            ],
+            "remuneration_lower_yen": [
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+            ],
+            "remuneration_upper_yen": [
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+                210_000,
+                230_000,
+                None,
+            ],
+        }
+    )
+
+
+def test_calculate_monthly_health_insurance_contribution():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    result = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=205_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    assert result == 10_000
+
+
+def test_monthly_health_insurance_1990():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    result = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=205_000,
+        target_date="1990-06-01",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    assert result == 8_400
+
+
+def test_monthly_health_insurance_1997_rate_change():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    august = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=205_000,
+        target_date="1997-08-31",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    september = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=205_000,
+        target_date="1997-09-01",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    assert august == 8_200
+    assert september == 8_500
+
+
+def test_monthly_health_insurance_2010_rate_change():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    february = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=205_000,
+        target_date="2010-02-28",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    march = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=205_000,
+        target_date="2010-03-01",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    assert february == 8_200
+    assert march == 9_340
+
+
+def test_monthly_health_insurance_uses_standard_remuneration():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    below = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=209_999,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    boundary = calculate_monthly_health_insurance_contribution(
+        remuneration_yen=210_000,
+        target_date="2025-06-01",
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    assert below == 10_000
+    assert boundary == 11_000
+
+
+def test_calculate_annual_regular_health_insurance_contribution():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_annual_regular_health_insurance_contribution(
+        monthly_remuneration=monthly,
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    assert result == 120_000
+
+
+def test_annual_health_insurance_handles_rate_change():
+    standard_rules = _create_health_standard_monthly_rules()
+    rates = _create_health_insurance_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "1997-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    result = calculate_annual_regular_health_insurance_contribution(
+        monthly_remuneration=monthly,
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+    )
+
+    expected = 8_200 * 8 + 8_500 * 4
+
+    assert result == expected
+    assert result == 99_600
+
+
+def _create_health_bonus_rules() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "scheme": [
+                "health",
+                "health",
+                "health",
+                "health",
+            ],
+            "effective_from": [
+                "1990-01-01",
+                "2003-04-01",
+                "2007-04-01",
+                "2016-04-01",
+            ],
+            "effective_to": [
+                "2003-03-31",
+                "2007-03-31",
+                "2016-03-31",
+                None,
+            ],
+            "cap_type": [
+                "none",
+                "per_payment",
+                "fiscal_year",
+                "fiscal_year",
+            ],
+            "cap_yen": [
+                None,
+                2_000_000,
+                5_400_000,
+                5_730_000,
+            ],
+            "rounding_unit_yen": [
+                100,
+                1_000,
+                1_000,
+                1_000,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_health_bonus_contribution_before_total_remuneration():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    result = calculate_health_bonus_contribution(
+        bonus_yen=500_099,
+        target_date="1990-06-01",
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 1_500
+
+
+def test_health_bonus_contribution_after_2003():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    result = calculate_health_bonus_contribution(
+        bonus_yen=500_999,
+        target_date="2003-06-01",
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 20_500
+
+
+def test_health_bonus_2003_per_payment_cap():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    result = calculate_health_bonus_contribution(
+        bonus_yen=2_500_000,
+        target_date="2005-06-01",
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 82_000
+
+
+def test_annual_health_bonus_uses_5400000_cap():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2015-06-01",
+                "2015-12-01",
+            ],
+            "bonus_yen": [
+                3_000_000,
+                3_000_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_bonus_contribution(
+        bonus_payments=bonuses,
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 270_000
+
+
+def test_annual_health_bonus_uses_5730000_cap():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                3_000_000,
+                3_000_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_bonus_contribution(
+        bonus_payments=bonuses,
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 286_500
+
+
+def test_health_bonus_cap_resets_in_april():
+    rates = _create_health_insurance_rates()
+    rules = _create_health_bonus_rules()
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-03-01",
+                "2025-04-01",
+            ],
+            "bonus_yen": [
+                4_000_000,
+                4_000_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_bonus_contribution(
+        bonus_payments=bonuses,
+        health_insurance_rates=rates,
+        bonus_rules=rules,
+    )
+
+    assert result == 400_000
+
+
+def test_get_fiscal_year():
+    assert _get_fiscal_year("2025-03-31") == 2024
+    assert _get_fiscal_year("2025-04-01") == 2025
+
+
+def test_calculate_annual_health_insurance_contribution():
+    standard_rules = _create_health_standard_monthly_rules()
+
+    rates = _create_health_insurance_rates()
+    bonus_rules = _create_health_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_insurance_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+        bonus_rules=bonus_rules,
+    )
+
+    assert result["regular_health_yen"] == 120_000
+
+    assert result["bonus_health_yen"] == 50_000
+
+    assert result["total_health_yen"] == 170_000
+
+
+def test_calculate_annual_health_insurance_contribution_1990():
+    standard_rules = _create_health_standard_monthly_rules()
+
+    rates = _create_health_insurance_rates()
+    bonus_rules = _create_health_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "1990-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "1990-06-01",
+                "1990-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_health_insurance_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+        bonus_rules=bonus_rules,
+    )
+
+    assert result["regular_health_yen"] == 100_800
+
+    assert result["bonus_health_yen"] == 3_000
+
+    assert result["total_health_yen"] == 103_800
+
+
+def test_calculate_annual_health_insurance_without_bonus():
+    standard_rules = _create_health_standard_monthly_rules()
+
+    rates = _create_health_insurance_rates()
+    bonus_rules = _create_health_bonus_rules()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        columns=[
+            "date",
+            "bonus_yen",
+        ]
+    )
+
+    result = calculate_annual_health_insurance_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        standard_monthly_rules=standard_rules,
+        health_insurance_rates=rates,
+        bonus_rules=bonus_rules,
+    )
+
+    assert result["regular_health_yen"] == 120_000
+
+    assert result["bonus_health_yen"] == 0
+
+    assert result["total_health_yen"] == 120_000
+
+
+def test_create_employment_insurance_wage_payments():
+    monthly = pd.DataFrame(
+        {
+            "date": [
+                "2025-05-01",
+                "2025-06-01",
+            ],
+            "regular_pay_yen": [
+                205_000,
+                205_000,
+            ],
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-15",
+            ],
+            "bonus_yen": [
+                500_000,
+            ],
+        }
+    )
+
+    result = _create_employment_insurance_wage_payments(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+    )
+
+    assert len(result) == 3
+
+    assert result["cash_earnings_yen"].sum() == 910_000
+
+    assert result["cash_earnings_yen"].tolist() == [
+        205_000,
+        205_000,
+        500_000,
+    ]
+
+
+def test_create_employment_insurance_wage_payments_without_bonus():
+    monthly = pd.DataFrame(
+        {
+            "date": [
+                "2025-01-01",
+                "2025-02-01",
+            ],
+            "regular_pay_yen": [
+                205_000,
+                205_000,
+            ],
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        columns=[
+            "date",
+            "bonus_yen",
+        ]
+    )
+
+    result = _create_employment_insurance_wage_payments(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+    )
+
+    assert len(result) == 2
+    assert result["cash_earnings_yen"].sum() == 410_000
+
+
+def test_calculate_annual_social_insurance():
+    pension_standard_rules = _create_pension_standard_monthly_rules()
+
+    pension_rates = pd.concat(
+        [
+            _create_pension_rates(),
+            _create_pension_bonus_rates(),
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    health_standard_rules = _create_health_standard_monthly_rules()
+
+    health_rates = _create_health_insurance_rates()
+
+    pension_bonus_rules = _create_pension_bonus_rules()
+
+    health_bonus_rules = _create_health_bonus_rules()
+
+    bonus_rules = pd.concat(
+        [
+            pension_bonus_rules,
+            health_bonus_rules,
+        ],
+        ignore_index=True,
+    )
+
+    employment_rates = _create_employment_insurance_rates()
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    bonuses = pd.DataFrame(
+        {
+            "date": [
+                "2025-06-01",
+                "2025-12-01",
+            ],
+            "bonus_yen": [
+                500_000,
+                500_000,
+            ],
+        }
+    )
+
+    result = calculate_annual_social_insurance(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        pension_standard_monthly_rules=(pension_standard_rules),
+        pension_rates=pension_rates,
+        health_standard_monthly_rules=(health_standard_rules),
+        health_insurance_rates=health_rates,
+        bonus_rules=bonus_rules,
+        employment_insurance_rates=(employment_rates),
+    )
+
+    assert result["total_pension_yen"] == 311_100
+
+    assert result["total_health_yen"] == 170_000
+
+    assert result["employment_insurance_yen"] == pytest.approx(19_337.5)
+
+    assert result["total_social_insurance_yen"] == pytest.approx(500_437.5)
+
+
+def test_annual_social_insurance_total_identity():
+    pension_standard_rules = _create_pension_standard_monthly_rules()
+
+    pension_rates = pd.concat(
+        [
+            _create_pension_rates(),
+            _create_pension_bonus_rates(),
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    bonus_rules = pd.concat(
+        [
+            _create_pension_bonus_rules(),
+            _create_health_bonus_rules(),
+        ],
+        ignore_index=True,
+    )
+
+    monthly = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                "2025-01-01",
+                periods=12,
+                freq="MS",
+            ),
+            "regular_pay_yen": [
+                205_000,
+            ]
+            * 12,
+        }
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_social_insurance(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        pension_standard_monthly_rules=(pension_standard_rules),
+        pension_rates=pension_rates,
+        health_standard_monthly_rules=(_create_health_standard_monthly_rules()),
+        health_insurance_rates=(_create_health_insurance_rates()),
+        bonus_rules=bonus_rules,
+        employment_insurance_rates=(_create_employment_insurance_rates()),
+    )
+
+    expected = (
+        result["total_pension_yen"]
+        + result["total_health_yen"]
+        + result["employment_insurance_yen"]
+    )
+
+    assert result["total_social_insurance_yen"] == pytest.approx(expected)
+
+
+def test_create_constant_monthly_remuneration():
+    result = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+    )
+
+    assert len(result) == 12
+
+    assert result["regular_pay_yen"].sum() == 2_460_000
+
+    assert result.loc[
+        0,
+        "date",
+    ] == pd.Timestamp("2025-01-01")
+
+    assert result.loc[
+        11,
+        "date",
+    ] == pd.Timestamp("2025-12-01")
+
+
+def test_calculate_standard_worker_income_tax_2025():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+    )
+
+    assert result["annual_regular_pay_yen"] == 2_460_000
+
+    assert result["annual_bonus_yen"] == 1_000_000
+
+    assert result["gross_salary_yen"] == 3_460_000
+
+    assert result["social_insurance_yen"] == pytest.approx(500_437.5)
+
+    assert result["salary_income_deduction_yen"] == 1_118_000
+
+    assert result["salary_income_yen"] == 2_342_000
+
+    assert result["basic_deduction_yen"] == 880_000
+
+    assert result["taxable_income_yen"] == 961_000
+
+    assert result["base_income_tax_yen"] == 48_050
+
+    assert result["income_tax_yen"] == 49_000
+
+    assert result["after_income_tax_and_social_insurance_yen"] == pytest.approx(
+        2_910_562.5
+    )
+
+
+def test_standard_worker_income_tax_identity():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+    )
+
+    expected = (
+        result["gross_salary_yen"]
+        - result["social_insurance_yen"]
+        - result["income_tax_yen"]
+    )
+
+    assert result["after_income_tax_and_social_insurance_yen"] == pytest.approx(
+        expected
+    )
+
+
+def _create_resident_tax_deductions() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "deduction_type": [
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+                "basic",
+            ],
+            "assessment_year_from": [
+                1991,
+                1995,
+                2021,
+                2021,
+                2021,
+                2021,
+            ],
+            "assessment_year_to": [
+                1994,
+                2020,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "lower_bound_yen": [
+                0,
+                0,
+                0,
+                24_000_001,
+                24_500_001,
+                25_000_001,
+            ],
+            "upper_bound_yen": [
+                None,
+                None,
+                24_000_000,
+                24_500_000,
+                25_000_000,
+                None,
+            ],
+            "fixed_yen": [
+                310_000,
+                330_000,
+                430_000,
+                290_000,
+                150_000,
+                0,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def _create_resident_tax_income_rates() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "assessment_year_from": [
+                1999,
+                1999,
+                1999,
+                2007,
+            ],
+            "assessment_year_to": [
+                2006,
+                2006,
+                2006,
+                None,
+            ],
+            "bracket_order": [
+                1,
+                2,
+                3,
+                1,
+            ],
+            "lower_bound_yen": [
+                0,
+                2_000_000,
+                7_000_000,
+                0,
+            ],
+            "upper_bound_yen": [
+                2_000_000,
+                7_000_000,
+                None,
+                None,
+            ],
+            "marginal_rate": [
+                0.05,
+                0.10,
+                0.13,
+                0.10,
+            ],
+            "quick_deduction_yen": [
+                0,
+                100_000,
+                310_000,
+                0,
+            ],
+            "source_key": [
+                "test",
+                "test",
+                "test",
+                "test",
+            ],
+        }
+    )
+
+
+def test_calculate_resident_basic_deduction_1991():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_basic_deduction(
+        total_income_yen=3_000_000,
+        assessment_year=1991,
+        deduction_rules=rules,
+    )
+
+    assert result == 310_000
+
+
+def test_calculate_resident_basic_deduction_2000():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_basic_deduction(
+        total_income_yen=3_000_000,
+        assessment_year=2000,
+        deduction_rules=rules,
+    )
+
+    assert result == 330_000
+
+
+def test_calculate_resident_basic_deduction_2026():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_basic_deduction(
+        total_income_yen=2_342_000,
+        assessment_year=2026,
+        deduction_rules=rules,
+    )
+
+    assert result == 430_000
+
+
+def test_calculate_resident_taxable_income_2026():
+    rules = _create_resident_tax_deductions()
+
+    result = calculate_resident_taxable_income(
+        salary_income_yen=2_342_000,
+        social_insurance_deduction_yen=500_437.5,
+        assessment_year=2026,
+        resident_tax_deductions=rules,
+    )
+
+    assert result["resident_basic_deduction_yen"] == 430_000
+
+    assert result["resident_taxable_income_yen"] == 1_411_000
+
+
+def test_calculate_base_resident_income_levy_2026():
+    rates = _create_resident_tax_income_rates()
+
+    result = calculate_base_resident_income_levy(
+        taxable_income_yen=1_411_000,
+        assessment_year=2026,
+        income_rate_rules=rates,
+    )
+
+    assert result == 141_100
+
+
+def test_calculate_base_resident_income_levy_2000():
+    rates = _create_resident_tax_income_rates()
+
+    result = calculate_base_resident_income_levy(
+        taxable_income_yen=5_000_000,
+        assessment_year=2000,
+        income_rate_rules=rates,
+    )
+
+    assert result == 400_000
+
+
+def test_resident_income_levy_rate_boundary():
+    rates = _create_resident_tax_income_rates()
+
+    below = calculate_base_resident_income_levy(
+        taxable_income_yen=1_999_000,
+        assessment_year=2000,
+        income_rate_rules=rates,
+    )
+
+    boundary = calculate_base_resident_income_levy(
+        taxable_income_yen=2_000_000,
+        assessment_year=2000,
+        income_rate_rules=rates,
+    )
+
+    assert below == 99_950
+    assert boundary == 100_000
+
+
+def _create_resident_tax_adjustments() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "policy_id": [
+                "special_reduction_1994",
+                "special_reduction_1995_1996",
+                "special_reduction_1998",
+                "proportional_reduction_1999_2005",
+                "proportional_reduction_2006",
+                "adjustment_credit_2007_2020",
+                "adjustment_credit_2021",
+                "fixed_reduction_2024",
+            ],
+            "assessment_year_from": [
+                1994,
+                1995,
+                1998,
+                1999,
+                2006,
+                2007,
+                2021,
+                2024,
+            ],
+            "assessment_year_to": [
+                1994,
+                1996,
+                1998,
+                2005,
+                2006,
+                2020,
+                None,
+                2024,
+            ],
+            "operation": [
+                "subtract_rate",
+                "subtract_rate",
+                "subtract_fixed",
+                "subtract_rate",
+                "subtract_rate",
+                "adjustment_credit",
+                "adjustment_credit",
+                "subtract_fixed",
+            ],
+            "base": [
+                "income_levy",
+                "income_levy",
+                "income_levy",
+                "income_levy",
+                "income_levy",
+                "human_deduction_difference",
+                "human_deduction_difference",
+                "income_levy",
+            ],
+            "rate": [
+                0.20,
+                0.15,
+                None,
+                0.15,
+                0.075,
+                None,
+                None,
+                None,
+            ],
+            "fixed_taxpayer_yen": [
+                None,
+                None,
+                17_000,
+                None,
+                None,
+                None,
+                None,
+                10_000,
+            ],
+            "fixed_dependent_yen": [
+                None,
+                None,
+                8_500,
+                None,
+                None,
+                None,
+                None,
+                10_000,
+            ],
+            "cap_yen": [
+                200_000,
+                20_000,
+                None,
+                40_000,
+                20_000,
+                None,
+                None,
+                None,
+            ],
+            "total_income_limit_yen": [
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                25_000_000,
+                18_050_000,
+            ],
+            "policy_class": [
+                "temporary",
+                "temporary",
+                "temporary",
+                "multi_year_general",
+                "multi_year_general",
+                "structural",
+                "structural",
+                "temporary",
+            ],
+            "source_key": [
+                "test",
+            ]
+            * 8,
+        }
+    )
+
+
+def test_calculate_resident_adjustment_credit_2026():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_adjustment_credit(
+        taxable_income_yen=1_411_000,
+        total_income_yen=2_342_000,
+        assessment_year=2026,
+        adjustment_rules=rules,
+    )
+
+    assert result == 2_500
+
+
+def test_resident_adjustment_credit_2026_income_limit():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_adjustment_credit(
+        taxable_income_yen=10_000_000,
+        total_income_yen=25_000_001,
+        assessment_year=2026,
+        adjustment_rules=rules,
+    )
+
+    assert result == 0
+
+
+def test_resident_income_levy_after_adjustments_1999():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_income_levy_after_adjustments(
+        base_income_levy_yen=400_000,
+        taxable_income_yen=5_000_000,
+        total_income_yen=5_000_000,
+        assessment_year=1999,
+        adjustment_rules=rules,
+    )
+
+    # 400,000 × 15% = 60,000だが
+    # 上限40,000円。
+    assert result["resident_adjustment_credit_yen"] == 0
+
+    assert result["resident_other_reduction_yen"] == 40_000
+
+    assert result["resident_income_levy_after_adjustments_yen"] == 360_000
+
+
+def test_resident_income_levy_after_adjustments_2024():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_income_levy_after_adjustments(
+        base_income_levy_yen=100_000,
+        taxable_income_yen=1_500_000,
+        total_income_yen=3_000_000,
+        assessment_year=2024,
+        adjustment_rules=rules,
+    )
+
+    assert result["resident_adjustment_credit_yen"] == 2_500
+
+    assert result["resident_other_reduction_yen"] == 10_000
+
+    assert result["resident_income_levy_after_adjustments_yen"] == 87_500
+
+
+def test_resident_2024_fixed_reduction_with_dependents():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_income_levy_after_adjustments(
+        base_income_levy_yen=100_000,
+        taxable_income_yen=1_500_000,
+        total_income_yen=3_000_000,
+        assessment_year=2024,
+        adjustment_rules=rules,
+        dependent_count=2,
+    )
+
+    assert result["resident_other_reduction_yen"] == 30_000
+
+    assert result["resident_income_levy_after_adjustments_yen"] == 67_500
+
+
+def test_resident_structural_policy_excludes_2024_fixed_reduction():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_income_levy_after_adjustments(
+        base_income_levy_yen=100_000,
+        taxable_income_yen=1_500_000,
+        total_income_yen=3_000_000,
+        assessment_year=2024,
+        adjustment_rules=rules,
+        policy_mode="structural_policy",
+    )
+
+    assert result["resident_adjustment_credit_yen"] == 2_500
+
+    assert result["resident_other_reduction_yen"] == 0
+
+    assert result["resident_income_levy_after_adjustments_yen"] == 97_500
+
+
+def test_resident_structural_policy_keeps_1999_reduction():
+    rules = _create_resident_tax_adjustments()
+
+    result = calculate_resident_income_levy_after_adjustments(
+        base_income_levy_yen=400_000,
+        taxable_income_yen=5_000_000,
+        total_income_yen=5_000_000,
+        assessment_year=1999,
+        adjustment_rules=rules,
+        policy_mode="structural_policy",
+    )
+
+    assert result["resident_other_reduction_yen"] == 40_000
+
+    assert result["resident_income_levy_after_adjustments_yen"] == 360_000
+
+
+def _create_resident_tax_per_capita() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "assessment_year_from": [
+                1991,
+                1995,
+                2004,
+                2014,
+                2024,
+            ],
+            "assessment_year_to": [
+                1994,
+                2003,
+                2013,
+                2023,
+                None,
+            ],
+            "municipality_band": [
+                "mid_size",
+                "mid_size",
+                "standard",
+                "standard",
+                "standard",
+            ],
+            "prefectural_yen": [
+                700,
+                1_000,
+                1_000,
+                1_500,
+                1_000,
+            ],
+            "municipal_yen": [
+                2_000,
+                2_500,
+                3_000,
+                3_500,
+                3_000,
+            ],
+            "forest_environment_tax_yen": [
+                0,
+                0,
+                0,
+                0,
+                1_000,
+            ],
+            "source_key": [
+                "test",
+            ]
+            * 5,
+        }
+    )
+
+
+def test_calculate_resident_per_capita_tax_2026():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_resident_per_capita_tax(
+        assessment_year=2026,
+        per_capita_rules=rules,
+    )
+
+    assert result["prefectural_per_capita_yen"] == 1_000
+
+    assert result["municipal_per_capita_yen"] == 3_000
+
+    assert result["resident_per_capita_yen"] == 4_000
+
+    assert result["forest_environment_tax_yen"] == 1_000
+
+
+def test_calculate_resident_per_capita_tax_2020():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_resident_per_capita_tax(
+        assessment_year=2020,
+        per_capita_rules=rules,
+    )
+
+    assert result["resident_per_capita_yen"] == 5_000
+
+    assert result["forest_environment_tax_yen"] == 0
+
+
+def test_calculate_resident_per_capita_tax_2000():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_resident_per_capita_tax(
+        assessment_year=2000,
+        per_capita_rules=rules,
+        municipality_band="mid_size",
+    )
+
+    assert result["resident_per_capita_yen"] == 3_500
+
+
+def test_calculate_total_resident_tax_floors_income_levy():
+    rules = _create_resident_tax_per_capita()
+
+    result = calculate_total_resident_tax(
+        income_levy_after_adjustments_yen=138_699,
+        assessment_year=2026,
+        per_capita_rules=rules,
+    )
+
+    assert result["resident_income_levy_yen"] == 138_600
+
+    assert result["resident_per_capita_yen"] == 4_000
+
+    assert result["forest_environment_tax_yen"] == 1_000
+
+    assert result["total_resident_tax_yen"] == 143_600
+
+
+def test_total_resident_tax_for_2025_income():
+    adjustment_rules = _create_resident_tax_adjustments()
+
+    per_capita_rules = _create_resident_tax_per_capita()
+
+    adjusted = calculate_resident_income_levy_after_adjustments(
+        base_income_levy_yen=141_100,
+        taxable_income_yen=1_411_000,
+        total_income_yen=2_342_000,
+        assessment_year=2026,
+        adjustment_rules=adjustment_rules,
+    )
+
+    assert adjusted["resident_adjustment_credit_yen"] == 2_500
+
+    assert adjusted["resident_income_levy_after_adjustments_yen"] == 138_600
+
+    result = calculate_total_resident_tax(
+        income_levy_after_adjustments_yen=(
+            adjusted["resident_income_levy_after_adjustments_yen"]
+        ),
+        assessment_year=2026,
+        per_capita_rules=per_capita_rules,
+    )
+
+    assert result["resident_income_levy_yen"] == 138_600
+
+    assert result["total_resident_tax_yen"] == 143_600
+
+
+def test_calculate_standard_worker_take_home_2025():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_take_home(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+        resident_tax_deductions=(rules["resident_tax_deductions"]),
+        resident_tax_income_rates=(rules["resident_tax_income_rates"]),
+        resident_tax_adjustments=(rules["resident_tax_adjustments"]),
+        resident_tax_per_capita=(rules["resident_tax_per_capita"]),
+    )
+
+    assert result["resident_tax_assessment_year"] == 2026
+
+    assert result["gross_salary_yen"] == 3_460_000
+
+    assert result["social_insurance_yen"] == pytest.approx(500_437.5)
+
+    assert result["income_tax_yen"] == 49_000
+
+    assert result["resident_taxable_income_yen"] == 1_411_000
+
+    assert result["resident_adjustment_credit_yen"] == 2_500
+
+    assert result["resident_tax_yen"] == 143_600
+
+    assert result["total_deductions_yen"] == pytest.approx(693_037.5)
+
+    assert result["nominal_take_home_yen"] == pytest.approx(2_766_962.5)
+
+
+def test_standard_worker_take_home_identity():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_take_home(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+        resident_tax_deductions=(rules["resident_tax_deductions"]),
+        resident_tax_income_rates=(rules["resident_tax_income_rates"]),
+        resident_tax_adjustments=(rules["resident_tax_adjustments"]),
+        resident_tax_per_capita=(rules["resident_tax_per_capita"]),
+    )
+
+    expected_deductions = (
+        result["social_insurance_yen"]
+        + result["income_tax_yen"]
+        + result["resident_tax_yen"]
+    )
+
+    expected_take_home = result["gross_salary_yen"] - expected_deductions
+
+    assert result["total_deductions_yen"] == pytest.approx(expected_deductions)
+
+    assert result["nominal_take_home_yen"] == pytest.approx(expected_take_home)
+
+    assert (
+        result["take_home_rate"] + result["effective_burden_rate"]
+    ) == pytest.approx(1.0)
+
+
+def test_calculate_take_home_time_series():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                2025,
+            ],
+            "total_cash_earnings": [
+                3_939_398 / 12,
+                4_267_634 / 12,
+            ],
+            "regular_earnings": [
+                2_993_174 / 12,
+                3_448_900 / 12,
+            ],
+            "special_earnings": [
+                946_224 / 12,
+                818_734 / 12,
+            ],
+        }
+    )
+
+    # 途中年を要求しないよう、
+    # 各端点をそれぞれ計算する。
+    result_1990 = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=1990,
+        end_year=1990,
+    )
+
+    result_2025 = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+    )
+
+    assert len(result_1990) == 1
+    assert len(result_2025) == 1
+
+    assert result_1990.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(3_939_398)
+
+    assert result_2025.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(4_267_634)
+
+    assert (
+        result_1990.loc[
+            0,
+            "resident_tax_assessment_year",
+        ]
+        == 1991
+    )
+
+    assert (
+        result_2025.loc[
+            0,
+            "resident_tax_assessment_year",
+        ]
+        == 2026
+    )
+
+    for result in [
+        result_1990,
+        result_2025,
+    ]:
+        assert result.loc[
+            0,
+            "nominal_take_home_yen",
+        ] == pytest.approx(
+            result.loc[
+                0,
+                "gross_salary_yen",
+            ]
+            - result.loc[
+                0,
+                "total_deductions_yen",
+            ]
+        )
+
+        assert (
+            result.loc[
+                0,
+                "take_home_rate",
+            ]
+            + result.loc[
+                0,
+                "effective_burden_rate",
+            ]
+        ) == pytest.approx(1.0)
+
+
+def test_take_home_time_series_rejects_missing_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2023,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2024",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2023,
+            end_year=2025,
+        )
+
+
+def test_take_home_time_series_rejects_wage_identity_error():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2025,
+            ],
+            "total_cash_earnings": [
+                320_000,
+            ],
+            "regular_earnings": [
+                270_000,
+            ],
+            "special_earnings": [
+                40_000,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="給与構成の恒等式",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+        )
+
+
+def test_calculate_standard_worker_resident_tax_2026():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_standard_worker_resident_tax(
+        salary_income_yen=2_342_000,
+        social_insurance_deduction_yen=500_437.5,
+        assessment_year=2026,
+        resident_tax_deductions=(rules["resident_tax_deductions"]),
+        resident_tax_income_rates=(rules["resident_tax_income_rates"]),
+        resident_tax_adjustments=(rules["resident_tax_adjustments"]),
+        resident_tax_per_capita=(rules["resident_tax_per_capita"]),
+    )
+
+    assert result["resident_tax_assessment_year"] == 2026
+
+    assert result["resident_taxable_income_yen"] == 1_411_000
+
+    assert result["resident_adjustment_credit_yen"] == 2_500
+
+    assert result["resident_tax_yen"] == 143_600
+
+
+def test_take_home_time_series_cash_flow_uses_previous_year_income():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+        timing="cash_flow",
+    )
+
+    assert len(result) == 1
+
+    assert (
+        result.loc[
+            0,
+            "timing",
+        ]
+        == "cash_flow"
+    )
+
+    assert (
+        result.loc[
+            0,
+            "resident_tax_income_year",
+        ]
+        == 2024
+    )
+
+    assert (
+        result.loc[
+            0,
+            "resident_tax_assessment_year",
+        ]
+        == 2025
+    )
+
+    # 当年の額面賃金は2025年給与。
+    assert result.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(320_000 * 12)
+
+
+def test_take_home_time_series_cash_flow_requires_previous_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2025,
+            ],
+            "total_cash_earnings": [
+                320_000,
+            ],
+            "regular_earnings": [
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="2024",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+            timing="cash_flow",
+        )
+
+
+def test_cash_flow_aligns_2024_resident_fixed_reduction():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2023,
+                2024,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    cash_flow = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2024,
+        end_year=2024,
+        timing="cash_flow",
+    )
+
+    income_year = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2024,
+        end_year=2024,
+        timing="income_year",
+    )
+
+    # cash_flow:
+    # 2023年所得 → 2024年度住民税
+    assert (
+        cash_flow.loc[
+            0,
+            "resident_tax_income_year",
+        ]
+        == 2023
+    )
+
+    assert (
+        cash_flow.loc[
+            0,
+            "resident_tax_assessment_year",
+        ]
+        == 2024
+    )
+
+    assert (
+        cash_flow.loc[
+            0,
+            "resident_other_reduction_yen",
+        ]
+        == 10_000
+    )
+
+    # income_year:
+    # 2024年所得 → 2025年度住民税
+    assert (
+        income_year.loc[
+            0,
+            "resident_tax_income_year",
+        ]
+        == 2024
+    )
+
+    assert (
+        income_year.loc[
+            0,
+            "resident_tax_assessment_year",
+        ]
+        == 2025
+    )
+
+    assert (
+        income_year.loc[
+            0,
+            "resident_other_reduction_yen",
+        ]
+        == 0
+    )
+
+
+def test_take_home_time_series_rejects_invalid_timing():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [2025],
+            "total_cash_earnings": [320_000],
+            "regular_earnings": [270_000],
+            "special_earnings": [50_000],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="timing",
+    ):
+        calculate_take_home_time_series(
+            annual_wage_df=annual_wage,
+            rule_tables=rules,
+            start_year=2025,
+            end_year=2025,
+            timing="invalid",
+        )
+
+
+def test_add_real_take_home_metrics():
+    take_home = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                1991,
+            ],
+            "gross_salary_yen": [
+                4_000_000,
+                4_400_000,
+            ],
+            "nominal_take_home_yen": [
+                3_200_000,
+                3_520_000,
+            ],
+        }
+    )
+
+    cpi = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                1991,
+            ],
+            "cpi": [
+                80.0,
+                88.0,
+            ],
+        }
+    )
+
+    result = add_real_take_home_metrics(
+        take_home_df=take_home,
+        annual_cpi_df=cpi,
+        base_year=1990,
+    )
+
+    assert result.loc[
+        0,
+        "real_gross_salary_yen",
+    ] == pytest.approx(5_000_000)
+
+    assert result.loc[
+        0,
+        "real_take_home_yen",
+    ] == pytest.approx(4_000_000)
+
+    # 名目は10%増だが、CPIも10%上昇。
+    assert result.loc[
+        1,
+        "real_gross_salary_yen",
+    ] == pytest.approx(5_000_000)
+
+    assert result.loc[
+        1,
+        "real_take_home_yen",
+    ] == pytest.approx(4_000_000)
+
+    assert result.loc[
+        0,
+        "gross_salary_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        0,
+        "nominal_take_home_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        0,
+        "real_gross_salary_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        0,
+        "real_take_home_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        1,
+        "gross_salary_index",
+    ] == pytest.approx(110)
+
+    assert result.loc[
+        1,
+        "nominal_take_home_index",
+    ] == pytest.approx(110)
+
+    assert result.loc[
+        1,
+        "real_gross_salary_index",
+    ] == pytest.approx(100)
+
+    assert result.loc[
+        1,
+        "real_take_home_index",
+    ] == pytest.approx(100)
+
+
+def test_add_real_take_home_metrics_rejects_missing_cpi_year():
+    take_home = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                1991,
+            ],
+            "gross_salary_yen": [
+                4_000_000,
+                4_100_000,
+            ],
+            "nominal_take_home_yen": [
+                3_200_000,
+                3_280_000,
+            ],
+        }
+    )
+
+    cpi = pd.DataFrame(
+        {
+            "year": [
+                1990,
+            ],
+            "cpi": [
+                80.0,
+            ],
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="1991",
+    ):
+        add_real_take_home_metrics(
+            take_home_df=take_home,
+            annual_cpi_df=cpi,
+            base_year=1990,
+        )
+
+
+def test_create_take_home_period_log_decomposition():
+    df = pd.DataFrame(
+        {
+            "year": [
+                2000,
+                2010,
+            ],
+            "gross_salary_yen": [
+                100.0,
+                110.0,
+            ],
+            "take_home_rate": [
+                0.8,
+                0.8,
+            ],
+            "cpi": [
+                100.0,
+                110.0,
+            ],
+            "real_take_home_yen": [
+                80.0,
+                80.0,
+            ],
+        }
+    )
+
+    result = create_take_home_period_log_decomposition(
+        df,
+        periods=[
+            (2000, 2010),
+        ],
+    )
+
+    expected = math.log(1.1) * 100
+
+    assert result.loc[
+        0,
+        "wage_log_contribution_pt",
+    ] == pytest.approx(expected)
+
+    assert result.loc[
+        0,
+        "burden_log_contribution_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "price_log_contribution_pt",
+    ] == pytest.approx(-expected)
+
+    assert result.loc[
+        0,
+        "real_take_home_log_change_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "decomposition_total_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "real_take_home_pct_change",
+    ] == pytest.approx(0)
+
+
+def test_take_home_log_decomposition_burden_effect():
+    df = pd.DataFrame(
+        {
+            "year": [
+                2000,
+                2010,
+            ],
+            "gross_salary_yen": [
+                100.0,
+                100.0,
+            ],
+            "take_home_rate": [
+                0.8,
+                0.75,
+            ],
+            "cpi": [
+                100.0,
+                100.0,
+            ],
+            "real_take_home_yen": [
+                80.0,
+                75.0,
+            ],
+        }
+    )
+
+    result = create_take_home_period_log_decomposition(
+        df,
+        periods=[
+            (2000, 2010),
+        ],
+    )
+
+    expected_burden = math.log(0.75 / 0.8) * 100
+
+    assert result.loc[
+        0,
+        "wage_log_contribution_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "price_log_contribution_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "burden_log_contribution_pt",
+    ] == pytest.approx(expected_burden)
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(0)
+
+    assert result.loc[
+        0,
+        "real_take_home_pct_change",
+    ] == pytest.approx(-6.25)
+
+    assert result.loc[
+        0,
+        "burden_change_pt",
+    ] == pytest.approx(5.0)
+
+
+def test_add_deduction_component_rates():
+    df = pd.DataFrame(
+        {
+            "gross_salary_yen": [
+                1_000_000,
+            ],
+            "income_tax_yen": [
+                50_000,
+            ],
+            "resident_tax_yen": [
+                40_000,
+            ],
+            "pension_yen": [
+                100_000,
+            ],
+            "health_insurance_yen": [
+                50_000,
+            ],
+            "employment_insurance_yen": [
+                10_000,
+            ],
+            "total_deductions_yen": [
+                250_000,
+            ],
+            "effective_burden_rate": [
+                0.25,
+            ],
+        }
+    )
+
+    result = add_deduction_component_rates(df)
+
+    assert result.loc[
+        0,
+        "income_tax_rate",
+    ] == pytest.approx(0.05)
+
+    assert result.loc[
+        0,
+        "resident_tax_rate",
+    ] == pytest.approx(0.04)
+
+    assert result.loc[
+        0,
+        "pension_rate_effective",
+    ] == pytest.approx(0.10)
+
+    assert result.loc[
+        0,
+        "health_insurance_rate_effective",
+    ] == pytest.approx(0.05)
+
+    assert result.loc[
+        0,
+        "employment_insurance_rate_effective",
+    ] == pytest.approx(0.01)
+
+    assert result.loc[
+        0,
+        "component_burden_rate_sum",
+    ] == pytest.approx(0.25)
+
+    assert result.loc[
+        0,
+        "component_burden_rate_error",
+    ] == pytest.approx(0)
+
+
+def test_create_deduction_burden_change_summary():
+    df = pd.DataFrame(
+        {
+            "year": [
+                1990,
+                2000,
+            ],
+            "effective_burden_rate": [
+                0.20,
+                0.25,
+            ],
+            "income_tax_rate": [
+                0.05,
+                0.04,
+            ],
+            "resident_tax_rate": [
+                0.03,
+                0.04,
+            ],
+            "pension_rate_effective": [
+                0.07,
+                0.10,
+            ],
+            "health_insurance_rate_effective": [
+                0.04,
+                0.05,
+            ],
+            "employment_insurance_rate_effective": [
+                0.01,
+                0.02,
+            ],
+        }
+    )
+
+    result = create_deduction_burden_change_summary(
+        df,
+        periods=[
+            (1990, 2000),
+        ],
+    )
+
+    assert result.loc[
+        0,
+        "income_tax_change_pt",
+    ] == pytest.approx(-1.0)
+
+    assert result.loc[
+        0,
+        "resident_tax_change_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        0,
+        "pension_change_pt",
+    ] == pytest.approx(3.0)
+
+    assert result.loc[
+        0,
+        "health_insurance_change_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        0,
+        "employment_insurance_change_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        0,
+        "total_burden_change_pt",
+    ] == pytest.approx(5.0)
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(0)
+
+
+def test_create_hundred_yen_allocation():
+    df = pd.DataFrame(
+        {
+            "year": [2000],
+            "income_tax_rate": [0.05],
+            "resident_tax_rate": [0.04],
+            "pension_rate_effective": [0.10],
+            "health_insurance_rate_effective": [0.05],
+            "employment_insurance_rate_effective": [0.01],
+            "take_home_rate": [0.75],
+        }
+    )
+
+    result = create_hundred_yen_allocation(
+        df,
+        years=[2000],
+    )
+
+    assert result.loc[
+        0,
+        "income_tax_yen_per_100",
+    ] == pytest.approx(5)
+
+    assert result.loc[
+        0,
+        "resident_tax_yen_per_100",
+    ] == pytest.approx(4)
+
+    assert result.loc[
+        0,
+        "pension_yen_per_100",
+    ] == pytest.approx(10)
+
+    assert result.loc[
+        0,
+        "health_insurance_yen_per_100",
+    ] == pytest.approx(5)
+
+    assert result.loc[
+        0,
+        "employment_insurance_yen_per_100",
+    ] == pytest.approx(1)
+
+    assert result.loc[
+        0,
+        "take_home_yen_per_100",
+    ] == pytest.approx(75)
+
+    assert result.loc[
+        0,
+        "allocation_total_yen",
+    ] == pytest.approx(100)
+
+
+def test_add_deduction_component_changes():
+    df = pd.DataFrame(
+        {
+            "year": [
+                2000,
+                2001,
+            ],
+            "income_tax_rate": [
+                0.05,
+                0.04,
+            ],
+            "resident_tax_rate": [
+                0.03,
+                0.04,
+            ],
+            "pension_rate_effective": [
+                0.07,
+                0.08,
+            ],
+            "health_insurance_rate_effective": [
+                0.04,
+                0.045,
+            ],
+            "employment_insurance_rate_effective": [
+                0.01,
+                0.012,
+            ],
+            "effective_burden_rate": [
+                0.20,
+                0.217,
+            ],
+        }
+    )
+
+    result = add_deduction_component_changes(df)
+
+    assert pd.isna(
+        result.loc[
+            0,
+            "total_burden_yoy_pt",
+        ]
+    )
+
+    assert result.loc[
+        1,
+        "income_tax_yoy_pt",
+    ] == pytest.approx(-1.0)
+
+    assert result.loc[
+        1,
+        "resident_tax_yoy_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        1,
+        "pension_yoy_pt",
+    ] == pytest.approx(1.0)
+
+    assert result.loc[
+        1,
+        "health_insurance_yoy_pt",
+    ] == pytest.approx(0.5)
+
+    assert result.loc[
+        1,
+        "employment_insurance_yoy_pt",
+    ] == pytest.approx(0.2)
+
+    assert result.loc[
+        1,
+        "component_burden_yoy_sum_pt",
+    ] == pytest.approx(1.7)
+
+    assert result.loc[
+        1,
+        "total_burden_yoy_pt",
+    ] == pytest.approx(1.7)
+
+    assert result.loc[
+        1,
+        "component_burden_yoy_error_pt",
+    ] == pytest.approx(0)
+
+
+def test_calculate_take_home_under_policy_year():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_take_home_under_policy_year(
+        wage_year=2025,
+        policy_year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        rule_tables=rules,
+    )
+
+    assert result["wage_year"] == 2025
+
+    assert result["policy_year"] == 2025
+
+    assert result["gross_salary_yen"] == pytest.approx(3_460_000)
+
+    assert result["resident_tax_assessment_year"] == 2026
+
+
+def test_take_home_under_policy_year_separates_wage_and_policy_year():
+    rules = load_take_home_rule_tables()
+
+    actual_2025 = calculate_take_home_under_policy_year(
+        wage_year=2025,
+        policy_year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        rule_tables=rules,
+    )
+
+    policy_1990 = calculate_take_home_under_policy_year(
+        wage_year=2025,
+        policy_year=1990,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        rule_tables=rules,
+    )
+
+    # 賃金入力は同一なので額面は同じ。
+    assert policy_1990["gross_salary_yen"] == pytest.approx(
+        actual_2025["gross_salary_yen"]
+    )
+
+    # 制度年は異なる。
+    assert actual_2025["resident_tax_assessment_year"] == 2026
+
+    assert policy_1990["resident_tax_assessment_year"] == 1991
+
+    # 制度が異なるため控除総額も異なる。
+    assert policy_1990["total_deductions_yen"] != pytest.approx(
+        actual_2025["total_deductions_yen"]
+    )
+
+
+def test_fixed_policy_time_series_matches_actual_for_same_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [2025],
+            "total_cash_earnings": [
+                4_267_634 / 12,
+            ],
+            "regular_earnings": [
+                3_448_900 / 12,
+            ],
+            "special_earnings": [
+                818_734 / 12,
+            ],
+        }
+    )
+
+    actual = calculate_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+        timing="income_year",
+    )
+
+    fixed = calculate_fixed_policy_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        policy_year=2025,
+        start_year=2025,
+        end_year=2025,
+    )
+
+    assert fixed.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(
+        actual.loc[
+            0,
+            "gross_salary_yen",
+        ]
+    )
+
+    assert fixed.loc[
+        0,
+        "total_deductions_yen",
+    ] == pytest.approx(
+        actual.loc[
+            0,
+            "total_deductions_yen",
+        ]
+    )
+
+    assert fixed.loc[
+        0,
+        "nominal_take_home_yen",
+    ] == pytest.approx(
+        actual.loc[
+            0,
+            "nominal_take_home_yen",
+        ]
+    )
+
+
+def test_fixed_policy_time_series_uses_same_policy_year():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = calculate_fixed_policy_take_home_time_series(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        policy_year=1990,
+        start_year=2024,
+        end_year=2025,
+    )
+
+    assert result["wage_year"].tolist() == [
+        2024,
+        2025,
+    ]
+
+    assert result["policy_year"].tolist() == [
+        1990,
+        1990,
+    ]
+
+    assert result["resident_tax_assessment_year"].tolist() == [
+        1991,
+        1991,
+    ]
+
+    assert result.loc[
+        0,
+        "gross_salary_yen",
+    ] == pytest.approx(300_000 * 12)
+
+    assert result.loc[
+        1,
+        "gross_salary_yen",
+    ] == pytest.approx(320_000 * 12)
+
+
+def test_create_burden_policy_shapley_decomposition():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = create_burden_policy_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    assert len(result) == 1
+
+    assert (
+        result.loc[
+            0,
+            "period",
+        ]
+        == "2024→2025"
+    )
+
+    assert result.loc[
+        0,
+        "shapley_sum_pt",
+    ] == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pt",
+        ]
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(
+        0,
+        abs=1e-10,
+    )
+
+
+def test_burden_policy_shapley_corner_values():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = create_burden_policy_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    direct = calculate_take_home_under_policy_year(
+        wage_year=2025,
+        policy_year=2024,
+        monthly_regular_pay_yen=270_000,
+        annual_bonus_yen=600_000,
+        rule_tables=rules,
+    )
+
+    assert result.loc[
+        0,
+        "b_w1_p0_pct",
+    ] == pytest.approx(direct["effective_burden_rate"] * 100)
+
+
+def test_income_tax_with_policy_years_matches_existing_when_same_year():
+    rules = load_take_home_rule_tables()
+
+    existing = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+    )
+
+    separated = calculate_standard_worker_income_tax_with_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+    )
+
+    for column in [
+        "gross_salary_yen",
+        "pension_yen",
+        "health_insurance_yen",
+        "employment_insurance_yen",
+        "social_insurance_yen",
+        "salary_income_yen",
+        "taxable_income_yen",
+        "income_tax_yen",
+    ]:
+        assert separated[column] == pytest.approx(existing[column])
+
+
+def test_income_tax_with_policy_years_separates_tax_and_social_insurance():
+    rules = load_take_home_rule_tables()
+
+    base = calculate_standard_worker_income_tax_with_policy_years(
+        wage_year=2025,
+        tax_policy_year=1990,
+        social_insurance_policy_year=1990,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=800_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+    )
+
+    social_2025 = calculate_standard_worker_income_tax_with_policy_years(
+        wage_year=2025,
+        tax_policy_year=1990,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=800_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+    )
+
+    # 賃金入力は同じ。
+    assert social_2025["gross_salary_yen"] == pytest.approx(base["gross_salary_yen"])
+
+    # 税制度年も同じ。
+    assert social_2025["tax_policy_year"] == 1990
+
+    # 社会保険制度のみ変更。
+    assert social_2025["social_insurance_policy_year"] == 2025
+
+    assert social_2025["social_insurance_yen"] != pytest.approx(
+        base["social_insurance_yen"]
+    )
+
+    # 社会保険料控除が変わるため、
+    # 同じ税制度でも所得税額にも波及し得る。
+    assert social_2025["taxable_income_yen"] != pytest.approx(
+        base["taxable_income_yen"]
+    )
+
+
+def test_take_home_under_policy_years_matches_existing_when_same_year():
+    rules = load_take_home_rule_tables()
+
+    existing = calculate_standard_worker_take_home(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+        resident_tax_deductions=(rules["resident_tax_deductions"]),
+        resident_tax_income_rates=(rules["resident_tax_income_rates"]),
+        resident_tax_adjustments=(rules["resident_tax_adjustments"]),
+        resident_tax_per_capita=(rules["resident_tax_per_capita"]),
+    )
+
+    separated = calculate_take_home_under_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=205_000,
+        annual_bonus_yen=1_000_000,
+        rule_tables=rules,
+    )
+
+    for column in [
+        "gross_salary_yen",
+        "pension_yen",
+        "health_insurance_yen",
+        "employment_insurance_yen",
+        "social_insurance_yen",
+        "income_tax_yen",
+        "resident_tax_yen",
+        "total_deductions_yen",
+        "nominal_take_home_yen",
+        "effective_burden_rate",
+    ]:
+        assert separated[column] == pytest.approx(existing[column])
+
+    assert separated["resident_tax_assessment_year"] == 2026
+
+
+def test_take_home_under_policy_years_separates_tax_policy():
+    rules = load_take_home_rule_tables()
+
+    tax_1990 = calculate_take_home_under_policy_years(
+        wage_year=2025,
+        tax_policy_year=1990,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=800_000,
+        rule_tables=rules,
+    )
+
+    tax_2025 = calculate_take_home_under_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=800_000,
+        rule_tables=rules,
+    )
+
+    # 社会保険制度は同一なので、
+    # 社会保険料は一致する。
+    assert tax_1990["social_insurance_yen"] == pytest.approx(
+        tax_2025["social_insurance_yen"]
+    )
+
+    # 税制度は異なる。
+    assert tax_1990["income_tax_yen"] != pytest.approx(tax_2025["income_tax_yen"])
+
+    assert tax_1990["resident_tax_assessment_year"] == 1991
+
+    assert tax_2025["resident_tax_assessment_year"] == 2026
+
+
+def test_take_home_under_policy_years_preserves_social_tax_interaction():
+    rules = load_take_home_rule_tables()
+
+    social_1990 = calculate_take_home_under_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=1990,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=800_000,
+        rule_tables=rules,
+    )
+
+    social_2025 = calculate_take_home_under_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=800_000,
+        rule_tables=rules,
+    )
+
+    assert social_1990["social_insurance_yen"] != pytest.approx(
+        social_2025["social_insurance_yen"]
+    )
+
+    assert social_1990["taxable_income_yen"] != pytest.approx(
+        social_2025["taxable_income_yen"]
+    )
+
+    assert social_1990["resident_taxable_income_yen"] != pytest.approx(
+        social_2025["resident_taxable_income_yen"]
+    )
+
+    assert social_1990["total_deductions_yen"] != pytest.approx(
+        social_2025["total_deductions_yen"]
+    )
+
+
+def test_create_burden_three_factor_shapley_decomposition():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = create_burden_three_factor_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    assert len(result) == 1
+
+    assert (
+        result.loc[
+            0,
+            "period",
+        ]
+        == "2024→2025"
+    )
+
+    assert result.loc[
+        0,
+        "shapley_sum_pt",
+    ] == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pt",
+        ]
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(
+        0,
+        abs=1e-10,
+    )
+
+
+def test_three_factor_shapley_matches_total_change():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    result = create_burden_three_factor_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    factor_sum = (
+        result.loc[
+            0,
+            "wage_effect_pt",
+        ]
+        + result.loc[
+            0,
+            "tax_policy_effect_pt",
+        ]
+        + result.loc[
+            0,
+            "social_insurance_policy_effect_pt",
+        ]
+    )
+
+    assert factor_sum == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pt",
+        ],
+        abs=1e-10,
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_pt",
+    ] == pytest.approx(
+        0,
+        abs=1e-10,
+    )
+
+
+def test_create_real_take_home_four_factor_shapley_decomposition():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    annual_cpi = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "cpi": [
+                100.0,
+                110.0,
+            ],
+        }
+    )
+
+    result = create_real_take_home_four_factor_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        annual_cpi_df=annual_cpi,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    assert len(result) == 1
+
+    factor_sum = (
+        result.loc[
+            0,
+            "wage_effect_yen",
+        ]
+        + result.loc[
+            0,
+            "tax_policy_effect_yen",
+        ]
+        + result.loc[
+            0,
+            "social_insurance_policy_effect_yen",
+        ]
+        + result.loc[
+            0,
+            "price_effect_yen",
+        ]
+    )
+
+    assert factor_sum == pytest.approx(
+        result.loc[
+            0,
+            "total_change_yen",
+        ],
+        abs=1e-8,
+    )
+
+    assert result.loc[
+        0,
+        "decomposition_error_yen",
+    ] == pytest.approx(
+        0,
+        abs=1e-8,
+    )
+
+    assert result.loc[
+        0,
+        "shapley_sum_pct_of_start",
+    ] == pytest.approx(
+        result.loc[
+            0,
+            "total_change_pct",
+        ],
+        abs=1e-10,
+    )
+
+
+def test_four_factor_shapley_price_effect_is_negative_when_cpi_rises():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    annual_cpi = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "cpi": [
+                100.0,
+                110.0,
+            ],
+        }
+    )
+
+    result = create_real_take_home_four_factor_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        annual_cpi_df=annual_cpi,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    assert (
+        result.loc[
+            0,
+            "price_effect_yen",
+        ]
+        < 0
+    )
+
+    assert (
+        result.loc[
+            0,
+            "price_effect_pct_of_start",
+        ]
+        < 0
+    )
+
+
+def test_four_factor_shapley_endpoint_real_take_home():
+    rules = load_take_home_rule_tables()
+
+    annual_wage = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "total_cash_earnings": [
+                300_000,
+                320_000,
+            ],
+            "regular_earnings": [
+                250_000,
+                270_000,
+            ],
+            "special_earnings": [
+                50_000,
+                50_000,
+            ],
+        }
+    )
+
+    annual_cpi = pd.DataFrame(
+        {
+            "year": [
+                2024,
+                2025,
+            ],
+            "cpi": [
+                105.0,
+                110.0,
+            ],
+        }
+    )
+
+    result = create_real_take_home_four_factor_shapley_decomposition(
+        annual_wage_df=annual_wage,
+        annual_cpi_df=annual_cpi,
+        rule_tables=rules,
+        periods=[
+            (2024, 2025),
+        ],
+    )
+
+    start = calculate_take_home_under_policy_years(
+        wage_year=2024,
+        tax_policy_year=2024,
+        social_insurance_policy_year=2024,
+        monthly_regular_pay_yen=250_000,
+        annual_bonus_yen=600_000,
+        rule_tables=rules,
+    )
+
+    end = calculate_take_home_under_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=270_000,
+        annual_bonus_yen=600_000,
+        rule_tables=rules,
+    )
+
+    assert result.loc[
+        0,
+        "start_real_take_home_yen",
+    ] == pytest.approx(start["nominal_take_home_yen"] / 1.05)
+
+    assert result.loc[
+        0,
+        "end_real_take_home_yen",
+    ] == pytest.approx(end["nominal_take_home_yen"] / 1.10)
+
+
+def test_long_term_care_second_insured_age():
+    assert not _is_long_term_care_second_insured(39)
+
+    assert _is_long_term_care_second_insured(40)
+
+    assert _is_long_term_care_second_insured(64)
+
+    assert not _is_long_term_care_second_insured(65)
+
+
+def test_monthly_long_term_care_before_introduction_is_zero():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_monthly_long_term_care_contribution(
+        remuneration_yen=300_000,
+        target_date="1999-12-01",
+        age=45,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+    )
+
+    assert result == pytest.approx(0)
+
+
+def test_monthly_long_term_care_outside_age_range_is_zero():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_monthly_long_term_care_contribution(
+        remuneration_yen=300_000,
+        target_date="2025-03-01",
+        age=35,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+    )
+
+    assert result == pytest.approx(0)
+
+
+def test_monthly_long_term_care_2025():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_monthly_long_term_care_contribution(
+        remuneration_yen=300_000,
+        target_date="2025-03-01",
+        age=45,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+    )
+
+    # 標準報酬月額30万円
+    # × 介護保険料率1.59%
+    # × 本人負担1/2
+    assert result == pytest.approx(2_385)
+
+
+def test_annual_regular_long_term_care_2025():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    result = calculate_annual_regular_long_term_care_contribution(
+        monthly_remuneration=monthly,
+        age=45,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+    )
+
+    assert result == pytest.approx(28_650)
+
+
+def test_annual_regular_long_term_care_2000_partial_year():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2000,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    result = calculate_annual_regular_long_term_care_contribution(
+        monthly_remuneration=monthly,
+        age=45,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+    )
+
+    assert result == pytest.approx(8_100)
+
+
+def test_annual_regular_long_term_care_age_35_is_zero():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    result = calculate_annual_regular_long_term_care_contribution(
+        monthly_remuneration=monthly,
+        age=35,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+    )
+
+    assert result == pytest.approx(0)
+
+
+def test_long_term_care_bonus_before_total_remuneration_is_zero():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_long_term_care_bonus_contribution(
+        bonus_yen=500_000,
+        target_date="2002-12-01",
+        age=45,
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result == pytest.approx(0)
+
+
+def test_long_term_care_bonus_2025():
+    rules = load_take_home_rule_tables()
+
+    result = calculate_long_term_care_bonus_contribution(
+        bonus_yen=500_000,
+        target_date="2025-06-01",
+        age=45,
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result == pytest.approx(3_975)
+
+
+def test_annual_long_term_care_bonus_2025():
+    rules = load_take_home_rule_tables()
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_long_term_care_bonus_contribution(
+        bonus_payments=bonuses,
+        age=45,
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result == pytest.approx(7_950)
+
+
+def test_annual_long_term_care_bonus_age_35_is_zero():
+    rules = load_take_home_rule_tables()
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_long_term_care_bonus_contribution(
+        bonus_payments=bonuses,
+        age=35,
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result == pytest.approx(0)
+
+
+def test_annual_long_term_care_contribution_2025_age_45():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_long_term_care_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        age=45,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result["regular_long_term_care_yen"] == pytest.approx(28_650)
+
+    assert result["bonus_long_term_care_yen"] == pytest.approx(7_950)
+
+    assert result["total_long_term_care_yen"] == pytest.approx(36_600)
+
+
+def test_annual_long_term_care_contribution_2000():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2000,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2000,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_long_term_care_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        age=45,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result["regular_long_term_care_yen"] == pytest.approx(8_100)
+
+    assert result["bonus_long_term_care_yen"] == pytest.approx(0)
+
+    assert result["total_long_term_care_yen"] == pytest.approx(8_100)
+
+
+def test_annual_long_term_care_contribution_age_35_is_zero():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_long_term_care_contribution(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        age=35,
+        standard_monthly_rules=(rules["health_standard_monthly"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+    )
+
+    assert result["regular_long_term_care_yen"] == pytest.approx(0)
+
+    assert result["bonus_long_term_care_yen"] == pytest.approx(0)
+
+    assert result["total_long_term_care_yen"] == pytest.approx(0)
+
+
+def test_annual_social_insurance_age_35_has_no_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=205_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    result = calculate_annual_social_insurance(
+        monthly_remuneration=monthly,
+        bonus_payments=bonuses,
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        age=35,
+    )
+
+    assert result["total_long_term_care_yen"] == pytest.approx(0)
+
+    # 既存テストで確認済みの2025年標準例
+    assert result["total_social_insurance_yen"] == pytest.approx(500_437.5)
+
+
+def test_annual_social_insurance_age_45_adds_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    common_kwargs = {
+        "monthly_remuneration": monthly,
+        "bonus_payments": bonuses,
+        "pension_standard_monthly_rules": (rules["pension_standard_monthly"]),
+        "pension_rates": (rules["pension_rates"]),
+        "health_standard_monthly_rules": (rules["health_standard_monthly"]),
+        "health_insurance_rates": (rules["health_insurance_rates"]),
+        "bonus_rules": (rules["social_insurance_bonus_rules"]),
+        "employment_insurance_rates": (rules["employment_insurance_rates"]),
+        "long_term_care_insurance_rates": (rules["long_term_care_insurance_rates"]),
+    }
+
+    age_35 = calculate_annual_social_insurance(
+        **common_kwargs,
+        age=35,
+    )
+
+    age_45 = calculate_annual_social_insurance(
+        **common_kwargs,
+        age=45,
+    )
+
+    assert age_45["total_long_term_care_yen"] == pytest.approx(36_600)
+
+    assert (
+        age_45["total_social_insurance_yen"] - age_35["total_social_insurance_yen"]
+    ) == pytest.approx(36_600)
+
+    # 年金・健康保険・雇用保険そのものは
+    # 年齢変更では変化しない。
+    assert age_45["total_pension_yen"] == pytest.approx(age_35["total_pension_yen"])
+
+    assert age_45["total_health_yen"] == pytest.approx(age_35["total_health_yen"])
+
+    assert age_45["employment_insurance_yen"] == pytest.approx(
+        age_35["employment_insurance_yen"]
+    )
+
+
+def test_annual_social_insurance_age_45_requires_long_term_care_rates():
+    rules = load_take_home_rule_tables()
+
+    monthly = create_constant_monthly_remuneration(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+    )
+
+    bonuses = create_semiannual_bonus_payments(
+        year=2025,
+        annual_bonus_yen=1_000_000,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="long_term_care_insurance_rates",
+    ):
+        calculate_annual_social_insurance(
+            monthly_remuneration=monthly,
+            bonus_payments=bonuses,
+            pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+            pension_rates=(rules["pension_rates"]),
+            health_standard_monthly_rules=(rules["health_standard_monthly"]),
+            health_insurance_rates=(rules["health_insurance_rates"]),
+            bonus_rules=(rules["social_insurance_bonus_rules"]),
+            employment_insurance_rates=(rules["employment_insurance_rates"]),
+            age=45,
+        )
+
+
+def test_income_tax_age_45_includes_long_term_care():
+    rules = load_take_home_rule_tables()
+
+    common_kwargs = {
+        "wage_year": 2025,
+        "tax_policy_year": 2025,
+        "social_insurance_policy_year": 2025,
+        "monthly_regular_pay_yen": 300_000,
+        "annual_bonus_yen": 1_000_000,
+        "income_tax_deductions": (rules["income_tax_deductions"]),
+        "income_tax_brackets": (rules["income_tax_brackets"]),
+        "income_tax_adjustments": (rules["income_tax_adjustments"]),
+        "pension_standard_monthly_rules": (rules["pension_standard_monthly"]),
+        "pension_rates": (rules["pension_rates"]),
+        "health_standard_monthly_rules": (rules["health_standard_monthly"]),
+        "health_insurance_rates": (rules["health_insurance_rates"]),
+        "bonus_rules": (rules["social_insurance_bonus_rules"]),
+        "employment_insurance_rates": (rules["employment_insurance_rates"]),
+        "long_term_care_insurance_rates": (rules["long_term_care_insurance_rates"]),
+    }
+
+    age_35 = calculate_standard_worker_income_tax_with_policy_years(
+        **common_kwargs,
+        age=35,
+    )
+
+    age_45 = calculate_standard_worker_income_tax_with_policy_years(
+        **common_kwargs,
+        age=45,
+    )
+
+    assert age_35["long_term_care_yen"] == pytest.approx(0)
+
+    assert age_45["long_term_care_yen"] == pytest.approx(36_600)
+
+    assert (
+        age_45["social_insurance_yen"] - age_35["social_insurance_yen"]
+    ) == pytest.approx(36_600)
+
+    # 介護保険料も社会保険料控除になる。
+    assert age_45["taxable_income_yen"] < age_35["taxable_income_yen"]
+
+    # したがって所得税は増えない。
+    assert age_45["income_tax_yen"] <= age_35["income_tax_yen"]
+
+
+def test_standard_worker_income_tax_age_45_matches_separated():
+    rules = load_take_home_rule_tables()
+
+    regular = calculate_standard_worker_income_tax(
+        year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        age=45,
+    )
+
+    separated = calculate_standard_worker_income_tax_with_policy_years(
+        wage_year=2025,
+        tax_policy_year=2025,
+        social_insurance_policy_year=2025,
+        monthly_regular_pay_yen=300_000,
+        annual_bonus_yen=1_000_000,
+        income_tax_deductions=(rules["income_tax_deductions"]),
+        income_tax_brackets=(rules["income_tax_brackets"]),
+        income_tax_adjustments=(rules["income_tax_adjustments"]),
+        pension_standard_monthly_rules=(rules["pension_standard_monthly"]),
+        pension_rates=(rules["pension_rates"]),
+        health_standard_monthly_rules=(rules["health_standard_monthly"]),
+        health_insurance_rates=(rules["health_insurance_rates"]),
+        bonus_rules=(rules["social_insurance_bonus_rules"]),
+        employment_insurance_rates=(rules["employment_insurance_rates"]),
+        long_term_care_insurance_rates=(rules["long_term_care_insurance_rates"]),
+        age=45,
+    )
+
+    for column in [
+        "long_term_care_yen",
+        "social_insurance_yen",
+        "taxable_income_yen",
+        "income_tax_yen",
+    ]:
+        assert regular[column] == pytest.approx(separated[column])
+
+
+def test_standard_worker_take_home_age_45():
+    rules = load_take_home_rule_tables()
+
+    common_kwargs = {
+        "year": 2025,
+        "monthly_regular_pay_yen": 300_000,
+        "annual_bonus_yen": 1_000_000,
+        "income_tax_deductions": rules["income_tax_deductions"],
+        "income_tax_brackets": rules["income_tax_brackets"],
+        "income_tax_adjustments": rules["income_tax_adjustments"],
+        "pension_standard_monthly_rules": (rules["pension_standard_monthly"]),
+        "pension_rates": rules["pension_rates"],
+        "health_standard_monthly_rules": (rules["health_standard_monthly"]),
+        "health_insurance_rates": (rules["health_insurance_rates"]),
+        "bonus_rules": rules["social_insurance_bonus_rules"],
+        "employment_insurance_rates": rules["employment_insurance_rates"],
+        "resident_tax_deductions": (rules["resident_tax_deductions"]),
+        "resident_tax_income_rates": (rules["resident_tax_income_rates"]),
+        "resident_tax_adjustments": (rules["resident_tax_adjustments"]),
+        "resident_tax_per_capita": (rules["resident_tax_per_capita"]),
+        "long_term_care_insurance_rates": (rules["long_term_care_insurance_rates"]),
+    }
+
+    age_35 = calculate_standard_worker_take_home(
+        **common_kwargs,
+        age=35,
+    )
+
+    age_45 = calculate_standard_worker_take_home(
+        **common_kwargs,
+        age=45,
+    )
+
+    assert age_45["long_term_care_yen"] == pytest.approx(36_600)
+
+    assert age_45["social_insurance_yen"] > age_35["social_insurance_yen"]
+
+    # 社会保険料控除が増えるため、
+    # 所得税・住民税は増えない。
+    assert age_45["income_tax_yen"] <= age_35["income_tax_yen"]
+
+    assert age_45["resident_tax_yen"] <= age_35["resident_tax_yen"]
+
+    # 税軽減で一部相殺されるので、
+    # 手取り減少額は介護保険料36,600円より小さい。
+    take_home_loss = age_35["nominal_take_home_yen"] - age_45["nominal_take_home_yen"]
+
+    assert take_home_loss > 0
+    assert take_home_loss < 36_600
+
+
+def test_take_home_time_series_age_35_matches_default():
+    rules = load_take_home_rule_tables()
+
+    annual_wage_df = pd.DataFrame(
+        {
+            "year": [2025],
+            "total_cash_earnings": [
+                350_000,
+            ],
+            "regular_earnings": [
+                300_000,
+            ],
+            "special_earnings": [
+                50_000,
+            ],
+        }
+    )
+
+    default = calculate_take_home_time_series(
+        annual_wage_df=annual_wage_df,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+    )
+
+    age_35 = calculate_take_home_time_series(
+        annual_wage_df=annual_wage_df,
+        rule_tables=rules,
+        start_year=2025,
+        end_year=2025,
+        age=35,
+    )
+
+    assert age_35.loc[
+        0,
+        "nominal_take_home_yen",
+    ] == pytest.approx(
+        default.loc[
+            0,
+            "nominal_take_home_yen",
+        ]
+    )
+
+    assert age_35.loc[
+        0,
+        "social_insurance_yen",
+    ] == pytest.approx(
+        default.loc[
+            0,
+            "social_insurance_yen",
+        ]
+    )
+
+    assert age_35.loc[
+        0,
+        "long_term_care_yen",
+    ] == pytest.approx(0)

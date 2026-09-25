@@ -1,0 +1,14 @@
+check,comparison,period,metric,value,unit,note
+resident_tax_timing,income_year,1991→2025,real_take_home_change_pct,-19.363,pct,主分析。所得年tに賦課年度t+1の住民税を対応。
+resident_tax_timing,cash_flow,1991→2025,real_take_home_change_pct,-19.48,pct,前年所得に基づく年税額を当年へ対応する感応度分析。
+sex,male,1990→2025,real_take_home_change_pct,-18.64,pct,主分析。
+sex,female,1990→2025,real_take_home_change_pct,-18.784,pct,厚生年金保険料率の男女差を反映。差は1990～1993年のみ。
+age_long_term_care,age35,1990→2025,real_take_home_change_pct,-18.64,pct,主分析。介護保険第2号被保険者外。
+age_long_term_care,age45,1990→2025,real_take_home_change_pct,-19.315,pct,40～64歳の介護保険料を反映。
+age_long_term_care,age45_minus_age35,2025,nominal_take_home_difference_yen,-28043.1,yen,"介護保険料33,243.1円の一部を所得税・住民税減が相殺。"
+wage_series,level_series,1990→2025,real_gross_wage_change_pct,-14.763,pct,毎月勤労統計の実額月次値から年平均を作成。
+wage_series,official_yoy_chained,1990→2025,real_gross_wage_change_pct,-14.364,pct,公表前年比を1990年から連鎖。
+wage_series,level_series,2015→2025,real_gross_wage_change_pct,-3.32,pct,毎月勤労統計の実額月次値から年平均を作成。
+wage_series,official_yoy_chained,2015→2025,real_gross_wage_change_pct,-5.881,pct,公表前年比を連鎖。
+temporary_tax_measures,actual_policy,1990→2025,interpretation,,,一時的減税を含む実際の制度。実質手取りのピークは1996年。
+temporary_tax_measures,structural_policy,1990→2025,interpretation,,,1994～1996、1998、2024年等の一時的減税を除外しても、実質手取りのピークは1996年。
