@@ -546,7 +546,7 @@ $R^H_t = \frac{H_{30+,t}}{H_{5+,t}}$とする。
 テスト：
 
 ```text
-tests/test_establishment_size_wage_analysis.py
+tests/wage/test_establishment_size_wage_analysis.py
 ```
 
 結果：

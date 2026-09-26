@@ -435,7 +435,7 @@ TL
 テスト：
 
 ```text
-tests/test_real_wage_decomposition_analysis.py
+tests/wage/test_real_wage_decomposition_analysis.py
 ```
 
 結果：

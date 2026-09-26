@@ -3204,8 +3204,9 @@ ESTAT_APP_ID = "..."
 
 ```text
 tests/
-├── test_corporate_profit_allocation_analysis.py
-└── test_corporate_profit_allocation_service.py
+└── corporate/
+    ├── test_corporate_profit_allocation_analysis.py
+    └── test_corporate_profit_allocation_service.py
 ```
 
 である。

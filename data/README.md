@@ -199,8 +199,8 @@ uv run python scripts/cpi/check_real_wage_decomposition_index.py
 ### 7.2 労働需給データを更新した場合
 
 ```bash
-uv run pytest tests/test_labor_market_service.py
-uv run pytest tests/test_labor_market_analysis.py
+uv run pytest tests/labor/test_labor_market_service.py
+uv run pytest tests/labor/test_labor_market_analysis.py
 ```
 
 ### 7.3 賃金改定調査を更新した場合
@@ -225,8 +225,8 @@ uv run python scripts/wage_revision/check_wage_revision_analysis.py
 さらに、
 
 ```bash
-uv run pytest tests/test_wage_revision_service.py
-uv run pytest tests/test_wage_revision_analysis.py
+uv run pytest tests/wage/test_wage_revision_service.py
+uv run pytest tests/wage/test_wage_revision_analysis.py
 ```
 
 を実行する。
@@ -235,7 +235,7 @@ uv run pytest tests/test_wage_revision_analysis.py
 
 ```bash
 uv run python scripts/cpi/check_real_wage_decomposition_index.py
-uv run pytest tests/test_real_wage_decomposition_analysis.py
+uv run pytest tests/wage/test_real_wage_decomposition_analysis.py
 ```
 
 更新後は次を更新前と比較する。
@@ -274,8 +274,8 @@ uv run python scripts/wage_distribution/check_company_size_distribution_analysis
 最後に自動テストを実行する。
 
 ```bash
-uv run pytest tests/test_wage_distribution_service.py
-uv run pytest tests/test_wage_distribution_analysis.py
+uv run pytest tests/wage/test_wage_distribution_service.py
+uv run pytest tests/wage/test_wage_distribution_analysis.py
 ```
 
 ### 7.6 労働投入分析用データを更新した場合

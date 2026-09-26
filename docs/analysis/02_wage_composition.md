@@ -680,7 +680,7 @@ $\Delta Total=\Delta In+\Delta Out+\Delta Bonus=9,856円$
 - `src/real_wage_dashboard/wage_service.py`
 - `src/real_wage_dashboard/wage_composition_analysis.py`
 - `pages/5_給与構成分析.py`
-- `tests/test_wage_composition_analysis.py`
+- `tests/wage/test_wage_composition_analysis.py`
 
 ### 分析実行スクリプト
 

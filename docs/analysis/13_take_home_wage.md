@@ -1644,8 +1644,8 @@ social_insurance_bonus_rules.csv
 主な単体テストは、
 
 ```text
-tests/test_take_home_analysis.py
-tests/test_take_home_service.py
+tests/take_home/test_take_home_analysis.py
+tests/take_home/test_take_home_service.py
 ```
 
 に実装した。

@@ -1551,7 +1551,7 @@ $$100\frac{C_N}{-(C_H + C_S)}$$
 - `scripts/wage/check_labor_input_cy_annual_means.py`
 - `scripts/wage/check_labor_input_hours_indices.py`
 - `scripts/wage/check_labor_input_published_values.py`
-- `tests/test_labor_input_analysis.py`
+- `tests/labor/test_labor_input_analysis.py`
 
 労働力調査に関する実装は、次のファイルを参照する。
 
