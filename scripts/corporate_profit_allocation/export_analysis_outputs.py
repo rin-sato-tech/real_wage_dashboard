@@ -45,6 +45,10 @@ OUTPUT_DIR = Path(
     "outputs/analysis/corporate_profit_allocation"
 )
 
+SNAPSHOT_DIR = Path(
+    "data/snapshots/corporate_profit_allocation"
+)
+
 
 def get_app_id() -> str:
     try:
@@ -63,17 +67,36 @@ def save_csv(
     df: pd.DataFrame,
     filename: str,
 ) -> None:
-    path = OUTPUT_DIR / filename
+    output_df = df.round(6)
 
-    df.round(6).to_csv(
-        path,
+    output_path = (
+        OUTPUT_DIR / filename
+    )
+
+    output_df.to_csv(
+        output_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    snapshot_path = (
+        SNAPSHOT_DIR / filename
+    )
+
+    output_df.to_csv(
+        snapshot_path,
         index=False,
         encoding="utf-8-sig",
     )
 
     print(
-        f"saved: {path} "
-        f"({len(df)} rows)"
+        f"saved: {output_path} "
+        f"({len(output_df)} rows)"
+    )
+
+    print(
+        f"snapshot: {snapshot_path} "
+        f"({len(output_df)} rows)"
     )
 
 
@@ -157,6 +180,11 @@ def create_income_chain(
 
 def main() -> None:
     OUTPUT_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    SNAPSHOT_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
