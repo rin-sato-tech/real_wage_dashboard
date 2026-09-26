@@ -568,8 +568,8 @@ uv run python scripts/wage_revision/check_wage_revision_analysis.py
 加えて、
 
 ```bash
-uv run pytest tests/test_wage_revision_service.py
-uv run pytest tests/test_wage_revision_analysis.py
+uv run pytest tests/wage/test_wage_revision_service.py
+uv run pytest tests/wage/test_wage_revision_analysis.py
 ```
 
 を実行する。
@@ -649,7 +649,7 @@ uv run python scripts/cpi/check_real_wage_decomposition_index.py
 自動テスト：
 
 ```bash
-uv run pytest tests/test_real_wage_decomposition_analysis.py
+uv run pytest tests/wage/test_real_wage_decomposition_analysis.py
 ```
 
 結果が変化した場合は、
@@ -893,8 +893,8 @@ uv run python scripts/wage_distribution/check_company_size_distribution_analysis
 自動テスト：
 
 ```bash
-uv run pytest tests/test_wage_distribution_service.py
-uv run pytest tests/test_wage_distribution_analysis.py
+uv run pytest tests/wage/test_wage_distribution_service.py
+uv run pytest tests/wage/test_wage_distribution_analysis.py
 ```
 
 更新時は少なくとも以下を確認する。
@@ -937,15 +937,15 @@ uv run python scripts/cpi/check_real_wage_decomposition_index.py
 労働需給：
 
 ```bash
-uv run pytest tests/test_labor_market_service.py
-uv run pytest tests/test_labor_market_analysis.py
+uv run pytest tests/labor/test_labor_market_service.py
+uv run pytest tests/labor/test_labor_market_analysis.py
 ```
 
 法人企業統計：
 
 ```bash
-uv run pytest tests/test_corporate_performance_service.py
-uv run pytest tests/test_corporate_performance_analysis.py
+uv run pytest tests/corporate/test_corporate_performance_service.py
+uv run pytest tests/corporate/test_corporate_performance_analysis.py
 ```
 
 必要に応じて、

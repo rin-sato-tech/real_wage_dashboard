@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-import pytest
-
 import pandas as pd
+import pytest
 
 import real_wage_dashboard.corporate_profit_allocation_service as service
 

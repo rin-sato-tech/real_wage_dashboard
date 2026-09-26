@@ -823,8 +823,8 @@ scripts/wage_revision/check_wage_revision_analysis.py
 ### 15.4 自動テスト
 
 ```text
-tests/test_wage_revision_service.py
-tests/test_wage_revision_analysis.py
+tests/wage/test_wage_revision_service.py
+tests/wage/test_wage_revision_analysis.py
 ```
 
 を基本とする。
@@ -1690,7 +1690,7 @@ expert_advice
 
 ### 23.15 テスト設計
 
-`tests/test_wage_revision_service.py` では最低限次をテストする。
+`tests/wage/test_wage_revision_service.py` では最低限次をテストする。
 
 1. 和暦から西暦への変換
 2. 令和元年の変換

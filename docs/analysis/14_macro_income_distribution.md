@@ -1086,9 +1086,10 @@ pages/11_マクロ所得分配.py
 
 ```text
 tests/
-├── test_macro_distribution_service.py
-├── test_macro_distribution_analysis.py
-└── test_macro_distribution_ui.py
+└── corporate/
+    ├── test_macro_distribution_service.py
+    ├── test_macro_distribution_analysis.py
+    └── test_macro_distribution_ui.py
 ```
 
 主な検証内容は、

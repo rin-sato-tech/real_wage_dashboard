@@ -162,7 +162,13 @@ real_wage_dashboard/
 ├── scripts/
 │   ├── README.md                   # 確認スクリプトの用途と実行方法
 │   └── check_*.py                  # 実データ・API確認用スクリプト
-└── tests/                          # 自動テスト
+└── tests/                          # 機能別の自動テスト
+    ├── common/                     # 共通処理・データ取得
+    ├── cpi/                        # 消費者物価指数
+    ├── wage/                       # 賃金・賃金分布
+    ├── labor/                      # 雇用・労働投入
+    ├── corporate/                  # 企業業績・所得分配
+    └── take_home/                  # 手取り賃金
 ```
 
 ---

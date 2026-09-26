@@ -142,7 +142,7 @@ UI化の有無は分析の完成度とは別に判断する。
 | 賃金抽出     | `src/real_wage_dashboard/wage_service.py`                   |
 | 労働時間抽出 | `src/real_wage_dashboard/working_hours_service.py`          |
 | CPI取得      | `src/real_wage_dashboard/estat_client.py`、`cpi_service.py` |
-| 中核テスト   | `tests/test_employment_analysis.py`                         |
+| 中核テスト   | `tests/labor/test_employment_analysis.py`                         |
 
 ### 6.2 給与構成分析
 
@@ -151,7 +151,7 @@ UI化の有無は分析の完成度とは別に判断する。
 | 文書       | `docs/analysis/02_wage_composition.md`                 |
 | UI         | `pages/5_給与構成分析.py`                              |
 | 中核処理   | `src/real_wage_dashboard/wage_composition_analysis.py` |
-| 中核テスト | `tests/test_wage_composition_analysis.py`              |
+| 中核テスト | `tests/wage/test_wage_composition_analysis.py`              |
 
 ### 6.3 労働投入分析
 
@@ -171,7 +171,7 @@ UI化の有無は分析の完成度とは別に判断する。
 | CY年平均照合             | `scripts/wage/check_labor_input_cy_annual_means.py`                                                                                                     |
 | 公式指数照合             | `scripts/wage/check_labor_input_hours_indices.py`                                                                                                       |
 | 主要掲載値一括確認       | `scripts/wage/check_labor_input_published_values.py`                                                                                                    |
-| 中核テスト               | `tests/test_labor_input_analysis.py`、`tests/test_labor_force_analysis.py`、`tests/test_labor_force_service.py`                                         |
+| 中核テスト               | `tests/labor/test_labor_input_analysis.py`、`tests/labor/test_labor_force_analysis.py`、`tests/labor/test_labor_force_service.py`                                         |
 
 労働投入分析は、次の2系統から構成する。
 
@@ -223,7 +223,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | 文書       | `docs/analysis/04_industry_wage.md`            |
 | UI         | `pages/7_産業別分析.py`                        |
 | 中核処理   | `src/real_wage_dashboard/industry_analysis.py` |
-| 中核テスト | `tests/test_industry_analysis.py`              |
+| 中核テスト | `tests/labor/test_industry_analysis.py`              |
 
 ### 6.5 産業構成効果分析
 
@@ -233,7 +233,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | UI           | `pages/8_産業構成効果分析.py`                              |
 | 中核処理     | `src/real_wage_dashboard/industry_composition_analysis.py` |
 | 産業共通処理 | `src/real_wage_dashboard/industry_analysis.py`             |
-| 中核テスト   | `tests/test_industry_composition_analysis.py`              |
+| 中核テスト   | `tests/labor/test_industry_composition_analysis.py`              |
 
 ### 6.6 労働需給と賃金分析
 
@@ -244,7 +244,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | 中核処理       | `src/real_wage_dashboard/labor_market_analysis.py`                          |
 | 労働需給データ | `src/real_wage_dashboard/labor_market_service.py`                           |
 | 賃金データ     | `src/real_wage_dashboard/wage_service.py`                                   |
-| 中核テスト     | `tests/test_labor_market_analysis.py`、`tests/test_labor_market_service.py` |
+| 中核テスト     | `tests/labor/test_labor_market_analysis.py`、`tests/labor/test_labor_market_service.py` |
 
 ### 6.7 企業業績・生産性・分配分析
 
@@ -256,7 +256,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | 中核処理         | `src/real_wage_dashboard/corporate_performance_analysis.py`                                   |
 | e-Stat通信       | `src/real_wage_dashboard/estat_client.py`                                                     |
 | 確認             | `scripts/check_corporate_*.py`                                                                |
-| 中核テスト       | `tests/test_corporate_performance_analysis.py`、`tests/test_corporate_performance_service.py` |
+| 中核テスト       | `tests/corporate/test_corporate_performance_analysis.py`、`tests/corporate/test_corporate_performance_service.py` |
 
 ### 6.8 賃金改定行動分析
 
@@ -267,7 +267,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | データ取得・整形 | `src/real_wage_dashboard/wage_revision_service.py`                            |
 | 中核処理         | `src/real_wage_dashboard/wage_revision_analysis.py`                           |
 | 確認             | `scripts/check_wage_revision_*.py`                                            |
-| 中核テスト       | `tests/test_wage_revision_analysis.py`、`tests/test_wage_revision_service.py` |
+| 中核テスト       | `tests/wage/test_wage_revision_analysis.py`、`tests/wage/test_wage_revision_service.py` |
 
 ### 6.9 実質賃金の名目賃金・物価要因分解
 
@@ -278,7 +278,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | 中核処理   | `src/real_wage_dashboard/real_wage_decomposition_analysis.py` |
 | 入力       | 毎月勤労統計の指数・増減率、公表実質賃金系列、CPI系列         |
 | 確認       | `scripts/cpi/check_real_wage_decomposition_index.py`          |
-| 中核テスト | `tests/test_real_wage_decomposition_analysis.py`              |
+| 中核テスト | `tests/wage/test_real_wage_decomposition_analysis.py`              |
 
 ### 6.10 事業所規模別賃金分析
 
@@ -290,7 +290,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | 賃金抽出     | `src/real_wage_dashboard/wage_service.py`                     |
 | 労働時間抽出 | `src/real_wage_dashboard/working_hours_service.py`            |
 | 確認         | `scripts/wage/check_establishment_size_wage.py`               |
-| 中核テスト   | `tests/test_establishment_size_wage_analysis.py`              |
+| 中核テスト   | `tests/wage/test_establishment_size_wage_analysis.py`              |
 
 ### 6.11 賃金分布分析
 
@@ -308,7 +308,7 @@ UIは毎月勤労統計を中心とする既存機能を提供するが、労働
 | 雇用形態別分析確認 | `scripts/wage_distribution/check_employment_distribution_analysis.py`                 |
 | 企業規模別取得確認 | `scripts/wage_distribution/check_company_size_distribution.py`                        |
 | 企業規模別分析確認 | `scripts/wage_distribution/check_company_size_distribution_analysis.py`               |
-| 中核テスト         | `tests/test_wage_distribution_analysis.py`、`tests/test_wage_distribution_service.py` |
+| 中核テスト         | `tests/wage/test_wage_distribution_analysis.py`、`tests/wage/test_wage_distribution_service.py` |
 
 ---
 
