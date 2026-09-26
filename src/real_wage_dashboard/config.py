@@ -16,6 +16,16 @@ SNA_NONFINANCIAL_FINANCIAL_ACCOUNT_STATS_DATA_ID = "0004049768"
 SNA_SECTOR_NET_LENDING_AMOUNT_STATS_DATA_ID = "0004049961"
 SNA_SECTOR_NET_LENDING_RATIO_STATS_DATA_ID = "0004049963"
 
+SNA_NONFINANCIAL_PRIMARY_INCOME_STATS_DATA_ID = "0004049827"
+SNA_NONFINANCIAL_SECONDARY_DISTRIBUTION_STATS_DATA_ID = "0004049828"
+SNA_NONFINANCIAL_USE_INCOME_STATS_DATA_ID = "0004049829"
+SNA_NONFINANCIAL_BALANCE_SHEET_STATS_DATA_ID = "0004049867"
+SNA_FINANCIAL_ASSETS_DETAIL_STATS_DATA_ID = "0004050013"
+SNA_FINANCIAL_LIABILITIES_DETAIL_STATS_DATA_ID = "0004050014"
+SNA_NONFINANCIAL_CORPORATIONS_SECTOR_CODE = "11"
+SNA_NONFINANCIAL_OTHER_VOLUME_CHANGES_STATS_DATA_ID = "0004049868"
+SNA_NONFINANCIAL_REVALUATION_STATS_DATA_ID = "0004049869"
+
 CPI_BASE_FILTERS = {
     "cdTab": "1",
     "cdArea": "00000",
@@ -240,6 +250,7 @@ LFS_EMPLOYMENT_TYPE_HOURS_CODES = {
 SNA_ANALYSIS_START_YEAR = 1994
 SNA_ANALYSIS_END_YEAR = 2024
 
+# 14番：マクロ所得分配
 SNA_INCOME_GENERATION_ITEMS = {
     "employee_compensation": "11",
     "taxes_on_production_and_imports": "16",
@@ -290,6 +301,7 @@ SNA_HOUSEHOLD_USE_INCOME_ITEMS = {
     "published_saving_rate": "21",
 }
 
+# 14番・15番共通
 SNA_NONFINANCIAL_CAPITAL_ACCOUNT_ITEMS = {
     "gross_fixed_capital_formation": "11",
     "consumption_fixed_capital": "12",
@@ -302,7 +314,79 @@ SNA_NONFINANCIAL_CAPITAL_ACCOUNT_ITEMS = {
 }
 
 SNA_NONFINANCIAL_FINANCIAL_ACCOUNT_ITEMS = {
+    # 金融資産の取引
+    "monetary_gold_sdr_assets": "100",
+    "cash_deposits_assets": "110",
+    "loans_assets": "120",
+    "debt_securities_assets": "130",
+    "equity_investment_fund_assets": "140",
+    "shares_assets": "150",  # 140の内数
+    "insurance_pension_guarantee_assets": "160",
+    "financial_derivatives_assets": "170",
+    "other_financial_assets": "180",
+    "financial_assets_change": "190",
+
+    # 純貸出・純借入
     "net_lending_financial_account": "200",
+
+    # 負債の取引
+    "monetary_gold_sdr_liabilities": "220",
+    "cash_deposits_liabilities": "230",
+    "loans_liabilities": "240",
+    "debt_securities_liabilities": "250",
+    "equity_investment_fund_liabilities": "260",
+    "shares_liabilities": "270",  # 260の内数
+    "insurance_pension_guarantee_liabilities": "280",
+    "financial_derivatives_liabilities": "290",
+    "other_liabilities": "300",
+
+    # 純貸出＋負債変動
+    "net_lending_plus_liabilities_change": "310",
+}
+
+# 15番：企業利益配分
+SNA_NONFINANCIAL_PRIMARY_INCOME_ITEMS = {
+    "property_income_paid": "11",
+    "interest_paid": "12",
+    "dividends_paid": "14",
+    "reinvested_earnings_paid": "16",
+    "net_primary_income_balance": "18",
+    "gross_primary_income_balance": "19",
+    "consumption_fixed_capital_primary": "20",
+    "net_operating_surplus": "22",
+    "gross_operating_surplus": "23",
+    "consumption_fixed_capital_operating_surplus": "24",
+    "property_income_received": "25",
+    "interest_received": "26",
+    "dividends_received": "28",
+    "reinvested_earnings_received": "30",
+    "interest_paid_before_fisim": "34",
+    "interest_received_before_fisim": "35",
+}
+
+SNA_NONFINANCIAL_SECONDARY_DISTRIBUTION_ITEMS = {
+    "current_taxes_paid": "11",
+    "income_taxes_paid": "12",
+    "other_current_taxes_paid": "13",
+    "other_social_insurance_nonpension_benefits_paid": "32",
+    "other_current_transfers_paid": "15",
+    "net_disposable_income": "20",
+    "gross_disposable_income": "21",
+    "consumption_fixed_capital_disposable_income": "22",
+    "net_primary_income_balance": "24",
+    "gross_primary_income_balance": "25",
+    "consumption_fixed_capital_primary": "26",
+    "imputed_employer_social_contributions_received": "33",
+    "other_current_transfers_received": "28",
+}
+
+SNA_NONFINANCIAL_USE_INCOME_ITEMS = {
+    "net_saving": "11",
+    "gross_saving": "12",
+    "consumption_fixed_capital": "13",
+    "net_disposable_income": "15",
+    "gross_disposable_income": "16",
+    "consumption_fixed_capital_disposable_income": "17",
 }
 
 SNA_SECTOR_NET_LENDING_ITEMS = {
@@ -319,4 +403,150 @@ SNA_SECTOR_NET_LENDING_ITEMS = {
     "financial_households": "23",
     "financial_npish": "24",
     "financial_rest_of_world": "25",
+}
+
+SNA_NONFINANCIAL_BALANCE_SHEET_ITEMS = {
+    # 非金融資産
+    "nonfinancial_assets": "100",
+    "fixed_assets": "120",
+    "inventories": "280",
+    "land": "370",
+
+    # 金融資産
+    "financial_assets": "450",
+    "cash_deposits_assets": "540",
+    "loans_assets": "550",
+    "debt_securities_assets": "560",
+    "equity_investment_fund_assets": "570",
+    "shares_assets": "580",
+    "insurance_pension_guarantee_assets": "590",
+    "financial_derivatives_assets": "600",
+    "other_financial_assets": "610",
+
+    "total_assets": "620",
+
+    # 負債
+    "liabilities": "640",
+    "cash_deposits_liabilities": "670",
+    "loans_liabilities": "680",
+    "debt_securities_liabilities": "690",
+    "equity_investment_fund_liabilities": "700",
+    "shares_liabilities": "710",
+    "insurance_pension_guarantee_liabilities": "720",
+    "financial_derivatives_liabilities": "730",
+    "other_liabilities": "740",
+
+    # 正味資産
+    "net_worth": "750",
+    "liabilities_and_net_worth": "760",
+}
+
+CORPORATE_PROFIT_ALLOCATION_ITEMS = {
+    # 利益
+    "operating_profit": "048",
+    "ordinary_profit": "051",
+    "profit_before_tax": "054",
+    "net_income": "056",
+
+    # 配当
+    "interim_dividends": "058",
+    "dividends": "059",
+    "total_dividends": "060",
+    "dividend_payout_ratio": "138",
+
+    # 当期末ストック
+    "cash_deposits_end": "002",
+    "fixed_assets_end": "147",
+    "investment_securities_end": "151",
+    "short_term_borrowings_end": "153",
+    "long_term_borrowings_end": "155",
+    "liabilities_end": "224",
+    "net_assets_end": "157",
+    "retained_earnings_end": "226",
+
+    # 前期末ストック
+    "cash_deposits_begin": "159",
+    "fixed_assets_begin": "205",
+    "investment_securities_begin": "209",
+    "short_term_borrowings_begin": "211",
+    "long_term_borrowings_begin": "213",
+    "liabilities_begin": "230",
+    "net_assets_begin": "215",
+    "retained_earnings_begin": "232",
+}
+
+SNA_FINANCIAL_ASSETS_DETAIL_ITEMS = {
+    # 大分類
+    "monetary_gold_sdr_assets": "100",
+    "cash_deposits_assets": "140",
+    "loans_assets": "220",
+    "debt_securities_assets": "350",
+    "equity_investment_fund_assets": "460",
+    "insurance_pension_guarantee_assets": "520",
+    "financial_derivatives_assets": "580",
+    "other_financial_assets": "620",
+    "financial_assets_total": "710",
+    "net_lending_financial_detail": "730",
+
+    # その他の金融資産の内訳
+    "fiscal_investment_fund_deposits_assets": "630",
+    "entrusted_funds_assets": "640",
+    "trade_credit_assets": "650",
+    "accounts_receivable_assets": "660",
+    "direct_investment_assets": "670",
+    "foreign_portfolio_investment_assets": "680",
+    "other_external_claims_assets": "690",
+    "other_assets": "700",
+}
+
+SNA_NONFINANCIAL_OTHER_VOLUME_CHANGES_ITEMS = {
+    "nonfinancial_assets": "100",
+    "fixed_assets": "120",
+    "inventories": "280",
+    "land": "370",
+    "financial_assets": "450",
+    "shares_assets": "460",
+    "assets_change": "470",
+    "liabilities": "640",
+    "shares_liabilities": "650",
+    "net_worth_change": "800",
+    "liabilities_and_net_worth_change": "840",
+}
+
+SNA_NONFINANCIAL_REVALUATION_ITEMS = {
+    "nonfinancial_assets": "100",
+    "fixed_assets": "120",
+    "inventories": "280",
+    "land": "370",
+    "financial_assets": "450",
+    "shares_assets": "460",
+    "assets_change": "470",
+    "liabilities": "640",
+    "shares_liabilities": "650",
+    "net_worth_change": "810",
+    "liabilities_and_net_worth_change": "840",
+}
+
+SNA_FINANCIAL_LIABILITIES_DETAIL_ITEMS = {
+    # 大分類
+    "monetary_gold_sdr_liabilities": "100",
+    "cash_deposits_liabilities": "140",
+    "loans_liabilities": "220",
+    "debt_securities_liabilities": "350",
+    "equity_investment_fund_liabilities": "460",
+    "insurance_pension_guarantee_liabilities": "520",
+    "financial_derivatives_liabilities": "580",
+    "other_financial_liabilities": "620",
+    "financial_liabilities_total": "710",
+    "net_lending_financial_detail": "730",
+
+    # その他の金融負債の内訳
+    "fiscal_investment_fund_deposits_liabilities": "630",
+    "entrusted_funds_liabilities": "640",
+    "trade_credit_liabilities": "650",
+    "accounts_payable_liabilities": "660",
+    "direct_investment_liabilities": "670",
+    "foreign_portfolio_investment_liabilities": "680",
+    "other_external_liabilities": "690",
+    "other_liabilities_detail": "700",
 }
