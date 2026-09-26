@@ -65,7 +65,7 @@ def save_csv(
 ) -> None:
     path = OUTPUT_DIR / filename
 
-    df.to_csv(
+    df.round(6).to_csv(
         path,
         index=False,
         encoding="utf-8-sig",
